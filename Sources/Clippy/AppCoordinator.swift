@@ -17,12 +17,23 @@ final class AppCoordinator {
     /// Non-nil when construction failed; surfaced in Settings rather than
     /// swallowed, because a store that failed to open means no history at all.
     private(set) var startupError: String?
+    /// Where history actually landed, for the diagnostics pane. In-memory when
+    /// the on-disk store could not be opened.
+    let storage: DiagnosticsSnapshot.Storage
+    /// What the capture loop has been doing. Drives the menu bar badge and the
+    /// diagnostics pane.
+    let captureHealth = CaptureHealth()
 
-    private let poller: PasteboardPoller
+    // Internal rather than private: `AppCoordinator+Diagnostics.swift` is the
+    // other half of this type, and Swift scopes `private` to the file.
+    let gatherer = DiagnosticsGatherer()
+    let poller: PasteboardPoller
+    var statusItem: StatusItemController?
+    var welcomeWindow: WelcomeWindowController?
+
     private let pasteService = PasteService()
     private let pickerModel: PickerModel
     private let panelController: PickerPanelController
-    private var statusItem: StatusItemController?
     /// Built in `start()` rather than `init`, because it needs a fully formed
     /// coordinator to hand to the settings view.
     private var settingsWindow: SettingsWindowController?
@@ -43,10 +54,12 @@ final class AppCoordinator {
 
         let bundleID = Bundle.main.bundleIdentifier ?? "com.psoldunov.clippy"
         var startupError: String?
+        var storage: DiagnosticsSnapshot.Storage
         let store: HistoryStore
         do {
             let url = try HistoryStore.defaultStoreURL(bundleID: bundleID)
             store = try HistoryStore(location: url, retention: preferences.retentionPolicy)
+            storage = .onDisk(path: url.path(percentEncoded: false))
         } catch {
             ClippyLog.store.error("Falling back to in-memory history: \(error.localizedDescription)")
             startupError =
@@ -58,9 +71,11 @@ final class AppCoordinator {
                 fatalError("SwiftData could not create an in-memory store; Clippy cannot run.")
             }
             store = fallback
+            storage = .inMemory(reason: error.localizedDescription)
         }
         self.store = store
         self.startupError = startupError
+        self.storage = storage
 
         poller = PasteboardPoller(
             rules: preferences.captureRules,
@@ -70,7 +85,7 @@ final class AppCoordinator {
                 NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             }
         )
-        pickerModel = PickerModel(store: store)
+        pickerModel = PickerModel(store: store, captureHealth: captureHealth)
         panelController = PickerPanelController(model: pickerModel)
     }
 
@@ -89,6 +104,7 @@ final class AppCoordinator {
             actions: .init(
                 showPicker: { [weak self] in self?.togglePicker() },
                 openSettings: { [weak self] in self?.openSettings() },
+                openDiagnostics: { [weak self] in self?.openSettings(tab: .diagnostics) },
                 clearHistory: { [weak self] in self?.confirmClearHistory() },
                 quit: { NSApp.terminate(nil) }
             )
@@ -99,6 +115,8 @@ final class AppCoordinator {
         }
 
         startCaptureLoop()
+        refreshHealth()
+        showWelcomeIfNeeded()
     }
 
     func stop() {
@@ -118,9 +136,11 @@ final class AppCoordinator {
     // MARK: - Capture
 
     private func startCaptureLoop() {
-        captureTask = Task { [poller, store] in
+        captureTask = Task { [weak self, poller, store] in
             let stream = await poller.start()
             for await decision in stream {
+                self?.captureHealth.record(decision)
+                self?.refreshHealth()
                 guard let item = decision.item else {
                     Self.logRejection(decision)
                     continue
@@ -131,17 +151,11 @@ final class AppCoordinator {
     }
 
     private static func logRejection(_ decision: CaptureDecision) {
-        switch decision {
-        case .captured:
-            break
-        case .rejectedPrivacyMarker:
-            ClippyLog.clipboard.debug("Skipped an entry marked transient or concealed.")
-        case .rejectedExcludedApp(let bundleID):
-            ClippyLog.clipboard.debug("Skipped an entry from excluded app \(bundleID, privacy: .public).")
-        case .rejectedEmpty:
-            ClippyLog.clipboard.debug("Skipped an empty pasteboard change.")
-        case .rejectedTooLarge(let byteCount):
-            ClippyLog.clipboard.notice("Skipped an entry of \(byteCount) bytes — over the size limit.")
+        guard let message = decision.rejectionLogMessage else { return }
+        if decision.isNoteworthyRejection {
+            ClippyLog.clipboard.notice("\(message, privacy: .public)")
+        } else {
+            ClippyLog.clipboard.debug("\(message, privacy: .public)")
         }
     }
 
@@ -216,40 +230,25 @@ final class AppCoordinator {
         return true
     }
 
-    /// Tells the user why the entry was copied rather than pasted, and offers
-    /// the one action that fixes it.
+    /// Tells the user why the entry was copied rather than pasted.
     private func presentNotice(_ message: String) {
         guard !isPresentingNotice else { return }
         isPresentingNotice = true
         defer { isPresentingNotice = false }
 
-        NSApp.activate()
-        let alert = NSAlert()
-        alert.messageText = "Copied, but not pasted"
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Open Accessibility Settings")
-        alert.addButton(withTitle: "OK")
-        if alert.runModal() == .alertFirstButtonReturn {
+        if UserAlert.confirmOpeningAccessibilitySettings(reason: message) {
             AccessibilityPermission.openSettings()
         }
     }
 
     // MARK: - Menu actions
 
-    private func openSettings() {
-        settingsWindow?.show()
+    func openSettings(tab: SettingsTab = .general) {
+        settingsWindow?.show(tab: tab)
     }
 
     private func confirmClearHistory() {
-        NSApp.activate()
-        let alert = NSAlert()
-        alert.messageText = "Clear clipboard history?"
-        alert.informativeText = "Pinned entries are kept. This cannot be undone."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Clear")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard UserAlert.confirmClearingHistory() else { return }
         store.clear(keepingPinned: true)
     }
 }

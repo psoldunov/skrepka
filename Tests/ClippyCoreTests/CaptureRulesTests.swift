@@ -117,9 +117,55 @@ struct CaptureRulesTests {
         #expect(item.text.isEmpty)
     }
 
-    @Test("Empty representations are discarded, markers still respected")
+    @Test("A declared type carrying no bytes reads as unreadable")
     func ignoresEmptyRepresentations() {
+        // Was `.rejectedEmpty`. A type declared with zero bytes is exactly what
+        // a denied pasteboard hands back, and an app genuinely copying an empty
+        // string is vanishingly rare — so the reading that helps the user wins.
+        //
+        // The cost, stated plainly: `blockedThreshold` consecutive copies like
+        // this with no successful read between them badge the menu bar, flip
+        // the picker's empty state to "Clippy can't read the clipboard" and
+        // turn the Status pane's tick red — on a machine whose pasteboard is
+        // fine. Needing a *run* of them is what keeps that trade acceptable;
+        // one of these decides nothing.
         let representations = [PasteboardType.string: Data()]
-        #expect(CaptureRules().decide(snapshot(representations)) == .rejectedEmpty)
+        #expect(CaptureRules().decide(snapshot(representations)) == .rejectedUnreadable)
+    }
+
+    // MARK: - Blocked reads
+
+    @Test("Declared readable types with no data read as unreadable, not empty")
+    func reportsBlockedReadAsUnreadable() {
+        // What a denied pasteboard looks like: the item still advertises the
+        // types it holds, and every read of them comes back with nothing.
+        let decision = CaptureRules().decide(
+            snapshot([:], declaring: [PasteboardType.string, PasteboardType.html])
+        )
+        #expect(decision == .rejectedUnreadable)
+    }
+
+    @Test("A pasteboard declaring nothing Clippy reads is empty, not blocked")
+    func reportsUnknownTypesAsEmpty() {
+        let decision = CaptureRules().decide(
+            snapshot([:], declaring: ["com.example.private-format"])
+        )
+        #expect(decision == .rejectedEmpty)
+    }
+
+    @Test("Whitespace-only text is empty, not blocked")
+    func reportsWhitespaceAsEmpty() {
+        // The bytes arrived, so access is fine — there is just nothing worth
+        // keeping. Reporting this as blocked would raise a false alarm on
+        // every stray copy of a newline.
+        #expect(CaptureRules().decide(snapshot(text("   \n  "))) == .rejectedEmpty)
+    }
+
+    @Test("Privacy markers still win over the unreadable check")
+    func privacyMarkersTakePrecedence() {
+        let decision = CaptureRules().decide(
+            snapshot([:], declaring: ["org.nspasteboard.TransientType", PasteboardType.string])
+        )
+        #expect(decision == .rejectedPrivacyMarker)
     }
 }

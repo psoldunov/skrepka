@@ -18,8 +18,10 @@ struct SettingsView: View {
     static let windowSize = CGSize(width: 560, height: 460)
 
     let coordinator: AppCoordinator
-
-    @State private var selection: SettingsTab = .general
+    /// Owned by the window controller so `show(tab:)` can jump straight to a
+    /// pane — the window is cached and reused, so a `@State` here would ignore
+    /// every request after the first.
+    @Binding var selection: SettingsTab
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,6 +60,8 @@ struct SettingsView: View {
             PrivacySettingsView(preferences: coordinator.preferences) {
                 coordinator.preferencesChanged()
             }
+        case .diagnostics:
+            DiagnosticsSettingsView(coordinator: coordinator)
         }
     }
 }

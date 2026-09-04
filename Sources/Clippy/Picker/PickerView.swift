@@ -34,7 +34,10 @@ struct PickerView: View {
 
                 Group {
                     if model.isEmpty {
-                        EmptyStateView(hasQuery: !model.query.isEmpty)
+                        EmptyStateView(
+                            hasQuery: !model.query.isEmpty,
+                            isBlocked: model.captureHealth.isBlocked
+                        )
                     } else {
                         resultList
                     }

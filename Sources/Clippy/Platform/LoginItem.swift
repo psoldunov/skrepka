@@ -17,6 +17,19 @@ enum LoginItem {
         SMAppService.mainApp.status == .requiresApproval
     }
 
+    /// The status, in the vocabulary the diagnostics report speaks.
+    static var state: DiagnosticsSnapshot.LoginItemState {
+        switch SMAppService.mainApp.status {
+        case .enabled: .enabled
+        case .requiresApproval: .requiresApproval
+        case .notFound: .notFound
+        case .notRegistered: .notRegistered
+        // SMAppServiceStatus is a plain NS_ENUM; an unknown value is reported
+        // as "not enabled" rather than guessed at.
+        @unknown default: .notRegistered
+        }
+    }
+
     /// - Returns: nil on success, or a user-facing message on failure.
     static func setEnabled(_ enabled: Bool) -> String? {
         do {
