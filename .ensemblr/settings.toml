@@ -5,21 +5,36 @@
 # .build directory that scripts/doctor.sh does.
 
 [environment_variables]
-# scripts/doctor.sh and scripts/bundle.sh already default to this path; setting
-# it here makes the raw `swift`/`xcrun` buttons agree with them. `xcode-select
-# -p` points at CommandLineTools, so without this the Test and Format buttons
-# would run a different toolchain binary than the quality gate — a SwiftPM
-# scratch directory keyed to a different toolchain forces a full rebuild on
-# every switch, and two swift-format versions disagree about formatting.
-# README.md already states Xcode 26 is required to build.
+# scripts/doctor.sh, scripts/bundle.sh and scripts/setup.sh already default to
+# this path; stating it here is meant to make the raw `swift`/`xcrun` buttons
+# agree with them. `xcode-select -p` points at CommandLineTools, whose toolchain
+# ships no libSwiftDataMacros.dylib (it lives only under Xcode's
+# MacOSX.platform), so an unpinned `swift build` fails on every @Model in
+# Sources/ClippyCore/Store/ — and a SwiftPM scratch directory keyed to a
+# different toolchain forces a full rebuild on every switch, which is what makes
+# mixed buttons feel so slow. README.md already states Xcode 26 is required.
+#
+# WHY EVERY COMMAND STILL PINS IT: as of Ensemblr's current build this table
+# does not reach terminals. Reproduced in a workspace terminal —
+#
+#   echo "DD=[$DEVELOPER_DIR] WS=[$ENSEMBLR_WORKSPACE_NAME] PORT=[$ENSEMBLR_PORT]"
+#   DD=[] WS=[fix-setup-build-errors] PORT=[41686]
+#
+# — so the file is parsed (the run scripts below all appear, and the reserved
+# ENSEMBLR_* variables are injected) but this table is not applied. Do not
+# delete the row: it is correct, and it starts working the day that is fixed.
+# Until then every command below pins the toolchain itself.
 DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer"
 
 [scripts]
 # A fresh worktree starts with no .build/ (it is gitignored, so nothing is
 # carried over). Resolve the pinned graph — KeyboardShortcuts 3.0.1, per
 # Package.resolved — then warm the debug build so the first Doctor or Test
-# press is incremental. A cold debug build of this package measures ~15s.
-setup = "swift package resolve && swift build"
+# press is incremental. A cold debug build of this package measures ~13s.
+#
+# A script, not an inline `swift package resolve && swift build`, so it pins
+# DEVELOPER_DIR the way every other script here does.
+setup = "scripts/setup.sh"
 
 # Every script here contends on the one .build directory, and Periphery builds
 # the package a third time. Serialise rather than have concurrent SwiftPM
@@ -53,13 +68,16 @@ icon = "zap"
 
 [scripts.run.test]
 # Just the Swift Testing suite, for when the whole gate is too slow to be a
-# feedback loop.
-command = "swift test --parallel"
+# feedback loop. `env` rather than a `VAR=value cmd` prefix, which fish does not
+# read the same way every other shell does.
+command = "env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --parallel"
 icon = "test-tube"
 
 [scripts.run.format]
-# The fixer scripts/doctor.sh names by hand when its format check fails.
-command = "xcrun swift-format format --in-place --recursive --parallel Sources Tests"
+# The fixer scripts/doctor.sh names by hand when its format check fails. Pinned
+# for the same reason: CommandLineTools carries its own swift-format, and two
+# versions of it disagree about formatting.
+command = "env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift-format format --in-place --recursive --parallel Sources Tests"
 icon = "paintbrush"
 
 [scripts.run.bundle]
