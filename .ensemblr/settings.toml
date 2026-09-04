@@ -84,3 +84,17 @@ icon = "paintbrush"
 # Produce build/Clippy.app without stopping or relaunching a running instance.
 command = "scripts/bundle.sh"
 icon = "package"
+
+[scripts.run.notarize]
+# Build, sign with a secure timestamp, submit to Apple's notary service, staple
+# the ticket, and leave build/Clippy.zip ready to send to someone else.
+#
+# Not part of the edit loop: it costs a round-trip to Apple's timestamp server
+# plus a notary submission that usually takes a few minutes. scripts/bundle.sh
+# stays fast and unnotarized for local runs; this is the button for a build that
+# leaves the machine.
+#
+# Needs a one-time notarytool keychain profile named `clippy` — the script
+# prints the exact `store-credentials` command when it cannot find one.
+command = "scripts/notarize.sh"
+icon = "shield-check"

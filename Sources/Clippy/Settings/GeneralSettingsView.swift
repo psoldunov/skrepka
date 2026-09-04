@@ -21,10 +21,10 @@ struct GeneralSettingsView: View {
             footer: "Press this anywhere to open the clipboard picker. It needs no permissions."
         ) {
             SettingsRow(title: "Open Clippy", symbol: "command") {
-                KeyboardShortcuts.Recorder(for: .showPicker)
-                    .onChange(of: KeyboardShortcuts.getShortcut(for: .showPicker)) {
-                        coordinator.preferencesChanged()
-                    }
+                ShortcutRecorderView(name: .showPicker) {
+                    coordinator.preferencesChanged()
+                }
+                .frame(width: 128, height: 24)
             }
         }
 
@@ -48,7 +48,7 @@ struct GeneralSettingsView: View {
             if preferences.pasteAutomatically && !isAccessibilityTrusted {
                 SettingsNotice(
                     tone: .warning,
-                    message: "Accessibility permission is not granted, so Clippy can only copy.",
+                    message: DiagnosticsProblem.accessibilityMissing.summary,
                     actionTitle: "Open Settings",
                     action: AccessibilityPermission.openSettings
                 )

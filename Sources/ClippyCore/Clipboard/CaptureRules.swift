@@ -26,7 +26,7 @@ public struct CaptureRules: Sendable {
 
         let payload = ClipPayload(representations: snapshot.representations.filter { !$0.value.isEmpty })
         guard !payload.isEmpty, let kind = Self.kind(for: payload) else {
-            return .rejectedEmpty
+            return Self.emptyReason(declaredTypes: snapshot.declaredTypes)
         }
         guard payload.byteCount <= maximumItemBytes else {
             return .rejectedTooLarge(byteCount: payload.byteCount)
@@ -47,6 +47,24 @@ public struct CaptureRules: Sendable {
                 isConcealed: PrivacyMarkers.isConcealed(types: snapshot.declaredTypes)
             )
         )
+    }
+
+    /// Tells "the clipboard holds nothing we want" apart from "we were not
+    /// allowed to read what it holds".
+    ///
+    /// Reached only once every representation has come back empty, so the
+    /// question left is narrow: did the item advertise a type Clippy reads? If
+    /// it did and yielded no bytes, something refused the read — macOS gates
+    /// programmatic access to the general pasteboard, so on a machine where the
+    /// user has denied Clippy this is every single copy, and reporting it as
+    /// "empty" is what made the failure invisible.
+    ///
+    /// Takes the declared types rather than the whole snapshot: the
+    /// representations cannot inform this answer, because reaching here is
+    /// what proves they are all empty.
+    static func emptyReason(declaredTypes: [String]) -> CaptureDecision {
+        let readable = Set(PasteboardType.readOrder)
+        return declaredTypes.contains(where: readable.contains) ? .rejectedUnreadable : .rejectedEmpty
     }
 
     /// Richest representation wins, per ``PasteboardType/readOrder``.

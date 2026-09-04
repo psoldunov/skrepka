@@ -22,6 +22,7 @@ public final class Preferences {
         excludedBundleIDs = Set(defaults.value(for: .excludedBundleIDs))
         launchAtLogin = defaults.value(for: .launchAtLogin)
         pasteAutomatically = defaults.value(for: .pasteAutomatically)
+        hasCompletedFirstRun = defaults.value(for: .hasCompletedFirstRun)
     }
 
     /// Maximum unpinned entries, nil for unlimited.
@@ -48,6 +49,11 @@ public final class Preferences {
     /// pastes themselves — which needs no Accessibility permission.
     public var pasteAutomatically: Bool {
         didSet { defaults.set(pasteAutomatically, for: .pasteAutomatically) }
+    }
+
+    /// Set once the welcome window has been shown, so it never reappears.
+    public var hasCompletedFirstRun: Bool {
+        didSet { defaults.set(hasCompletedFirstRun, for: .hasCompletedFirstRun) }
     }
 
     public var retentionPolicy: RetentionPolicy {
@@ -88,6 +94,9 @@ struct PreferenceKey<Value: Sendable>: Sendable {
     }
     static var pasteAutomatically: PreferenceKey<Bool> {
         .init(name: "pasteAutomatically", defaultValue: true)
+    }
+    static var hasCompletedFirstRun: PreferenceKey<Bool> {
+        .init(name: "hasCompletedFirstRun", defaultValue: false)
     }
 }
 

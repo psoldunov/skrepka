@@ -7,12 +7,6 @@ import os
 /// Accessibility permission, needed only to synthesise the ⌘V that pastes into
 /// the frontmost app. Capture and the hotkey work without it.
 enum AccessibilityPermission {
-    /// Verified in the macOS 26 SDK: `SecurityPrivacyExtension.appex` ships this
-    /// pane identifier and the `Privacy_Accessibility` anchor.
-    private static let settingsURL = URL(
-        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-    )
-
     /// Checks without prompting. Passing nil options is what makes it silent.
     static var isTrusted: Bool {
         AXIsProcessTrustedWithOptions(nil)
@@ -39,7 +33,6 @@ enum AccessibilityPermission {
     }
 
     static func openSettings() {
-        guard let settingsURL else { return }
-        NSWorkspace.shared.open(settingsURL)
+        SystemSettingsLink.open(SystemSettingsLink.accessibility)
     }
 }
