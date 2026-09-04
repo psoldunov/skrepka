@@ -108,7 +108,7 @@ private struct HistorySummary: View {
             HStack(spacing: 10) {
                 MetricTile(value: items.count, label: "Entries")
                 MetricTile(value: items.count { $0.isPinned }, label: "Pinned")
-                MetricTile(value: items.count { $0.kind == .image }, label: "Images")
+                MetricTile(value: items.count(where: \.isPicture), label: "Images")
             }
         }
     }

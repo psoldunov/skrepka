@@ -22,9 +22,20 @@ final class SettingsWindowController {
         if isFirstShow {
             window.center()
         }
-        // An accessory app has to activate to put a real window in front.
+        // `activate()` asks for keyboard focus, and that is all it can do:
+        // NSApplication.h says it activates "if possible" and "does not
+        // guarantee that the app will be activated at all" without the
+        // frontmost app first calling `yieldActivationToApplication:`. Clippy
+        // is LSUIElement, so nothing ever yields to it — activation is refused,
+        // `makeKeyAndOrderFront` orders the window only within Clippy's own
+        // layer, and Settings opens behind whatever the user was using.
+        //
+        // `orderFrontRegardless` is what actually puts it in front, the same
+        // way PickerPanelController does. Activation is also asynchronous, so
+        // ordering could not depend on it even when it does land.
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     private func makeWindow() -> NSWindow {

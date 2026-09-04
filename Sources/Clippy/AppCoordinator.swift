@@ -125,7 +125,7 @@ final class AppCoordinator {
                     Self.logRejection(decision)
                     continue
                 }
-                store.capture(item)
+                await store.capture(item)
             }
         }
     }
