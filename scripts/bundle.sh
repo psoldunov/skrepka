@@ -44,14 +44,54 @@ CONFIGURATION="${CONFIGURATION:-release}"
 APP="build/${APP_NAME}.app"
 SIGN_IDENTITY="${CLIPPY_SIGN_IDENTITY:-Developer ID Application: Philipp Soldunov (MSU5X4VMMP)}"
 
-echo "▸ Building (${CONFIGURATION})"
-swift build -c "${CONFIGURATION}"
-BIN_PATH="$(swift build -c "${CONFIGURATION}" --show-bin-path)/${APP_NAME}"
+# Architecture. The edit loop builds for this Mac only; CLIPPY_UNIVERSAL=1 asks
+# for the arm64 + x86_64 binary that a build leaving the machine needs, and
+# scripts/notarize.sh sets it.
+#
+# Only four Intel Macs run macOS 26 at all -- the 2019 Mac Pro, the 2019 16-inch
+# MacBook Pro, the 2020 13-inch MacBook Pro with four Thunderbolt 3 ports and
+# the 2020 27-inch iMac -- and 26 is the last release that supports any of them.
+# A small set, but an arm64-only .app does not launch on one, and the recipient
+# sees a Finder error rather than anything this app can explain.
+#
+# The array is always populated because /usr/bin/env bash here is bash 3.2,
+# where "${EMPTY[@]}" under `set -u` is an unbound-variable error. Naming the
+# host arch explicitly is free: `--arch $(uname -m)` resolves to the same
+# .build/<triple>/<config> bin path as passing nothing, so the incremental
+# cache that scripts/setup.sh warms is untouched (measured with
+# `swift build --show-bin-path`, both ways).
+if [[ "${CLIPPY_UNIVERSAL:-0}" == "1" ]]; then
+	ARCHITECTURES=(arm64 x86_64)
+else
+	ARCHITECTURES=("$(uname -m)")
+fi
+
+ARCHITECTURE_ARGUMENTS=()
+for architecture in "${ARCHITECTURES[@]}"; do
+	ARCHITECTURE_ARGUMENTS+=(--arch "${architecture}")
+done
+
+echo "▸ Building (${CONFIGURATION}, ${ARCHITECTURES[*]})"
+swift build -c "${CONFIGURATION}" "${ARCHITECTURE_ARGUMENTS[@]}"
+BIN_PATH="$(swift build -c "${CONFIGURATION}" \
+	"${ARCHITECTURE_ARGUMENTS[@]}" --show-bin-path)/${APP_NAME}"
 
 if [[ ! -x "${BIN_PATH}" ]]; then
 	echo "error: executable not found at ${BIN_PATH}" >&2
 	exit 1
 fi
+
+# Every slice this asked for has to actually be in the file. The x86_64 one is
+# the slice nobody here can launch, so a build that silently produced only
+# arm64 would pass every other check in this script, notarize, and then fail on
+# the one Mac it was built for.
+BUILT_SLICES="$(lipo -archs "${BIN_PATH}")"
+for architecture in "${ARCHITECTURES[@]}"; do
+	if [[ " ${BUILT_SLICES} " != *" ${architecture} "* ]]; then
+		echo "error: ${BIN_PATH} has no ${architecture} slice (found: ${BUILT_SLICES})." >&2
+		exit 1
+	fi
+done
 
 echo "▸ Assembling ${APP}"
 if [[ -d "${APP}" ]]; then

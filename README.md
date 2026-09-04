@@ -14,7 +14,8 @@ are in, without taking focus away from it.
 
 ## Requirements
 
-macOS 26.0 or later, Apple silicon. Xcode 26 to build.
+macOS 26.0 or later, Apple silicon or one of the four Intel Macs that run
+macOS 26. Xcode 26 to build.
 
 ## Build and run
 
@@ -28,6 +29,25 @@ scripts/make-icon.sh  # redraw Sources/Clippy/Resources/AppIcon.icns
 Launch with `scripts/run.sh` rather than running the binary directly. TCC
 attributes permissions to the responsible process, so a shell-launched binary
 inherits the terminal's grants instead of exercising the real permission path.
+
+### Architecture
+
+`scripts/bundle.sh` builds for the machine it runs on. `CLIPPY_UNIVERSAL=1`
+builds an arm64 + x86_64 binary instead:
+
+```sh
+CLIPPY_UNIVERSAL=1 scripts/bundle.sh
+```
+
+`scripts/notarize.sh` sets it, because that is the build that goes to other
+people. macOS 26 is the last release to support Intel, and four models still run
+it — the 2019 Mac Pro, the 2019 16-inch MacBook Pro, the 2020 13-inch MacBook
+Pro with four Thunderbolt 3 ports, and the 2020 27-inch iMac. An arm64-only
+`.app` does not launch on any of them.
+
+The universal build costs roughly twice the compile work and doubles the
+executable — 2.3 MB to 4.7 MB, measured on this release build. The local edit
+loop pays neither.
 
 ### Signing
 
