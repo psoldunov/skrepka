@@ -54,4 +54,17 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         guard !isConcealed else { return 1 }
         return max(1, text.split(whereSeparator: \.isNewline).count)
     }
+
+    /// Whether this entry is a picture, for counting and for anything that
+    /// treats pictures as a group.
+    ///
+    /// Not `kind == .image`: `public.file-url` outranks `public.png` in
+    /// ``PasteboardType/readOrder``, so a screenshot copied out of Finder is
+    /// `.file`, and counting by kind alone reported zero Images for a history
+    /// full of them. Not ``ClipKind/canPreview`` either — that admits every
+    /// `.file`, so a copied text document would count. A thumbnail is the
+    /// honest signal: one exists only where something decoded to a picture.
+    public var isPicture: Bool {
+        kind == .image || thumbnail != nil
+    }
 }

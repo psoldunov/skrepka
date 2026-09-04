@@ -30,6 +30,20 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// Whether an entry of this kind is worth asking ``ThumbnailMaker`` about.
+    ///
+    /// `.file` is on the list because a copied picture is a file, not an image:
+    /// `public.file-url` outranks `public.png` in ``PasteboardType/readOrder``,
+    /// so a screenshot copied out of Finder arrives here as `.file`. Excluding
+    /// it is what left those rows showing a generic document icon. Files that
+    /// turn out not to be images simply get no preview.
+    var canPreview: Bool {
+        switch self {
+        case .image, .file: true
+        case .text, .richText, .link: false
+        }
+    }
+
     /// Representations that carry identity, richest first, for the kinds whose
     /// ``ClipItem/text`` cannot be trusted to.
     ///

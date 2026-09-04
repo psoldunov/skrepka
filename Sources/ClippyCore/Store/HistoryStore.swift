@@ -16,7 +16,7 @@ public final class HistoryStore {
     }
 
     private let container: ModelContainer
-    private let thumbnailMaker: ThumbnailMaker
+    private let thumbnailRenderer: ThumbnailRenderer
     private var context: ModelContext { container.mainContext }
 
     /// - Parameter location: where the SQLite store lives, or nil for memory
@@ -24,10 +24,10 @@ public final class HistoryStore {
     public init(
         location: URL?,
         retention: RetentionPolicy = .default,
-        thumbnailMaker: ThumbnailMaker = ThumbnailMaker()
+        thumbnailRenderer: ThumbnailRenderer = ThumbnailRenderer()
     ) throws {
         self.retention = retention
-        self.thumbnailMaker = thumbnailMaker
+        self.thumbnailRenderer = thumbnailRenderer
 
         let configuration: ModelConfiguration =
             if let location {
@@ -56,18 +56,27 @@ public final class HistoryStore {
 
     /// Stores a newly captured item, collapsing a repeat copy onto the entry it
     /// duplicates rather than adding a second row.
+    ///
+    /// Asynchronous because previewing a copied file means reading it, and that
+    /// read belongs off this actor — see ``ThumbnailRenderer``. Captures arrive
+    /// one at a time from the poller's stream, so the suspension does not
+    /// interleave two of them.
     @discardableResult
-    public func capture(_ item: ClipItem) -> Bool {
+    public func capture(_ item: ClipItem) async -> Bool {
+        // Generated before the context is touched, so no SwiftData work spans
+        // the suspension.
+        let preview = await thumbnailRenderer.preview(for: item)
+
         do {
             if let existing = try recordMatching(contentHash: item.contentHash) {
                 existing.createdAt = item.createdAt
                 existing.sourceBundleID = item.sourceBundleID ?? existing.sourceBundleID
+                backfillPreview(preview, into: existing)
                 try context.save()
                 reload()
                 return true
             }
 
-            let preview = item.kind == .image ? thumbnailMaker.makePreview(from: item.payload) : nil
             let record = try ClipRecordMapping.makeRecord(from: item, preview: preview)
             context.insert(record)
             try context.save()
@@ -78,6 +87,23 @@ public final class HistoryStore {
             ClippyLog.store.error("Failed to store clipboard entry: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Fills in a preview the entry never got.
+    ///
+    /// An entry stored before `.file` earned previews has no thumbnail, and so
+    /// does one whose file was unreadable at the time. A repeat copy is the only
+    /// chance to fix that: nothing else revisits a row, and the de-duplication
+    /// above is what a repeat copy hits. Without this those rows keep a generic
+    /// document icon for good.
+    ///
+    /// An existing thumbnail is left alone. The row is a snapshot of the copy
+    /// that made it, and replacing it would silently rewrite history.
+    private func backfillPreview(_ preview: ThumbnailMaker.Preview?, into record: ClipRecord) {
+        guard record.thumbnailData == nil, let preview else { return }
+        record.thumbnailData = preview.thumbnail
+        record.imageWidth = preview.pixelSize?.width
+        record.imageHeight = preview.pixelSize?.height
     }
 
     // MARK: - Reading
