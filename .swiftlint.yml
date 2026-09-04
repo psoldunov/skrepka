@@ -1,0 +1,90 @@
+# SwiftLint covers the semantic ceilings swift-format has no equivalent for:
+# complexity, length, force-unwrapping. Mechanical formatting is swift-format's
+# job — nothing here duplicates it.
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - build
+
+opt_in_rules:
+  - array_init
+  - closure_end_indentation
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - discouraged_optional_boolean
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - enum_case_associated_values_count
+  - fallthrough
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - literal_expression_end_indentation
+  - multiline_arguments
+  - multiline_parameters
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - private_action
+  - private_outlet
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unavailable_function
+  - unneeded_parentheses_in_closure_argument
+  - unowned_variable_capture
+  - untyped_error_in_catch
+  - yoda_condition
+
+disabled_rules:
+  # swift-format owns line breaking and indentation.
+  - line_length
+  - trailing_comma
+  # SwiftUI view bodies are legitimately deep.
+  - closure_body_length
+
+analyzer_rules: []
+
+file_length:
+  warning: 300
+  error: 400
+
+type_body_length:
+  warning: 200
+  error: 300
+
+function_body_length:
+  warning: 40
+  error: 60
+
+cyclomatic_complexity:
+  warning: 8
+  error: 12
+
+identifier_name:
+  min_length: 2
+  excluded: [x, y, i, j, id, ok, up, to, in]
+
+type_name:
+  min_length: 3
+
+nesting:
+  type_level: 2
+
+large_tuple:
+  warning: 3
+  error: 4
+
+reporter: emoji

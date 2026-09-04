@@ -1,0 +1,12 @@
+# Dead-code detection for the Swift package.
+#
+# Upstream is archived (2026-08-12) and Homebrew disables the formula in 2027 —
+# pinned and expected to be dropped eventually. Nothing else finds an
+# unreferenced type across modules.
+#
+# No `project`/`schemes`: those force Xcode mode. In a package root Periphery
+# reads Package.swift and builds every target itself.
+retain_public: false
+retain_objc_accessible: true
+retain_swift_ui_previews: true
+strict: true
