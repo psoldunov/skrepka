@@ -18,7 +18,21 @@ public struct ThumbnailMaker: Sendable {
 
     public init() {}
 
+    /// A preview for anything the payload holds a picture of, or nil.
+    ///
+    /// Image bytes first, then the file the payload points at. The order is
+    /// what keeps the common case off the disk: an app that puts both a
+    /// `public.file-url` and a `public.png` on the pasteboard is previewed
+    /// from the bytes it already handed over.
+    ///
+    /// The preview is a snapshot taken at copy time. Editing or deleting the
+    /// file afterwards leaves the row showing the picture as it was, which is
+    /// the same promise the rest of the history makes.
     public func makePreview(from payload: ClipPayload) -> Preview? {
+        previewFromImageData(payload) ?? previewFromReferencedFile(payload)
+    }
+
+    private func previewFromImageData(_ payload: ClipPayload) -> Preview? {
         let imageTypes = [PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf]
         for type in imageTypes {
             guard let data = payload.data(forType: type), let image = NSImage(data: data) else {
@@ -28,6 +42,16 @@ public struct ThumbnailMaker: Sendable {
             return Preview(thumbnail: thumbnail, pixelSize: Self.pixelSize(of: image))
         }
         return nil
+    }
+
+    /// `public.file-url` carries the absolute URL string and nothing else, so
+    /// the picture is read from the file itself.
+    private func previewFromReferencedFile(_ payload: ClipPayload) -> Preview? {
+        guard let data = payload.data(forType: PasteboardType.fileURL),
+            let string = String(data: data, encoding: .utf8),
+            let url = URL(string: string), url.isFileURL
+        else { return nil }
+        return ImageFileThumbnail.preview(ofFileAt: url, maximumEdge: Int(Self.maximumEdge))
     }
 
     /// Pixel dimensions of the original, which is what the row subtitle shows.

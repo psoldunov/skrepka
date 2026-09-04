@@ -3,9 +3,10 @@ import SwiftUI
 
 /// The leading visual on a row.
 ///
-/// Image entries get a real preview wide enough to recognise the picture from —
-/// a 30-point square tells you nothing about a screenshot. Everything else gets
-/// a square kind symbol, so text rows stay compact.
+/// Anything Clippy could render a picture of — image data, and image files —
+/// gets a real preview wide enough to recognise the picture from; a 30-point
+/// square tells you nothing about a screenshot. Everything else gets a square
+/// kind symbol, so text rows stay compact.
 struct ClipThumbnailView: View {
     let item: ClipSummary
 
