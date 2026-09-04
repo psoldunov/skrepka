@@ -50,7 +50,11 @@ NOTARY_TIMEOUT="${CLIPPY_NOTARY_TIMEOUT:-30m}"
 
 # Builds and signs with a secure timestamp, and refuses to fall back to ad-hoc
 # signing -- an ad-hoc signature can never be notarized.
-CLIPPY_NOTARIZE=1 scripts/bundle.sh
+#
+# CLIPPY_REVEAL=0 because the .app at this point has no ticket yet. Revealing it
+# here would put the un-notarized build in front of the user, which is the one
+# copy of it that must not be sent anywhere.
+CLIPPY_NOTARIZE=1 CLIPPY_REVEAL=0 scripts/bundle.sh
 
 # Read back from the artifact rather than duplicating the identity string that
 # scripts/bundle.sh owns. Only used to make the error hint below copy-pasteable.
@@ -109,3 +113,13 @@ spctl --assess --verbose=4 --type exec "${APP}"
 
 echo "✓ ${APP}"
 echo "✓ ${ZIP} — notarized and stapled, safe to send"
+
+# The zip and not the .app: this script's product is the thing you hand to
+# someone, and the zip is the copy that carries the stapled ticket. Both sit in
+# build/, so the folder that opens holds the app either way.
+#
+# `|| true` for the same reason as in bundle.sh -- no window server, no Finder,
+# and the artifacts are already on disk.
+if [[ "${CLIPPY_REVEAL:-1}" == "1" ]]; then
+	open -R "${ZIP}" || true
+fi

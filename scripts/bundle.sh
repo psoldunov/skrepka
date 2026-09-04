@@ -113,3 +113,14 @@ codesign --force --options runtime "${TIMESTAMP_ARGUMENT[@]}" \
 codesign --verify --strict "${APP}"
 
 echo "✓ ${APP}"
+
+# Building this script on its own means the .app IS the thing you wanted, so
+# hand it over. The two scripts that call bundle.sh as a step set
+# CLIPPY_REVEAL=0: run.sh launches the app instead, and notarize.sh reveals its
+# own artifact once the ticket is stapled.
+#
+# `|| true` because a build with no window server -- CI, ssh -- has no Finder to
+# reveal into, and a signed .app that already exists is not worth failing over.
+if [[ "${CLIPPY_REVEAL:-1}" == "1" ]]; then
+	open -R "${APP}" || true
+fi

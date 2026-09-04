@@ -20,6 +20,11 @@ when the Developer ID certificate expires. `scripts/notarize.sh` sets
 `CLIPPY_NOTARIZE=1`, which turns the timestamp on and makes an ad-hoc fallback a
 hard error. It needs a one-time `xcrun notarytool store-credentials clippy`.
 
+`bundle.sh` and `notarize.sh` reveal what they built in Finder when they finish.
+Set `CLIPPY_REVEAL=0` to suppress it — `run.sh` does, because it launches the
+app, and `notarize.sh` does for its inner `bundle.sh` call, because that `.app`
+has no ticket yet.
+
 Every script pins `DEVELOPER_DIR` to `/Applications/Xcode.app/Contents/Developer`.
 Do not build with a bare `swift build`: `xcode-select -p` points at
 CommandLineTools, whose toolchain ships no `libSwiftDataMacros.dylib`, so `@Model`
