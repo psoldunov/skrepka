@@ -1,0 +1,61 @@
+import Foundation
+
+/// Conversions between the persisted ``ClipRecord`` and the value types the
+/// rest of the app uses. Kept out of `ClipRecord` so the model stays a shape.
+enum ClipRecordMapping {
+    private static let encoder: PropertyListEncoder = {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        return encoder
+    }()
+
+    static func encode(_ payload: ClipPayload) throws -> Data {
+        try encoder.encode(payload.representations)
+    }
+
+    static func decodePayload(_ data: Data) throws -> ClipPayload {
+        guard !data.isEmpty else { return ClipPayload(representations: [:]) }
+        let representations = try PropertyListDecoder().decode([String: Data].self, from: data)
+        return ClipPayload(representations: representations)
+    }
+
+    static func makeRecord(from item: ClipItem, preview: ThumbnailMaker.Preview?) throws -> ClipRecord {
+        // The pixel size comes from decoding the image, which only the preview
+        // step does — the pure capture rules never touch AppKit imaging.
+        let imageSize = preview?.pixelSize ?? item.imageSize
+        return ClipRecord(
+            id: item.id,
+            kindRaw: item.kind.rawValue,
+            text: item.text,
+            sourceBundleID: item.sourceBundleID,
+            createdAt: item.createdAt,
+            isPinned: item.isPinned,
+            isConcealed: item.isConcealed,
+            contentHash: item.contentHash,
+            imageWidth: imageSize?.width,
+            imageHeight: imageSize?.height,
+            thumbnailData: preview?.thumbnail,
+            payloadData: try encode(item.payload)
+        )
+    }
+
+    static func summary(from record: ClipRecord) -> ClipSummary {
+        let imageSize: ClipItem.ImageSize? =
+            if let width = record.imageWidth, let height = record.imageHeight {
+                ClipItem.ImageSize(width: width, height: height)
+            } else {
+                nil
+            }
+        return ClipSummary(
+            id: record.id,
+            kind: ClipKind(rawValue: record.kindRaw) ?? .text,
+            text: record.text,
+            sourceBundleID: record.sourceBundleID,
+            createdAt: record.createdAt,
+            isPinned: record.isPinned,
+            isConcealed: record.isConcealed,
+            imageSize: imageSize,
+            thumbnail: record.thumbnailData
+        )
+    }
+}

@@ -1,0 +1,68 @@
+#:schema https://www.ensemblr.dev/schemas/settings.schema.json
+
+# Clippy is a SwiftPM package, not an Xcode project: there is no scheme and no
+# dev server. Every button below drives the same `swift` toolchain and the same
+# .build directory that scripts/doctor.sh does.
+
+[environment_variables]
+# scripts/doctor.sh and scripts/bundle.sh already default to this path; setting
+# it here makes the raw `swift`/`xcrun` buttons agree with them. `xcode-select
+# -p` points at CommandLineTools, so without this the Test and Format buttons
+# would run a different toolchain binary than the quality gate — a SwiftPM
+# scratch directory keyed to a different toolchain forces a full rebuild on
+# every switch, and two swift-format versions disagree about formatting.
+# README.md already states Xcode 26 is required to build.
+DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer"
+
+[scripts]
+# A fresh worktree starts with no .build/ (it is gitignored, so nothing is
+# carried over). Resolve the pinned graph — KeyboardShortcuts 3.0.1, per
+# Package.resolved — then warm the debug build so the first Doctor or Test
+# press is incremental. A cold debug build of this package measures ~15s.
+setup = "swift package resolve && swift build"
+
+# Every script here contends on the one .build directory, and Periphery builds
+# the package a third time. Serialise rather than have concurrent SwiftPM
+# invocations block on the package lock with interleaved output.
+run_mode = "nonconcurrent"
+
+# Deliberately off. The default script launches the real app bundle, which
+# prompts for Accessibility; that should be a decision, not a side effect of
+# creating a workspace.
+auto_run_after_setup = false
+
+[scripts.run.run]
+# Build, bundle, sign and launch. Launching via this script rather than
+# executing the binary matters: TCC attributes permissions to the responsible
+# process, so a shell-launched binary inherits the terminal's grants instead of
+# exercising the real permission path. Exits as soon as `open` returns.
+command = "scripts/run.sh"
+icon = "play"
+default = true
+
+[scripts.run.doctor]
+# The quality gate and the definition of done: format check, lint, build with
+# warnings as errors, tests, dead-code scan.
+command = "scripts/doctor.sh"
+icon = "badge-check"
+
+[scripts.run.doctor-fast]
+# The mid-edit loop — format, lint and build only, no tests, no Periphery.
+command = "scripts/doctor.sh --fast"
+icon = "zap"
+
+[scripts.run.test]
+# Just the Swift Testing suite, for when the whole gate is too slow to be a
+# feedback loop.
+command = "swift test --parallel"
+icon = "test-tube"
+
+[scripts.run.format]
+# The fixer scripts/doctor.sh names by hand when its format check fails.
+command = "xcrun swift-format format --in-place --recursive --parallel Sources Tests"
+icon = "paintbrush"
+
+[scripts.run.bundle]
+# Produce build/Clippy.app without stopping or relaunching a running instance.
+command = "scripts/bundle.sh"
+icon = "package"
