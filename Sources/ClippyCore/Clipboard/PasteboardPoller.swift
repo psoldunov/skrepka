@@ -82,7 +82,14 @@ public actor PasteboardPoller {
         guard !isPaused else { return }
 
         let source = await sourceProvider()
-        guard let snapshot = reader.snapshot(sourceBundleID: source) else { return }
-        continuation?.yield(rules.decide(snapshot))
+        switch reader.read(sourceBundleID: source) {
+        case .contents(let snapshot):
+            continuation?.yield(rules.decide(snapshot))
+        case .unreadable:
+            // Emitted rather than dropped. This is what a denied pasteboard
+            // looks like, and swallowing it here is what made an unusable
+            // install indistinguishable from an idle one.
+            continuation?.yield(.rejectedUnreadable)
+        }
     }
 }

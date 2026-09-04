@@ -19,10 +19,7 @@ struct PrivacySettingsView: View {
                 subtitle: "Anything marked transient or concealed is never recorded.",
                 symbol: "lock.shield"
             ) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.green)
-                    .accessibilityLabel("Always on")
+                StatusIndicator(state: .good)
             }
         }
 

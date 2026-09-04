@@ -10,7 +10,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-scripts/bundle.sh
+# CLIPPY_REVEAL=0 because this script launches the app; a Finder window opening
+# over the thing you are about to run is noise, not a result.
+CLIPPY_REVEAL=0 scripts/bundle.sh
 
 echo "▸ Stopping any running instance"
 pkill -x Clippy 2> /dev/null || true

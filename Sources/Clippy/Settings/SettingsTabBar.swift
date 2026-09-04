@@ -5,6 +5,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case general
     case history
     case privacy
+    case diagnostics
 
     var id: String { rawValue }
 
@@ -13,6 +14,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .general: "General"
         case .history: "History"
         case .privacy: "Privacy"
+        case .diagnostics: "Status"
         }
     }
 
@@ -21,6 +23,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .general: "gearshape"
         case .history: "clock.arrow.circlepath"
         case .privacy: "hand.raised"
+        case .diagnostics: "stethoscope"
         }
     }
 }

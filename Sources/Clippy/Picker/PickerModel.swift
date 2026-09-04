@@ -48,6 +48,9 @@ final class PickerModel {
     private static let pointerMovementThreshold: CGFloat = 4
 
     private let store: HistoryStore
+    /// Read by the empty state so it can say why the list is empty rather than
+    /// assuming nobody has copied anything.
+    let captureHealth: CaptureHealth
     private let matcher = Matcher()
 
     /// Sends a chosen entry back to the coordinator.
@@ -59,7 +62,8 @@ final class PickerModel {
     /// Height the panel needs for the current results.
     var desiredPanelHeight: CGFloat { PickerMetrics.panelHeight(for: results) }
 
-    init(store: HistoryStore) {
+    init(store: HistoryStore, captureHealth: CaptureHealth) {
+        self.captureHealth = captureHealth
         self.store = store
         refreshResults()
         observeStore()

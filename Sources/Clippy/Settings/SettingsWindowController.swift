@@ -9,12 +9,17 @@ import SwiftUI
 final class SettingsWindowController {
     private unowned let coordinator: AppCoordinator
     private var window: NSWindow?
+    /// Which pane is showing. Held here rather than in the view because the
+    /// window is built once and reused, so a `@State` inside `SettingsView`
+    /// would survive every later `show(tab:)` and ignore it.
+    private let selection = SettingsSelection()
 
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
     }
 
-    func show() {
+    func show(tab: SettingsTab = .general) {
+        selection.tab = tab
         let isFirstShow = window == nil
         let window = window ?? makeWindow()
         self.window = window
@@ -39,7 +44,10 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let hosting = NSHostingController(rootView: SettingsView(coordinator: coordinator))
+        @Bindable var selection = selection
+        let hosting = NSHostingController(
+            rootView: SettingsView(coordinator: coordinator, selection: $selection.tab)
+        )
         // The window is a fixed size, so the hosting controller must not push a
         // preferred size of its own — that is what made it resize, and grow from
         // its bottom-left origin, every time the pane changed.
@@ -60,4 +68,12 @@ final class SettingsWindowController {
         window.setContentSize(SettingsView.windowSize)
         return window
     }
+}
+
+/// The selected pane, as an object the window controller owns and the view
+/// binds to.
+@MainActor
+@Observable
+final class SettingsSelection {
+    var tab: SettingsTab = .general
 }

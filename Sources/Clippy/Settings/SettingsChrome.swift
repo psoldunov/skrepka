@@ -180,6 +180,58 @@ struct SettingsNotice: View {
     }
 }
 
+/// A row's verdict, as a symbol.
+///
+/// A symbol and not a word: three "OK" pills stacked down a card read as a
+/// wall of text, and the tick is the same one the welcome window shows, so a
+/// granted permission looks identical wherever it appears. The label is
+/// carried for assistive technology, since the colour is doing real work.
+struct StatusIndicator: View {
+    enum State {
+        case good
+        case warning
+        case bad
+        case neutral
+
+        var symbol: String {
+            switch self {
+            case .good: "checkmark.circle.fill"
+            case .warning: "exclamationmark.triangle.fill"
+            case .bad: "xmark.octagon.fill"
+            case .neutral: "minus.circle.fill"
+            }
+        }
+
+        /// What VoiceOver reads in place of the symbol.
+        var label: String {
+            switch self {
+            case .good: "OK"
+            case .warning: "Needs attention"
+            case .bad: "Blocked"
+            case .neutral: "Off"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .good: .green
+            case .warning: .orange
+            case .bad: .red
+            case .neutral: .secondary
+            }
+        }
+    }
+
+    let state: State
+
+    var body: some View {
+        Image(systemName: state.symbol)
+            .font(.system(size: 14))
+            .foregroundStyle(state.color)
+            .accessibilityLabel(state.label)
+    }
+}
+
 /// The vibrant base the glass cards sit on.
 ///
 /// The window itself is transparent, so without this the cards would sample the
