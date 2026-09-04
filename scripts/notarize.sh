@@ -25,6 +25,10 @@
 #   * The signature needs a secure timestamp, which scripts/bundle.sh omits by
 #     default. CLIPPY_NOTARIZE=1 turns it on.
 #
+# The build is universal (CLIPPY_UNIVERSAL=1) because this is the copy that
+# goes to other people's Macs, and four Intel models still run macOS 26. See
+# the comment on ARCHITECTURES in scripts/bundle.sh.
+#
 # Credentials come from a notarytool keychain profile, created once:
 #
 #   xcrun notarytool store-credentials clippy \
@@ -54,7 +58,7 @@ NOTARY_TIMEOUT="${CLIPPY_NOTARY_TIMEOUT:-30m}"
 # CLIPPY_REVEAL=0 because the .app at this point has no ticket yet. Revealing it
 # here would put the un-notarized build in front of the user, which is the one
 # copy of it that must not be sent anywhere.
-CLIPPY_NOTARIZE=1 CLIPPY_REVEAL=0 scripts/bundle.sh
+CLIPPY_NOTARIZE=1 CLIPPY_REVEAL=0 CLIPPY_UNIVERSAL=1 scripts/bundle.sh
 
 # Read back from the artifact rather than duplicating the identity string that
 # scripts/bundle.sh owns. Only used to make the error hint below copy-pasteable.

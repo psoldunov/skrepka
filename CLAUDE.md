@@ -20,6 +20,11 @@ when the Developer ID certificate expires. `scripts/notarize.sh` sets
 `CLIPPY_NOTARIZE=1`, which turns the timestamp on and makes an ad-hoc fallback a
 hard error. It needs a one-time `xcrun notarytool store-credentials clippy`.
 
+`scripts/bundle.sh` builds for the host architecture alone. `CLIPPY_UNIVERSAL=1`
+builds arm64 + x86_64 instead, and `notarize.sh` sets it: four Intel Macs still
+run macOS 26, and an arm64-only `.app` will not launch on one. The script
+verifies with `lipo -archs` that every requested slice landed before it signs.
+
 `bundle.sh` and `notarize.sh` reveal what they built in Finder when they finish.
 Set `CLIPPY_REVEAL=0` to suppress it — `run.sh` does, because it launches the
 app, and `notarize.sh` does for its inner `bundle.sh` call, because that `.app`
