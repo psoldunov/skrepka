@@ -22,10 +22,22 @@ macOS 26. Xcode 26 to build.
 
 ## Install
 
-Download `Skrepka.zip` from the
+```sh
+brew install --cask psoldunov/tap/skrepka
+```
+
+Or download `Skrepka.zip` from the
 [latest release](https://github.com/psoldunov/skrepka/releases/latest), unzip
-it, and drag `Skrepka.app` into `/Applications`. The build is universal and
-notarized, so it opens on first launch with no Gatekeeper detour.
+it, and drag `Skrepka.app` into `/Applications`.
+
+Either way the build is universal and notarized, so it opens on first launch
+with no Gatekeeper detour.
+
+The cask lives in
+[`psoldunov/homebrew-tap`](https://github.com/psoldunov/homebrew-tap). Skrepka
+has no in-app updater, so `brew upgrade --cask skrepka` is the whole update
+path — and `brew uninstall --zap --cask skrepka` is the one that takes the
+clipboard history with it.
 
 ## Build and run
 
