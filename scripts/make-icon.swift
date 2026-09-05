@@ -1,13 +1,19 @@
-// Renders the Skrepka app icon: a gem clip with eyes, a nod to the old Office
-// assistant, drawn as vectors and rasterised once per iconset size so no size
-// is a resampled copy of another.
+// Renders the Skrepka app icon: the paperclip mark on a rounded tile, drawn as
+// vectors and rasterised once per iconset size so no size is a resampled copy
+// of another.
 //
-//   swift scripts/make-icon.swift <output.iconset> [variant]
-//   swift scripts/make-icon.swift --preview <directory>
+// Built, not interpreted — scripts/make-icon.sh compiles this file together
+// with Sources/SkrepkaCore/Branding/PaperclipPath.swift so the icon, the menu
+// bar mark and the in-app artwork all come from one path. Run it through that
+// script rather than `swift scripts/make-icon.swift`, which cannot see the
+// second file.
+//
+//   make-icon <output.iconset> [variant]
+//   make-icon --preview <directory>
 //
 // Variants exist so the palette can be compared side by side; the first one
 // is what ships. Not part of any SwiftPM target — it lives in scripts/ so the
-// package never tries to compile it.
+// package never tries to compile it into the app.
 
 import CoreGraphics
 import Foundation
@@ -75,239 +81,43 @@ struct Variant {
     let name: String
     /// Tile gradient, top-left to bottom-right.
     let tile: [CGColor]
-    /// A stack of note cards behind the clip.
-    let cards: Bool
     let finish: Finish
     let wire: [CGColor]
-    let brows: Bool
 }
 
+/// Off-white and off-black, both directions. Nothing else is on the tile, so
+/// the palette is the whole design decision: a neutral that does not fight the
+/// wallpaper, and a clip dark or light enough to survive being 32 points wide.
 let variants: [Variant] = [
     Variant(
-        name: "sand",
-        tile: [rgb(0xF3E7D2), rgb(0xE4D0AE), rgb(0xCBAF85)],
-        cards: true,
+        name: "paper",
+        tile: [rgb(0xFCFBF8), rgb(0xF0EEE8), rgb(0xDEDBD3)],
         finish: .flat,
-        wire: [rgb(0x74829A), rgb(0x4E5B73), rgb(0x333D52)],
-        brows: true
+        wire: [rgb(0x4C4C52), rgb(0x2B2B30), rgb(0x151518)]
     ),
     Variant(
-        name: "ink",
-        tile: [rgb(0x38456B), rgb(0x232C4A), rgb(0x131829)],
-        cards: true,
+        name: "carbon",
+        tile: [rgb(0x2C2C2F), rgb(0x1D1D20), rgb(0x101012)],
         finish: .chrome,
-        wire: [rgb(0xFDFEFF), rgb(0xCBD5E6), rgb(0x74829E)],
-        brows: true
-    ),
-    Variant(
-        name: "graphite",
-        tile: [rgb(0x4A5364), rgb(0x333B4A), rgb(0x1E2430)],
-        cards: true,
-        finish: .chrome,
-        wire: [rgb(0xFDFEFF), rgb(0xCDD6E3), rgb(0x76839A)],
-        brows: true
-    ),
-    Variant(
-        name: "sage",
-        tile: [rgb(0xDDE3D6), rgb(0xBFCAB6), rgb(0x94A38C)],
-        cards: true,
-        finish: .flat,
-        wire: [rgb(0x6F7F82), rgb(0x47555A), rgb(0x2C383D)],
-        brows: true
+        wire: [rgb(0xFFFFFF), rgb(0xEDEBE6), rgb(0xBFBCB5)]
     ),
 ]
 
-// MARK: - The gem clip
+// MARK: - The tile
 
-let clipCenterX: CGFloat = 512
-/// Lift applied to the whole character, in design units.
-let artOffsetY: CGFloat = -18
-/// How much of the tile the character fills. macOS icons carry their weight
-/// close to the edges; the clip on its own looked lost at 32pt without this.
-let artScale: CGFloat = 1.18
-let clipOuterHalfWidth: CGFloat = 210
-let clipInnerHalfWidth: CGFloat = 105
-let wireWidth: CGFloat = 48
-
-/// One continuous wire, bent the way a gem clip actually is: a U at the bottom
-/// of the inner loop, a tight U-turn at the top left stepping out to the outer
-/// loop, a U at the bottom of the outer loop, and two free ends pointing up.
-func clipWirePath() -> CGPath {
-    let cx = clipCenterX
-    let inner = clipInnerHalfWidth
-    let outer = clipOuterHalfWidth
-    let step = (outer - inner) / 2
-
-    let path = CGMutablePath()
-    path.move(to: CGPoint(x: cx + inner, y: 372))
-    path.addArc(
-        tangent1End: CGPoint(x: cx + inner, y: 700),
-        tangent2End: CGPoint(x: cx - inner, y: 700),
-        radius: inner
-    )
-    path.addArc(
-        tangent1End: CGPoint(x: cx - inner, y: 700),
-        tangent2End: CGPoint(x: cx - inner, y: 288),
-        radius: inner
-    )
-    path.addArc(
-        tangent1End: CGPoint(x: cx - inner, y: 288),
-        tangent2End: CGPoint(x: cx - outer, y: 288),
-        radius: step
-    )
-    path.addArc(
-        tangent1End: CGPoint(x: cx - outer, y: 288),
-        tangent2End: CGPoint(x: cx - outer, y: 790),
-        radius: step
-    )
-    path.addArc(
-        tangent1End: CGPoint(x: cx - outer, y: 790),
-        tangent2End: CGPoint(x: cx + outer, y: 790),
-        radius: outer
-    )
-    path.addArc(
-        tangent1End: CGPoint(x: cx + outer, y: 790),
-        tangent2End: CGPoint(x: cx + outer, y: 330),
-        radius: outer
-    )
-    path.addLine(to: CGPoint(x: cx + outer, y: 330))
-    return path
-}
-
-func strokedWire(_ width: CGFloat) -> CGPath {
-    clipWirePath().copy(
-        strokingWithWidth: width,
-        lineCap: .round,
-        lineJoin: .round,
-        miterLimit: 10
-    )
-}
-
-/// Strokes the wire centreline offset inside the silhouette, which is what
-/// gives a flat stroke the roundness of a real wire.
-func shadeWire(_ ctx: CGContext, dx: CGFloat, dy: CGFloat, width: CGFloat, color: CGColor) {
-    ctx.saveGState()
-    ctx.translateBy(x: dx, y: dy)
-    ctx.addPath(clipWirePath())
-    ctx.setStrokeColor(color)
-    ctx.setLineWidth(width)
-    ctx.setLineCap(.round)
-    ctx.setLineJoin(.round)
-    ctx.strokePath()
-    ctx.restoreGState()
-}
-
-func drawClip(_ ctx: CGContext, _ variant: Variant, _ scale: CGFloat) {
-    let silhouette = strokedWire(wireWidth)
-
-    // A steel wire is lighter than the paper it holds, so it needs a rim to
-    // stay a wire and not a hole in the cards.
-    let plate = variant.finish == .chrome ? strokedWire(wireWidth + 7) : silhouette
-    withShadow(ctx, scale, dy: 10, blur: 26, color: rgb(0x241A05, 0.32)) {
-        ctx.addPath(plate)
-        ctx.setFillColor(variant.finish == .chrome ? rgb(0x2B3444, 0.45) : variant.wire[1])
-        ctx.fillPath()
-    }
-
-    guard let body = gradient(variant.wire, [0, 0.5, 1]) else { return }
-    fill(ctx, silhouette, body, from: CGPoint(x: 300, y: 260), to: CGPoint(x: 730, y: 800))
-
-    ctx.saveGState()
-    ctx.addPath(silhouette)
-    ctx.clip()
-    switch variant.finish {
-    case .chrome:
-        shadeWire(ctx, dx: -7, dy: -8, width: wireWidth * 0.34, color: rgb(0xFFFFFF, 0.85))
-        shadeWire(ctx, dx: 8, dy: 9, width: wireWidth * 0.30, color: rgb(0x3E4B60, 0.30))
-    case .flat:
-        shadeWire(ctx, dx: -6, dy: -7, width: wireWidth * 0.28, color: rgb(0xFFFFFF, 0.22))
-    }
-    ctx.restoreGState()
-}
-
-// MARK: - The face
-
-struct Eye {
-    let center: CGPoint
-    let radius: CGFloat
-}
-
-let eyes = [
-    Eye(center: CGPoint(x: 446, y: 438), radius: 72),
-    Eye(center: CGPoint(x: 580, y: 426), radius: 65),
-]
-
-func drawEyes(_ ctx: CGContext, _ scale: CGFloat) {
-    guard let white = gradient([rgb(0xFFFFFF), rgb(0xFFFFFF), rgb(0xDDE4EE)], [0, 0.55, 1]) else {
-        return
-    }
-
-    for eye in eyes {
-        let bounds = CGRect(
-            x: eye.center.x - eye.radius,
-            y: eye.center.y - eye.radius,
-            width: eye.radius * 2,
-            height: eye.radius * 2
-        )
-        let ball = CGPath(ellipseIn: bounds, transform: nil)
-
-        withShadow(ctx, scale, dy: 6, blur: 16, color: rgb(0x241A05, 0.35)) {
-            ctx.addPath(ball)
-            ctx.setFillColor(rgb(0xFFFFFF))
-            ctx.fillPath()
-        }
-        fill(
-            ctx,
-            ball,
-            white,
-            from: CGPoint(x: eye.center.x, y: bounds.minY),
-            to: CGPoint(x: eye.center.x, y: bounds.maxY)
-        )
-
-        // Pupils sit high and slightly inward: a gaze up at whatever was just
-        // copied reads friendlier than a straight-ahead stare.
-        let pupil = CGPoint(x: eye.center.x + eye.radius * 0.16, y: eye.center.y - eye.radius * 0.12)
-        let pupilRadius = eye.radius * 0.46
-        ctx.setFillColor(rgb(0x151B27))
-        ctx.fillEllipse(
-            in: CGRect(
-                x: pupil.x - pupilRadius,
-                y: pupil.y - pupilRadius,
-                width: pupilRadius * 2,
-                height: pupilRadius * 2
-            )
-        )
-
-        let glint = pupilRadius * 0.34
-        ctx.setFillColor(rgb(0xFFFFFF, 0.92))
-        ctx.fillEllipse(
-            in: CGRect(
-                x: pupil.x - pupilRadius * 0.42 - glint,
-                y: pupil.y - pupilRadius * 0.46 - glint,
-                width: glint * 2,
-                height: glint * 2
-            )
-        )
-    }
-}
-
-/// Brows do most of the expression work; they are drawn thick enough to survive
-/// the 32pt rasterisation.
-func drawBrows(_ ctx: CGContext) {
-    let brows = CGMutablePath()
-    brows.move(to: CGPoint(x: 384, y: 344))
-    brows.addQuadCurve(to: CGPoint(x: 478, y: 328), control: CGPoint(x: 430, y: 312))
-    brows.move(to: CGPoint(x: 546, y: 322))
-    brows.addQuadCurve(to: CGPoint(x: 634, y: 344), control: CGPoint(x: 592, y: 310))
-
-    ctx.addPath(brows)
-    ctx.setStrokeColor(rgb(0x151B27))
-    ctx.setLineWidth(20)
-    ctx.setLineCap(.round)
-    ctx.strokePath()
-}
-
-// MARK: - The tile and the cards
+/// What survives macOS's own masking, in canvas units.
+///
+/// The Human Interface Guidelines say to hand macOS a *square* layer and let it
+/// round the corners itself ("provide square layers so the system can apply
+/// rounded corners"), and macOS 26 does that for a legacy `.icns` too: asking
+/// `NSWorkspace` for the icon of a bundle carrying a full-bleed square
+/// `AppIcon.icns` returns a squircle, inset, with a system-drawn rim and
+/// shadow. Thresholding that answer's alpha gives 824 × 824 at +100 +100.
+///
+/// So the tile is drawn full bleed and carries no shadow and no corner radius
+/// of its own — both would be applied twice — and everything that has to read
+/// stays inside this rectangle.
+let safeArea = CGRect(x: 100, y: 100, width: 824, height: 824)
 
 func drawTile(_ ctx: CGContext, _ variant: Variant) {
     let tile = CGPath(rect: CGRect(x: 0, y: 0, width: canvas, height: canvas), transform: nil)
@@ -330,32 +140,78 @@ func drawTile(_ ctx: CGContext, _ variant: Variant) {
     ctx.restoreGState()
 }
 
-/// Two note cards behind the clip — the history the clip is holding together.
-func drawCards(_ ctx: CGContext, _ scale: CGFloat) {
-    let sheets: [(rect: CGRect, angle: CGFloat, color: CGColor)] = [
-        (CGRect(x: 300, y: 430, width: 420, height: 420), 6, rgb(0xF7EAD1)),
-        (CGRect(x: 292, y: 418, width: 428, height: 428), -3, rgb(0xFFFFFF)),
-    ]
+// MARK: - The mark
 
-    for sheet in sheets {
-        let center = CGPoint(x: sheet.rect.midX, y: sheet.rect.midY)
-        ctx.saveGState()
-        ctx.translateBy(x: center.x, y: center.y)
-        ctx.rotate(by: sheet.angle * .pi / 180)
-        ctx.translateBy(x: -center.x, y: -center.y)
-        let card = CGPath(
-            roundedRect: sheet.rect,
-            cornerWidth: 26,
-            cornerHeight: 26,
-            transform: nil
+/// Where the paperclip sits: square, so `PaperclipPath.fitted(in:)` centres the
+/// mark's own bounding box inside it without cropping, and well inside
+/// ``safeArea`` so the system's corner masking never reaches it. Lifted a
+/// little, because the mark's ink sits low in its own box.
+let markBox = safeArea.insetBy(dx: 112, dy: 112).offsetBy(dx: 0, dy: -12)
+
+func drawClip(_ ctx: CGContext, _ variant: Variant, _ scale: CGFloat) {
+    // `flipped: false`: the context has already been flipped into the top-left
+    // origin the design space and PaperclipPath both use.
+    guard let mark = PaperclipPath.fitted(in: markBox, flipped: false) else { return }
+
+    // A light wire on a dark tile has nothing to end against, so chrome gets a
+    // rim: the silhouette grown a little and filled darker, under the wire.
+    let plate =
+        variant.finish == .chrome
+        ? mark.copy(
+            strokingWithWidth: markBox.width / 80,
+            lineCap: .round,
+            lineJoin: .round,
+            miterLimit: 10
         )
-        withShadow(ctx, scale, dy: 12, blur: 30, color: rgb(0x3A2404, 0.3)) {
-            ctx.addPath(card)
-            ctx.setFillColor(sheet.color)
-            ctx.fillPath()
-        }
-        ctx.restoreGState()
+        : mark
+    withShadow(ctx, scale, dy: 10, blur: 26, color: rgb(0x000000, 0.28)) {
+        ctx.addPath(mark)
+        ctx.addPath(plate)
+        ctx.setFillColor(variant.finish == .chrome ? rgb(0x000000, 0.38) : variant.wire[1])
+        ctx.fillPath()
     }
+
+    guard let body = gradient(variant.wire, [0, 0.5, 1]) else { return }
+    fill(
+        ctx,
+        mark,
+        body,
+        from: CGPoint(x: markBox.minX, y: markBox.minY),
+        to: CGPoint(x: markBox.maxX, y: markBox.maxY)
+    )
+
+    ctx.saveGState()
+    ctx.addPath(mark)
+    ctx.clip()
+    switch variant.finish {
+    case .chrome:
+        shadeEdge(ctx, mark, dx: -6, dy: -7, width: 16, color: rgb(0xFFFFFF, 0.85))
+        shadeEdge(ctx, mark, dx: 7, dy: 8, width: 14, color: rgb(0x2A2A2E, 0.34))
+    case .flat:
+        shadeEdge(ctx, mark, dx: -5, dy: -6, width: 13, color: rgb(0xFFFFFF, 0.20))
+    }
+    ctx.restoreGState()
+}
+
+/// Runs a soft line along the mark's own boundary, offset out of the silhouette
+/// so the clip it is drawn inside keeps only the half that falls on the wire.
+/// That asymmetry is what gives a flat fill the roundness of a real wire.
+func shadeEdge(
+    _ ctx: CGContext,
+    _ mark: CGPath,
+    dx: CGFloat,
+    dy: CGFloat,
+    width: CGFloat,
+    color: CGColor
+) {
+    ctx.saveGState()
+    ctx.translateBy(x: dx, y: dy)
+    ctx.addPath(mark)
+    ctx.setStrokeColor(color)
+    ctx.setLineWidth(width)
+    ctx.setLineJoin(.round)
+    ctx.strokePath()
+    ctx.restoreGState()
 }
 
 // MARK: - Rasterisation
@@ -381,20 +237,7 @@ func renderIcon(size: Int, variant: Variant) -> CGImage? {
     ctx.scaleBy(x: 1, y: -1)
 
     drawTile(ctx, variant)
-
-    // The character's ink sits low and small in its own coordinates; lift and
-    // grow it about the tile centre so the tile reads as optically filled.
-    ctx.translateBy(x: canvas / 2, y: canvas / 2 + artOffsetY)
-    ctx.scaleBy(x: artScale, y: artScale)
-    ctx.translateBy(x: -canvas / 2, y: -canvas / 2)
-    if variant.cards {
-        drawCards(ctx, scale)
-    }
     drawClip(ctx, variant, scale)
-    drawEyes(ctx, scale)
-    if variant.brows {
-        drawBrows(ctx)
-    }
 
     return ctx.makeImage()
 }
@@ -453,12 +296,10 @@ let iconsetSizes: [(name: String, pixels: Int)] = [
     ("icon_512x512@2x", 1024),
 ]
 
-let arguments = Array(CommandLine.arguments.dropFirst())
-
 func usage() -> Never {
     let text = """
-        usage: make-icon.swift <output.iconset> [variant]
-               make-icon.swift --preview <directory>
+        usage: make-icon <output.iconset> [variant]
+               make-icon --preview <directory>
         variants: \(variants.map(\.name).joined(separator: ", "))
 
         """
@@ -466,32 +307,40 @@ func usage() -> Never {
     exit(2)
 }
 
-do {
-    switch arguments.first {
-    case "--preview":
-        guard arguments.count == 2 else { usage() }
-        let directory = URL(fileURLWithPath: arguments[1])
-        for variant in variants {
-            try render(
-                variant,
-                sizes: [("\(variant.name)-1024", 1024), ("\(variant.name)-064", 64)],
-                into: directory
-            )
-        }
-        print("✓ previews in \(directory.path)")
+/// Compiled as a library so PaperclipPath can be linked in beside it, which
+/// rules out top-level statements — hence an explicit entry point.
+@main
+enum IconTool {
+    static func main() {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        do {
+            switch arguments.first {
+            case "--preview":
+                guard arguments.count == 2 else { usage() }
+                let directory = URL(fileURLWithPath: arguments[1])
+                for variant in variants {
+                    try render(
+                        variant,
+                        sizes: [("\(variant.name)-1024", 1024), ("\(variant.name)-064", 64)],
+                        into: directory
+                    )
+                }
+                print("✓ previews in \(directory.path)")
 
-    case .some(let path) where !path.hasPrefix("-"):
-        let requested = arguments.count > 1 ? arguments[1] : variants[0].name
-        guard let variant = variants.first(where: { $0.name == requested }) else {
-            throw IconError.message("unknown variant \(requested)")
-        }
-        try render(variant, sizes: iconsetSizes, into: URL(fileURLWithPath: path))
-        print("✓ rendered \(variant.name) at \(iconsetSizes.count) sizes")
+            case .some(let path) where !path.hasPrefix("-"):
+                let requested = arguments.count > 1 ? arguments[1] : variants[0].name
+                guard let variant = variants.first(where: { $0.name == requested }) else {
+                    throw IconError.message("unknown variant \(requested)")
+                }
+                try render(variant, sizes: iconsetSizes, into: URL(fileURLWithPath: path))
+                print("✓ rendered \(variant.name) at \(iconsetSizes.count) sizes")
 
-    default:
-        usage()
+            default:
+                usage()
+            }
+        } catch {
+            FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+            exit(1)
+        }
     }
-} catch {
-    FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
-    exit(1)
 }

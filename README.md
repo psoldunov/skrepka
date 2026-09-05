@@ -61,18 +61,30 @@ warns.
 
 ### Icon
 
-The app icon is a gem clip with eyes holding a stack of notes — a nod to the
-Office assistant the app is named after. It is drawn in code, not in a design
-tool: `scripts/make-icon.swift` renders the vectors once per iconset size and
-`scripts/make-icon.sh` packs them into `Sources/Skrepka/Resources/AppIcon.icns`.
-Pass a palette name (`sand`, `ink`, `graphite`, `sage`) to try another; `sand`
-ships. `--preview <dir>` writes every palette at 1024 and 64 px for comparison.
+One mark, drawn once: a swirl paperclip, one continuous wire through three
+U-turns with a semicircular cap on each free end. It lives as a `CGPath` in
+`PaperclipPath` (`Sources/SkrepkaCore/Branding/`), and `scripts/paperclip.svg`
+is the same artwork in SVG form — the design source the path was transcribed
+from. The source art cuts both free ends square; the caps are the one change.
 
-The menu bar mark is drawn too, by `StatusItemIcon` in `SkrepkaCore` — the same
-gem clip, thinned and flattened into an 18pt template image, with the eyes kept
-as pupils since a template image is alpha only. A test pins its ink coverage to
-a band, because a wire drawn too heavy reads as a blob and one drawn too light
-disappears, and neither fails loudly.
+Everything that shows the mark draws that path:
+
+- **`AppIcon.icns`** — `scripts/make-icon.swift` renders the vectors once per
+  iconset size and `scripts/make-icon.sh` packs them. The script is *compiled*
+  rather than interpreted, with `PaperclipPath.swift` linked in beside it, so
+  the icon cannot drift from the app. Palettes are `paper` (off-white tile,
+  near-black clip — ships) and `carbon` (off-black tile, chrome clip); pass one
+  by name, or `--preview <dir>` to write both at 1024 and 64 px.
+- **The menu bar** — `StatusItemIcon` in `SkrepkaCore`, the same path flattened
+  into an 18pt template image. A test pins its ink coverage to a band, because
+  a mark drawn too heavy reads as a blob and one drawn too light disappears,
+  and neither fails loudly. The wire is drawn at its own weight and not
+  boldened: the three nested wires leave gaps narrower than the wire, and
+  thickening it closes them.
+- **In-app** — `PaperclipMark`, a SwiftUI `Shape` in `Sources/Skrepka/Branding/`,
+  on the Welcome header, the Settings identity row and the empty picker. The
+  permission rows keep the system `doc.on.clipboard` symbol: they label the
+  clipboard, not Skrepka.
 
 The app icon artwork is full-bleed square on purpose. macOS 26 masks a legacy
 `.icns` into its own rounded-rectangle, insets it and adds the shadow — checked
