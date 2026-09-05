@@ -1,12 +1,22 @@
 # A Linux Skrepka, and LAN sync between the two
 
-**Status: consideration. Nothing here is committed to and no code exists for
-any of it.** This is the written-down version of a design investigation, kept
-so the next person to pick the idea up does not repeat the research. Claims are
-sourced where they were verified and labelled where they were not.
+**Status: this was written as a consideration; the work has since been
+committed to.** See [D-6](linux-sync/open-questions.md#d-6). No code exists for
+any of it yet.
+
+This is the written-down version of a design investigation, kept so the next
+person to pick the idea up does not repeat the research. Claims are sourced
+where they were verified and labelled where they were not. Where a later
+decision has overtaken something here, it is marked in place.
 
 Date of investigation: 2026-09-04. Anything about a third-party project's
 support matrix rots; re-check before relying on it.
+
+> **This document is the design.** The implementation plan built on it lives in
+> [`docs/linux-sync/`](linux-sync/README.md) — one document per phase, plus
+> [`open-questions.md`](linux-sync/open-questions.md), which is the live tracker
+> for everything in §14 below and for the decisions the phases surfaced.
+> Sections here are referenced from there as `design §N`.
 
 ---
 
@@ -444,11 +454,15 @@ conflating them is how a sync feature quietly destroys history.
 
 ### Concealed items do not sync
 
-Default: `isConcealed` content never crosses the wire, behind an off-by-default
-toggle for anyone who insists. Replicating password-manager content across a
-network is a different risk class from storing it locally, and the app's
-existing posture — never rendered in the clear, never matches search — should
-extend outward rather than stop at the NIC.
+`isConcealed` content never crosses the wire. Replicating password-manager
+content across a network is a different risk class from storing it locally, and
+the app's existing posture — never rendered in the clear, never matches search —
+should extend outward rather than stop at the NIC.
+
+> **Superseded 2026-09-05.** This section originally proposed an off-by-default
+> toggle for anyone who insists. That toggle was dropped for v1 —
+> [D-7](linux-sync/open-questions.md#d-7), which also records why encrypting
+> concealed items and syncing them anyway was considered and not taken.
 
 ---
 
@@ -785,6 +799,13 @@ Mac is already the useful thing, and Phase 7 is the expensive one.
 Collected so nothing here reads as settled when it is not. Per
 `.claude/rules/verify-against-docs.md`, these must be confirmed against the
 installed interface before any code depends on them.
+
+**Tracked live in [`docs/linux-sync/open-questions.md`](linux-sync/open-questions.md)**,
+where each item says what it blocks, how to answer it, and what changes under
+each answer — as `OQ-1` through `OQ-10`, in the same order as below. That file
+also carries two the investigation missed: Core Graphics path availability on
+Linux (`OQ-12`, which excludes `PaperclipPath` from the port) and `Observation`
+on Linux (`OQ-11`). Answer them there rather than here.
 
 **Platform behaviour, needs an experiment:**
 
