@@ -4,6 +4,9 @@ A clipboard-history manager for macOS 26. Lives in the menu bar with no Dock
 icon; press ⌘⇧V anywhere and a Liquid Glass picker opens over whatever app you
 are in, without taking focus away from it.
 
+![The Skrepka picker open over Safari, showing recent clipboard entries with
+their source app and a ⌘N shortcut on each row](docs/images/picker.png)
+
 - Text, rich text, URLs, files and images, with inline image previews
 - Type to filter; ↑↓ to move; ↩ to paste into the app you were using
 - ⌘1–⌘9 paste that row outright, ⇧⌘↩ pastes as plain text, ⌘P pins
@@ -17,11 +20,19 @@ are in, without taking focus away from it.
 macOS 26.0 or later, Apple silicon or one of the four Intel Macs that run
 macOS 26. Xcode 26 to build.
 
+## Install
+
+Download `Skrepka.zip` from the
+[latest release](https://github.com/psoldunov/skrepka/releases/latest), unzip
+it, and drag `Skrepka.app` into `/Applications`. The build is universal and
+notarized, so it opens on first launch with no Gatekeeper detour.
+
 ## Build and run
 
 ```sh
 scripts/run.sh        # build, bundle, sign, launch
 scripts/bundle.sh     # produce build/Skrepka.app only
+scripts/notarize.sh   # build, sign, notarize, staple — the copy you send out
 scripts/doctor.sh     # the quality gate
 scripts/make-icon.sh  # redraw Sources/Skrepka/Resources/AppIcon.icns
 ```
@@ -137,3 +148,7 @@ SwiftData at
 payloads use `@Attribute(.externalStorage)`, so large blobs land beside the
 database rather than inside a row. The picker holds only lightweight summaries
 plus a small thumbnail; a full payload is read only when an entry is pasted.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
