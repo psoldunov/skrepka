@@ -1,0 +1,568 @@
+{
+	"generatedAt": "2026-09-05T13:38:46.692Z",
+	"ir": {
+		"boundaries": [
+			{
+				"kind": "region",
+				"label": "App shell — AppKit, main actor",
+				"wraps": [
+					"app-entry",
+					"coordinator",
+					"menu-bar",
+					"picker",
+					"settings-ui",
+					"welcome",
+					"hotkey",
+					"paste",
+					"permissions",
+					"app-diagnostics"
+				]
+			},
+			{
+				"kind": "region",
+				"label": "SkrepkaCore — testable, no window server",
+				"wraps": [
+					"capture",
+					"privacy-rules",
+					"store",
+					"models",
+					"search",
+					"preferences",
+					"core-diagnostics",
+					"branding"
+				]
+			},
+			{
+				"kind": "region",
+				"label": "Build & quality gate",
+				"wraps": [
+					"tests",
+					"scripts"
+				]
+			},
+			{
+				"kind": "region",
+				"label": "macOS & third party",
+				"wraps": [
+					"pasteboard",
+					"frontmost-app",
+					"keyboard-shortcuts",
+					"notary"
+				]
+			},
+			{
+				"kind": "region",
+				"label": "Diagnostics",
+				"wraps": [
+					"app-diagnostics",
+					"core-diagnostics"
+				]
+			}
+		],
+		"components": [
+			{
+				"id": "app-entry",
+				"label": "App entry",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/SkrepkaMain.swift"
+					}
+				],
+				"sublabel": "NSApplication + delegate",
+				"type": "backend"
+			},
+			{
+				"id": "coordinator",
+				"label": "AppCoordinator",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/AppCoordinator.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Diagnostics/AppCoordinator+Diagnostics.swift"
+					}
+				],
+				"sublabel": "owns store, capture loop, hotkey, panel",
+				"type": "backend"
+			},
+			{
+				"id": "menu-bar",
+				"label": "Menu bar item",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/MenuBar"
+					}
+				],
+				"sublabel": "NSStatusItem, badge, menu",
+				"type": "frontend"
+			},
+			{
+				"id": "picker",
+				"label": "Picker panel",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Picker"
+					}
+				],
+				"sublabel": "non-activating NSPanel + SwiftUI list",
+				"type": "frontend"
+			},
+			{
+				"id": "settings-ui",
+				"label": "Settings window",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Settings"
+					}
+				],
+				"sublabel": "General, History, Privacy, Diagnostics",
+				"type": "frontend"
+			},
+			{
+				"id": "welcome",
+				"label": "Welcome window",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Welcome"
+					}
+				],
+				"sublabel": "first run, paste-back permission",
+				"type": "frontend"
+			},
+			{
+				"id": "hotkey",
+				"label": "Global hotkey",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Platform/HotKeyService.swift"
+					}
+				],
+				"sublabel": "⌘⇧V registration",
+				"type": "backend"
+			},
+			{
+				"id": "paste",
+				"label": "Paste-back",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Platform/PasteService.swift"
+					}
+				],
+				"sublabel": "writes pasteboard, synthesizes ⌘V",
+				"type": "backend"
+			},
+			{
+				"id": "permissions",
+				"label": "Permissions & system links",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Platform/AccessibilityPermission.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Platform/LoginItem.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Platform/SystemSettingsLink.swift"
+					}
+				],
+				"sublabel": "Accessibility trust, login item",
+				"type": "security"
+			},
+			{
+				"id": "app-diagnostics",
+				"label": "Diagnostics gatherer",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Diagnostics/DiagnosticsGatherer.swift"
+					}
+				],
+				"sublabel": "reads the system, not the app",
+				"type": "backend"
+			},
+			{
+				"id": "capture",
+				"label": "Pasteboard capture",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/PasteboardPoller.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/PasteboardReader.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/CaptureDecision.swift"
+					}
+				],
+				"sublabel": "poller actor, 200 ms changeCount",
+				"type": "backend"
+			},
+			{
+				"id": "privacy-rules",
+				"label": "Capture rules",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/CaptureRules.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/PrivacyMarkers.swift"
+					}
+				],
+				"sublabel": "transient/concealed markers, app exclusions",
+				"type": "security"
+			},
+			{
+				"id": "store",
+				"label": "History store",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Store"
+					}
+				],
+				"sublabel": "SwiftData, retention, thumbnails",
+				"type": "database"
+			},
+			{
+				"id": "models",
+				"label": "Clip models",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Models"
+					}
+				],
+				"sublabel": "item, summary, payload, kind",
+				"type": "backend"
+			},
+			{
+				"id": "search",
+				"label": "Search matcher",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Search"
+					}
+				],
+				"sublabel": "filter and rank",
+				"type": "backend"
+			},
+			{
+				"id": "preferences",
+				"label": "Preferences",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Settings/Preferences.swift"
+					}
+				],
+				"sublabel": "UserDefaults-backed",
+				"type": "database"
+			},
+			{
+				"id": "core-diagnostics",
+				"label": "Health & report model",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Diagnostics"
+					}
+				],
+				"sublabel": "capture health, snapshot, problems",
+				"type": "backend"
+			},
+			{
+				"id": "branding",
+				"label": "Paperclip mark",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Branding/PaperclipPath.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/MenuBar/StatusItemIcon.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Branding/PaperclipMark.swift"
+					}
+				],
+				"sublabel": "one path: app icon, menu bar, in-app",
+				"type": "frontend"
+			},
+			{
+				"id": "tests",
+				"label": "Core tests",
+				"sources": [
+					{
+						"path": "Tests/SkrepkaCoreTests"
+					}
+				],
+				"sublabel": "Swift Testing",
+				"type": "backend"
+			},
+			{
+				"id": "scripts",
+				"label": "Build & release scripts",
+				"sources": [
+					{
+						"path": "scripts"
+					}
+				],
+				"sublabel": "doctor, bundle, notarize, make-icon",
+				"type": "backend"
+			},
+			{
+				"id": "pasteboard",
+				"label": "NSPasteboard",
+				"sublabel": "general pasteboard",
+				"type": "external"
+			},
+			{
+				"id": "frontmost-app",
+				"label": "Frontmost app",
+				"sublabel": "receives the synthesized ⌘V",
+				"type": "external"
+			},
+			{
+				"id": "keyboard-shortcuts",
+				"label": "KeyboardShortcuts",
+				"sublabel": "sindresorhus, 3.0.1",
+				"type": "external"
+			},
+			{
+				"id": "notary",
+				"label": "Apple notary service",
+				"sublabel": "App Store Connect API key",
+				"type": "cloud"
+			}
+		],
+		"connections": [
+			{
+				"from": "app-entry",
+				"id": "e-entry-coordinator",
+				"label": "starts",
+				"to": "coordinator"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-capture",
+				"label": "capture loop",
+				"to": "capture",
+				"variant": "emphasis"
+			},
+			{
+				"from": "capture",
+				"id": "e-capture-pasteboard",
+				"label": "polls changeCount",
+				"to": "pasteboard"
+			},
+			{
+				"from": "capture",
+				"id": "e-capture-rules",
+				"label": "filters",
+				"to": "privacy-rules",
+				"variant": "security"
+			},
+			{
+				"from": "capture",
+				"id": "e-capture-models",
+				"label": "builds ClipItem",
+				"to": "models"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-store",
+				"label": "captures",
+				"to": "store",
+				"variant": "emphasis"
+			},
+			{
+				"from": "store",
+				"id": "e-store-models",
+				"label": "maps records",
+				"to": "models"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-picker",
+				"label": "show / dismiss",
+				"to": "picker"
+			},
+			{
+				"from": "picker",
+				"id": "e-picker-store",
+				"label": "reads history",
+				"to": "store"
+			},
+			{
+				"from": "picker",
+				"id": "e-picker-search",
+				"label": "ranks query",
+				"to": "search"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-paste",
+				"label": "deliver",
+				"to": "paste"
+			},
+			{
+				"from": "paste",
+				"id": "e-paste-pasteboard",
+				"label": "writes",
+				"to": "pasteboard"
+			},
+			{
+				"from": "paste",
+				"id": "e-paste-frontmost",
+				"label": "⌘V",
+				"to": "frontmost-app",
+				"variant": "emphasis"
+			},
+			{
+				"from": "paste",
+				"id": "e-paste-permissions",
+				"label": "needs trust",
+				"to": "permissions",
+				"variant": "security"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-permissions",
+				"label": "requests Accessibility",
+				"to": "permissions",
+				"variant": "security"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-hotkey",
+				"label": "registers",
+				"to": "hotkey"
+			},
+			{
+				"from": "hotkey",
+				"id": "e-hotkey-shortcuts",
+				"to": "keyboard-shortcuts"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-menubar",
+				"label": "menu actions",
+				"to": "menu-bar"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-settings",
+				"label": "opens",
+				"to": "settings-ui"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-welcome",
+				"label": "first run",
+				"to": "welcome"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-prefs",
+				"label": "reads",
+				"to": "preferences"
+			},
+			{
+				"from": "settings-ui",
+				"id": "e-settings-prefs",
+				"label": "edits",
+				"to": "preferences"
+			},
+			{
+				"from": "settings-ui",
+				"id": "e-settings-diagnostics",
+				"label": "Status pane",
+				"to": "app-diagnostics"
+			},
+			{
+				"from": "settings-ui",
+				"id": "e-settings-shortcuts",
+				"label": "recorder",
+				"to": "keyboard-shortcuts",
+				"variant": "dashed"
+			},
+			{
+				"from": "app-diagnostics",
+				"id": "e-appdiag-corediag",
+				"label": "builds snapshot",
+				"to": "core-diagnostics"
+			},
+			{
+				"from": "app-diagnostics",
+				"id": "e-appdiag-prefs",
+				"to": "preferences"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-corediag",
+				"label": "records health",
+				"to": "core-diagnostics"
+			},
+			{
+				"from": "core-diagnostics",
+				"id": "e-corediag-menubar",
+				"label": "badge",
+				"to": "menu-bar",
+				"variant": "dashed"
+			},
+			{
+				"from": "menu-bar",
+				"id": "e-menubar-branding",
+				"label": "icon",
+				"to": "branding"
+			},
+			{
+				"from": "welcome",
+				"id": "e-welcome-branding",
+				"label": "mark",
+				"to": "branding"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-store",
+				"to": "store",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-rules",
+				"to": "privacy-rules",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-search",
+				"to": "search",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-entry",
+				"label": "builds .app",
+				"to": "app-entry",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-branding",
+				"label": "make-icon.sh",
+				"to": "branding",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-notary",
+				"label": "submit + staple",
+				"to": "notary",
+				"variant": "dashed"
+			}
+		],
+		"layout": {
+			"mode": "organic"
+		},
+		"meta": {
+			"subtitle": "macOS 26 clipboard-history manager — menu-bar daemon, Liquid Glass picker",
+			"title": "Skrepka"
+		},
+		"schemaVersion": 1
+	}
+}
