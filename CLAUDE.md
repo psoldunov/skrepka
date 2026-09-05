@@ -18,7 +18,25 @@ scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
 fatal for distribution: the notary service rejects it, and the signature dies
 when the Developer ID certificate expires. `scripts/notarize.sh` sets
 `SKREPKA_NOTARIZE=1`, which turns the timestamp on and makes an ad-hoc fallback
-a hard error. It needs a one-time `xcrun notarytool store-credentials skrepka`.
+a hard error.
+
+Notarization credentials come from `APPLE_API_KEY_PATH`, `APPLE_API_KEY_ID` and
+`APPLE_API_ISSUER` — an App Store Connect API key, the same three variables the
+Ensemblr repo's `forge.config.ts` reads, so one `.p8` covers both projects and
+CI needs no keychain. Set all three or none; a partial set is an error rather
+than a silent fallback. With none set it falls back to a notarytool keychain
+profile, `xcrun notarytool store-credentials skrepka`, which wants an
+app-specific password instead.
+
+`notarize.sh` reads those three from `.env` in the repository root by itself —
+copy `.env.example`, or point `SKREPKA_ENV_FILE` at another repo's `.env`
+instead of duplicating a key path. The file is parsed as `KEY=VALUE` data, never
+sourced, so nothing in it executes; anything already in the environment wins
+over it.
+
+Either way the credential is checked before anything is built — the universal
+build and the timestamped signature are minutes of work to spend on a missing
+`.p8`.
 
 `scripts/bundle.sh` builds for the host architecture alone.
 `SKREPKA_UNIVERSAL=1` builds arm64 + x86_64 instead, and `notarize.sh` sets it:
