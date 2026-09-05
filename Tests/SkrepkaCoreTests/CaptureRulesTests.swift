@@ -102,6 +102,59 @@ struct CaptureRulesTests {
         #expect(item.text == "shot.png")
     }
 
+    // MARK: - Files, folders and packages
+
+    private func fileURLItem(_ url: URL) throws -> ClipItem {
+        let representations = [PasteboardType.fileURL: Data(url.absoluteString.utf8)]
+        return try #require(CaptureRules().decide(snapshot(representations)).item)
+    }
+
+    @Test("A copied folder is captured as .folder, not .file")
+    func capturesFolder() throws {
+        // The bug: Finder writes one `public.file-url` whether the user copied
+        // a document or a folder, so every row read "File" and wore a document
+        // icon.
+        let folder = try Fixtures.makeDirectory().appending(
+            path: "Nextcloud",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        let item = try fileURLItem(folder)
+        #expect(item.kind == .folder)
+        // The trailing slash a directory URL carries is not part of the label.
+        #expect(item.text == "Nextcloud")
+    }
+
+    @Test("A copied application bundle is a file, not a folder")
+    func capturesPackageAsFile() throws {
+        // `.app` is a directory on disk, but Finder shows it as one item and so
+        // do we — and a folder would lose its preview, since `.folder` is never
+        // sent to the thumbnail maker.
+        let item = try fileURLItem(Fixtures.makePackage(named: "ChatGPT.app"))
+        #expect(item.kind == .file)
+        #expect(item.text == "ChatGPT.app")
+    }
+
+    @Test("A copied regular file stays .file")
+    func capturesRegularFileAsFile() throws {
+        let item = try fileURLItem(Fixtures.writePNG(width: 2, height: 2, named: "shot.png"))
+        #expect(item.kind == .file)
+    }
+
+    @Test("A file URL the disk cannot answer for is a file")
+    func capturesMissingPathAsFile() throws {
+        // Deleted since the copy, or on a volume that is no longer mounted.
+        // Nothing here is worth failing a capture over; `.file` is what every
+        // entry stored before folders were told apart already reads as.
+        let missing = try Fixtures.makeDirectory().appending(
+            path: "gone",
+            directoryHint: .notDirectory
+        )
+        let item = try fileURLItem(missing)
+        #expect(item.kind == .file)
+    }
+
     @Test("A bare URL is captured as .link")
     func capturesLink() throws {
         let representations = [PasteboardType.url: Data("https://example.com".utf8)]

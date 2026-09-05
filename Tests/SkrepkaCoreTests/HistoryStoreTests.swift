@@ -179,6 +179,22 @@ struct HistoryStoreTests {
         #expect(summary.imageSize == nil)
     }
 
+    @Test("Re-copying a folder corrects a row still labelled File")
+    func healsStaleFileKindOnRepeatCopy() async throws {
+        let store = try makeStore()
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let payload = Fixtures.fileURLPayload(directory)
+
+        // What a history stored before folders were told apart holds.
+        await store.capture(ClipItem(kind: .file, text: "Nextcloud", payload: payload))
+        #expect(store.items.first?.kind == .file)
+
+        await store.capture(ClipItem(kind: .folder, text: "Nextcloud", payload: payload))
+        #expect(store.items.count == 1)
+        #expect(store.items.first?.kind == .folder)
+    }
+
     @Test("Re-copying fills in a thumbnail the first capture could not make")
     func backfillsThumbnailOnRepeatCopy() async throws {
         let store = try makeStore()

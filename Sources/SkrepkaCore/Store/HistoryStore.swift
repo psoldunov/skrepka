@@ -71,6 +71,11 @@ public final class HistoryStore {
             if let existing = try recordMatching(contentHash: item.contentHash) {
                 existing.createdAt = item.createdAt
                 existing.sourceBundleID = item.sourceBundleID ?? existing.sourceBundleID
+                // A folder stored before Skrepka told folders from files still
+                // reads "File". Its hash matches — see ``ClipKind/hashDomain``
+                // — so a repeat copy lands here, and this is the one place that
+                // can correct it.
+                existing.kindRaw = item.kind.rawValue
                 backfillPreview(preview, into: existing)
                 try context.save()
                 reload()

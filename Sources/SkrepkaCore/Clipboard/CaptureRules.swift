@@ -2,8 +2,16 @@ import Foundation
 
 /// Turns a ``PasteboardSnapshot`` into a ``CaptureDecision``.
 ///
-/// Pure and synchronous: no pasteboard, no clock, no storage. This is where the
-/// privacy rules live, so they are covered by tests rather than by hope.
+/// Synchronous and free of ambient state: no pasteboard, no clock, no storage.
+/// This is where the privacy rules live, so they are covered by tests rather
+/// than by hope.
+///
+/// One thing here does touch the file system, and it is a metadata lookup
+/// rather than a read: telling a copied folder from a copied file means asking
+/// the disk, because the pasteboard says `public.file-url` for both — see
+/// ``FileURLKind``. It sits here rather than beside the preview, which is the
+/// other place that opens a copied file, so that an entry's kind and the
+/// content hash derived from it are decided in one pass.
 public struct CaptureRules: Sendable {
     /// Per-item ceiling. Above this the entry is dropped rather than stored;
     /// a 200 MB screenshot is not history, it is a memory leak.
@@ -72,7 +80,8 @@ public struct CaptureRules: Sendable {
         for type in PasteboardType.readOrder where payload.data(forType: type) != nil {
             switch type {
             case PasteboardType.rtfd, PasteboardType.rtf, PasteboardType.html: return .richText
-            case PasteboardType.fileURL: return .file
+            case PasteboardType.fileURL:
+                return payload.fileURL.map(FileURLKind.kind(ofFileAt:)) ?? .file
             case PasteboardType.url: return .link
             case PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf: return .image
             case PasteboardType.string: return .text
@@ -92,7 +101,7 @@ public struct CaptureRules: Sendable {
             guard let data = payload.data(forType: type),
                 let string = String(data: data, encoding: .utf8)
             else { continue }
-            return kind == .file ? Self.displayPath(forFileURL: string) : string
+            return kind.isFileSystemEntry ? Self.displayPath(forFileURL: string) : string
         }
         return ""
     }

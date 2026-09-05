@@ -7,6 +7,7 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
     case richText
     case link
     case file
+    case folder
     case image
 
     /// SF Symbol used to badge the entry in the picker.
@@ -16,6 +17,7 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
         case .richText: "textformat"
         case .link: "link"
         case .file: "doc"
+        case .folder: "folder"
         case .image: "photo"
         }
     }
@@ -26,8 +28,19 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
         case .richText: "Rich Text"
         case .link: "Link"
         case .file: "File"
+        case .folder: "Folder"
         case .image: "Image"
         }
+    }
+
+    /// Whether the entry points at something on disk rather than carrying its
+    /// own content.
+    ///
+    /// `.file` and `.folder` differ only in their icon and their label: both
+    /// arrive as a `public.file-url`, both are labelled by their last path
+    /// component, and both hash on the URL rather than that label.
+    public var isFileSystemEntry: Bool {
+        self == .file || self == .folder
     }
 
     /// Whether an entry of this kind is worth asking ``ThumbnailMaker`` about.
@@ -37,11 +50,26 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
     /// so a screenshot copied out of Finder arrives here as `.file`. Excluding
     /// it is what left those rows showing a generic document icon. Files that
     /// turn out not to be images simply get no preview.
+    ///
+    /// `.folder` is not: a directory is never a picture, so opening it could
+    /// only ever confirm that. An application bundle is a directory too, but it
+    /// classifies as `.file` — see ``FileURLKind`` — so it keeps its preview.
     var canPreview: Bool {
         switch self {
         case .image, .file: true
-        case .text, .richText, .link: false
+        case .text, .richText, .link, .folder: false
         }
+    }
+
+    /// The kind as it enters ``ClipItem/contentHash``.
+    ///
+    /// `.file` and `.folder` deliberately share one. The file URL they hash on
+    /// already identifies the thing uniquely, so the case adds nothing — and it
+    /// must not be added, or a folder recorded as `.file` before Skrepka could
+    /// tell the two apart would fail to collapse onto the `.folder` capture of
+    /// the same folder today, and the history would show it twice.
+    var hashDomain: String {
+        isFileSystemEntry ? ClipKind.file.rawValue : rawValue
     }
 
     /// Representations that carry identity, richest first, for the kinds whose
@@ -54,7 +82,7 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
     var identityTypes: [String]? {
         switch self {
         case .image: [PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf]
-        case .file: [PasteboardType.fileURL]
+        case .file, .folder: [PasteboardType.fileURL]
         case .text, .richText, .link: nil
         }
     }
