@@ -39,6 +39,8 @@ has no in-app updater, so `brew upgrade --cask skrepka` is the whole update
 path — and `brew uninstall --zap --cask skrepka` is the one that takes the
 clipboard history with it.
 
+[CHANGELOG.md](CHANGELOG.md) says what each version changed.
+
 ## Build and run
 
 ```sh
