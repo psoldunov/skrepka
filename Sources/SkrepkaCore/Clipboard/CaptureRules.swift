@@ -2,16 +2,18 @@ import Foundation
 
 /// Turns a ``PasteboardSnapshot`` into a ``CaptureDecision``.
 ///
-/// Synchronous and free of ambient state: no pasteboard, no clock, no storage.
+/// Pure and synchronous: no pasteboard, no clock, no storage, no file system.
 /// This is where the privacy rules live, so they are covered by tests rather
 /// than by hope.
 ///
-/// One thing here does touch the file system, and it is a metadata lookup
-/// rather than a read: telling a copied folder from a copied file means asking
-/// the disk, because the pasteboard says `public.file-url` for both — see
-/// ``FileURLKind``. It sits here rather than beside the preview, which is the
-/// other place that opens a copied file, so that an entry's kind and the
-/// content hash derived from it are decided in one pass.
+/// Purity is load-bearing rather than tidy. This runs inside
+/// ``PasteboardPoller``'s tick, and that tick advances the change count before
+/// it reads, so anything that blocks here costs history: copies made during the
+/// stall are never seen, and when the poller wakes it captures only whatever is
+/// on the pasteboard by then. A `public.file-url` under an unresponsive mount
+/// is exactly such a stall, which is why telling a copied folder from a copied
+/// file — see ``FileURLKind`` — happens later, on ``ThumbnailRenderer``,
+/// alongside the other work that has to open the copied thing.
 public struct CaptureRules: Sendable {
     /// Per-item ceiling. Above this the entry is dropped rather than stored;
     /// a 200 MB screenshot is not history, it is a memory leak.
@@ -76,12 +78,16 @@ public struct CaptureRules: Sendable {
     }
 
     /// Richest representation wins, per ``PasteboardType/readOrder``.
+    ///
+    /// A `public.file-url` reads as ``ClipKind/file`` whatever is at the end of
+    /// it. Only the file system can say whether that is a folder, and asking it
+    /// from here would put a blocking disk call in the poller's tick;
+    /// ``ThumbnailRenderer`` refines the kind instead.
     static func kind(for payload: ClipPayload) -> ClipKind? {
         for type in PasteboardType.readOrder where payload.data(forType: type) != nil {
             switch type {
             case PasteboardType.rtfd, PasteboardType.rtf, PasteboardType.html: return .richText
-            case PasteboardType.fileURL:
-                return payload.fileURL.map(FileURLKind.kind(ofFileAt:)) ?? .file
+            case PasteboardType.fileURL: return .file
             case PasteboardType.url: return .link
             case PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf: return .image
             case PasteboardType.string: return .text

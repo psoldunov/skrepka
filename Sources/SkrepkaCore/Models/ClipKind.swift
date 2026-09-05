@@ -65,9 +65,15 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
     ///
     /// `.file` and `.folder` deliberately share one. The file URL they hash on
     /// already identifies the thing uniquely, so the case adds nothing — and it
-    /// must not be added, or a folder recorded as `.file` before Skrepka could
-    /// tell the two apart would fail to collapse onto the `.folder` capture of
-    /// the same folder today, and the history would show it twice.
+    /// must not be added, or the same folder would de-duplicate against itself
+    /// only while the two captures happened to agree on which it was.
+    ///
+    /// Capture never produces `.folder` today: ``CaptureRules`` calls every
+    /// file URL a `.file` and ``ThumbnailRenderer`` refines it afterwards, so
+    /// the hash sees `.file` either way. This keeps that from being load
+    /// bearing. A ``ClipItem`` built directly as `.folder` — the store's own
+    /// tests do it, and nothing stops a future caller — still lands on the row
+    /// it duplicates rather than beside it.
     var hashDomain: String {
         isFileSystemEntry ? ClipKind.file.rawValue : rawValue
     }

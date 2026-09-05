@@ -87,25 +87,37 @@ struct ContentSizeTests {
     func abandonsOversizedFolder() throws {
         let directory = try Fixtures.makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        // One past the interval between clock reads, which is the earliest a
-        // walk can give up.
-        for index in 0...DirectorySize.checkInterval {
+        for index in 0..<8 {
             try write(1, to: directory.appending(path: "\(index).bin", directoryHint: .notDirectory))
         }
 
         // A partial total would read as a real measurement. Nothing is honest.
         #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == nil)
         // The same folder measures fine when there is time for it.
-        #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == DirectorySize.checkInterval + 1)
+        #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == 8)
     }
 
-    @Test("A folder smaller than one clock interval is always measured in full")
-    func neverAbandonsSmallFolder() throws {
+    @Test("A folder of one file is checked against the deadline too")
+    func checksDeadlineOnEveryEntry() throws {
+        // The clock used to be read once per 512 entries, so a folder smaller
+        // than that ran to completion however slow the volume under it. Small
+        // is not the same as fast.
         let directory = try Fixtures.makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         try write(42, to: directory.appending(path: "a.bin", directoryHint: .notDirectory))
 
-        #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == 42)
+        #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == nil)
+        #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == 42)
+    }
+
+    @Test("An empty folder measures zero rather than giving up")
+    func emptyFolderIsZero() throws {
+        // Nothing to walk means nothing to run out of time on, so even an
+        // expired deadline yields an answer.
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == 0)
     }
 
     // MARK: - Pasteboard data

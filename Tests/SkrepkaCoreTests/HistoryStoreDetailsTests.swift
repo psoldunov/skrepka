@@ -68,7 +68,10 @@ struct HistoryStoreDetailsTests {
             ClipItem(kind: .file, text: "notes.txt", payload: Fixtures.fileURLPayload(url))
         )
         #expect(store.items.first?.byteCount == 2048)
-        #expect(store.items.first?.sizeText == "2 kB")
+        // Locale pinned: `ByteCountFormatStyle` renders units and separators in
+        // the reader's language, so an unpinned assertion is a test that fails
+        // on a Mac set to French.
+        #expect(store.items.first?.sizeText(locale: Locale(identifier: "en_US")) == "2 kB")
     }
 
     @Test("Re-copying measures a size the first capture could not take")
@@ -109,20 +112,84 @@ struct HistoryStoreDetailsTests {
         #expect(store.items.first?.byteCount == 300)
     }
 
+    // MARK: - Folder kind
+
+    /// What the capture rules hand the store for any file URL: `.file`,
+    /// whatever is at the end of it. Only the detail pass can say otherwise.
+    private func fileItem(_ url: URL) -> ClipItem {
+        ClipItem(kind: .file, text: url.lastPathComponent, payload: Fixtures.fileURLPayload(url))
+    }
+
+    @Test("A copied folder is stored as .folder even though capture said .file")
+    func refinesFolderKind() async throws {
+        let store = try makeStore()
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let folder = directory.appending(path: "Nextcloud", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        await store.capture(fileItem(folder))
+        #expect(store.items.first?.kind == .folder)
+    }
+
     @Test("Re-copying a folder corrects a row still labelled File")
     func healsStaleFileKindOnRepeatCopy() async throws {
         let store = try makeStore()
         let directory = try Fixtures.makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let payload = Fixtures.fileURLPayload(directory)
+        let folder = directory.appending(path: "Nextcloud", directoryHint: .isDirectory)
 
-        // What a history stored before folders were told apart holds.
-        await store.capture(ClipItem(kind: .file, text: "Nextcloud", payload: payload))
+        // Captured with nothing at the path, so the disk cannot say what it is
+        // and the row falls back to `.file` — the same end state as every entry
+        // in a history stored before folders were told apart.
+        await store.capture(fileItem(folder))
         #expect(store.items.first?.kind == .file)
 
-        await store.capture(ClipItem(kind: .folder, text: "Nextcloud", payload: payload))
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        await store.capture(fileItem(folder))
         #expect(store.items.count == 1)
         #expect(store.items.first?.kind == .folder)
+    }
+
+    @Test("A row already labelled Folder survives a re-copy that cannot look")
+    func keepsFolderKindWhenPathIsUnreachable() async throws {
+        let store = try makeStore()
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let folder = directory.appending(path: "Nextcloud", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        await store.capture(fileItem(folder))
+        #expect(store.items.first?.kind == .folder)
+
+        // Ejected volume, or deleted since the copy. Overwriting the row with
+        // the capture rules' `.file` here is the original bug coming back on a
+        // row that was already right.
+        try FileManager.default.removeItem(at: folder)
+        await store.capture(fileItem(folder))
+        #expect(store.items.count == 1)
+        #expect(store.items.first?.kind == .folder)
+    }
+
+    @Test("A folder replaced by a file of the same name is relabelled")
+    func downgradesWhenTheDiskSaysSo() async throws {
+        let store = try makeStore()
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // No trailing slash, so the very same URL can name a file afterwards
+        // and the payload — and therefore the content hash — does not change.
+        let path = directory.appending(path: "Nextcloud", directoryHint: .notDirectory)
+        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
+
+        await store.capture(fileItem(path))
+        #expect(store.items.first?.kind == .folder)
+
+        // Folder → file is only wrong when it is a guess. Here the disk looked
+        // and answered, so the row follows it.
+        try FileManager.default.removeItem(at: path)
+        try Data("now a document".utf8).write(to: path)
+        await store.capture(fileItem(path))
+        #expect(store.items.first?.kind == .file)
     }
 
     @Test("Re-copying fills in a thumbnail the first capture could not make")

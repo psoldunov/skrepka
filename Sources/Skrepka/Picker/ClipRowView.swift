@@ -61,7 +61,7 @@ struct ClipRowView: View {
         if let imageSize = item.imageSize {
             parts.append(imageSize.description)
         }
-        if let sizeText = item.sizeText {
+        if let sizeText = item.sizeText() {
             parts.append(sizeText)
         }
         if item.lineCount > 1 {

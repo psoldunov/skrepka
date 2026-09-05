@@ -25,7 +25,9 @@ enum ClipRecordMapping {
         let imageSize = details.preview?.pixelSize ?? item.imageSize
         return ClipRecord(
             id: item.id,
-            kindRaw: item.kind.rawValue,
+            // The capture rules call every file URL a `.file`; only the detail
+            // pass can say it is a folder, and only when the disk answered.
+            kindRaw: (details.kind ?? item.kind).rawValue,
             text: item.text,
             sourceBundleID: item.sourceBundleID,
             createdAt: item.createdAt,

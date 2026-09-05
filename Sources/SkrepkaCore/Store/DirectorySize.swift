@@ -6,7 +6,15 @@ import Foundation
 /// a walk of everything underneath, which is why Finder shows a spinner while
 /// it counts. Skrepka cannot spin: the row has to appear the moment the copy
 /// happens, so the walk is bounded by a deadline and gives up rather than
-/// holding the capture open.
+/// counting a whole disk.
+///
+/// The deadline bounds how many steps the walk takes, not how long any one step
+/// lasts. A single `next()` against a hung mount blocks inside the file system
+/// until the mount times out, and no Foundation call cancels that. What the
+/// deadline buys is that a folder which merely *is* enormous stops quickly; the
+/// unresponsive-volume case is handled by where this runs, not by this —
+/// ``ThumbnailRenderer``, where a stall delays one row instead of stalling the
+/// poller or the picker.
 enum DirectorySize {
     /// How long a single folder may be measured for.
     ///
@@ -17,19 +25,19 @@ enum DirectorySize {
     /// not the interface; the poller's own cadence is 200 ms.
     static let deadline: Duration = .milliseconds(250)
 
-    /// Entries between two clock reads. Often enough to stop near the deadline,
-    /// rare enough that the reads themselves are not part of the measurement.
-    ///
-    /// It is also the floor on how early a walk can give up: a folder of fewer
-    /// entries than this is always measured in full, whatever the deadline.
-    static let checkInterval = 512
-
     /// Total bytes of every regular file under `url`, or nil when the deadline
     /// passed first.
     ///
     /// Nil rather than the running total on purpose. A partial sum is a wrong
     /// number that looks like a right one, and a row reading "412 MB" for a
     /// folder holding 60 GB is worse than a row that says nothing about size.
+    ///
+    /// The clock is read once per entry rather than once per batch. Batching it
+    /// was cheaper by a rounding error — a `ContinuousClock` read is tens of
+    /// nanoseconds against a `resourceValues` syscall — and it left a hole: a
+    /// folder with fewer children than the batch was never checked at all,
+    /// however slow the volume under it. Every entry now costs a comparison and
+    /// the deadline means what it says.
     ///
     /// Symbolic links are counted at neither end: the enumerator does not
     /// descend through them, and a link itself is not a regular file, so a
@@ -52,11 +60,9 @@ enum DirectorySize {
         let clock = ContinuousClock()
         let start = clock.now
         var total = 0
-        var visited = 0
 
         for case let child as URL in enumerator {
-            visited += 1
-            if visited.isMultiple(of: checkInterval), clock.now - start > deadline { return nil }
+            if clock.now - start > deadline { return nil }
             guard let values = try? child.resourceValues(forKeys: keys),
                 values.isRegularFile == true,
                 let size = values.fileSize

@@ -53,9 +53,14 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     /// Withheld from a concealed entry along with everything else about it. A
     /// password manager's payload is text and gets no size anyway, but the rule
     /// belongs with the other one rather than resting on that.
-    public var sizeText: String? {
+    ///
+    /// - Parameter locale: defaults to the user's, which is what the picker
+    ///   wants — a French Mac says `1,5 Mo` where an American one says
+    ///   `1.5 MB`. Named so tests can pin one; asserting against the machine's
+    ///   locale is a test that passes in Cupertino and fails in Zurich.
+    public func sizeText(locale: Locale = .autoupdatingCurrent) -> String? {
         guard !isConcealed, let byteCount else { return nil }
-        return byteCount.formatted(.byteCount(style: .file, spellsOutZero: false))
+        return byteCount.formatted(.byteCount(style: .file, spellsOutZero: false).locale(locale))
     }
 
     /// Single-line preview, masked when the entry came from a password manager.

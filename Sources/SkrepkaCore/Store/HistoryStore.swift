@@ -75,11 +75,16 @@ public final class HistoryStore {
                 // reads "File". Its hash matches — see ``ClipKind/hashDomain``
                 // — so a repeat copy lands here, and this is the one place that
                 // can correct it.
-                existing.kindRaw = item.kind.rawValue
-                // A size the first capture could not take: the entry predates
-                // sizes, or the folder was too large to walk that time. An
-                // existing measurement is kept when this one came back empty,
-                // so a moved file does not lose the size it was copied at.
+                //
+                // Only when the disk actually answered, though. A re-copy of a
+                // folder since deleted or on an ejected volume yields no kind
+                // at all, and writing the capture rules' guess of `.file` over
+                // a row already saying Folder would put the original bug back.
+                if let kind = details.kind { existing.kindRaw = kind.rawValue }
+                // Same rule for the size: the entry predates sizes, or the
+                // folder was too large to walk that time. An existing
+                // measurement is kept when this one came back empty, so a moved
+                // file does not lose the size it was copied at.
                 existing.byteCount = details.byteCount ?? existing.byteCount
                 backfillPreview(details.preview, into: existing)
                 try context.save()
