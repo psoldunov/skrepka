@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest something Skrepka should do that it does not do today.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Skrepka has a deliberately narrow scope: a clipboard history that opens fast, stays out
+        of the way, and keeps your data on your Mac. That makes an issue the cheapest place to
+        find out an idea is out of scope — cheaper than a finished branch, which is why this
+        form exists before the pull request.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched [existing issues](https://github.com/psoldunov/skrepka/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: This does not need private API, and it does not need Skrepka to run on anything older than macOS 26.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem?
+      description: |
+        Describe the situation you are in, not the feature you want. What are you trying to do,
+        and what happens today when you try?
+      placeholder: |
+        I copy long code snippets all day and the picker rows truncate at one line, so three
+        entries look identical and I have to paste each one to find the right one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should Skrepka do instead?
+      description: Be concrete. If it touches the picker, describe the keys and what appears on screen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What did you try?
+      description: |
+        Existing settings, other tools, or workarounds — and why each one falls short. This is
+        often what decides whether a feature is worth building.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Mockups, links to how another app solves it, or prior discussion.
+    validations:
+      required: false

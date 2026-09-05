@@ -1,0 +1,135 @@
+name: Bug report
+description: Something in Skrepka behaves differently from how it is documented or intended.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this.
+
+        **Skrepka reads your clipboard, so please redact before you paste.** Screenshots of
+        the picker, log excerpts and crash reports can all contain passwords, tokens, private
+        messages or client work. Everything in a public issue stays public. Blur or crop the
+        rows that are not the bug.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched [existing issues](https://github.com/psoldunov/skrepka/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I am on macOS 26.0 or later. Skrepka supports no earlier release.
+          required: true
+        - label: I have removed anything sensitive from the screenshots, logs and clipboard contents below.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Skrepka version
+      description: Menu bar icon → **About Skrepka**. If you built it yourself, give the commit instead.
+      placeholder: "0.1.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install it?
+      options:
+        - Homebrew cask (psoldunov/tap/skrepka)
+        - Release .zip from GitHub
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Apple menu → **About This Mac**.
+      placeholder: "26.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: Mac
+      options:
+        - Apple silicon
+        - Intel
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Skrepka?
+      description: A best guess is fine — it only routes triage.
+      options:
+        - Capture (something was not saved, or something was saved that should not have been)
+        - Picker panel (opening, placement, focus, appearance)
+        - Search and filtering
+        - Pasting into another app
+        - Pinning, retention or eviction
+        - Menu bar item
+        - Settings
+        - Permissions (Accessibility)
+        - Install, launch or update
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead.
+      placeholder: |
+        Pressing ⌘⇧V over Safari opened the picker behind the Safari window instead of over it.
+        Expected the picker to float above whatever app is frontmost.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: The shortest sequence that reliably produces it. If it is intermittent, say roughly how often.
+      placeholder: |
+        1. Copy three items from Notes
+        2. Switch to Safari and go full screen
+        3. Press ⌘⇧V
+        4. The picker opens on the previous desktop instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or crash report
+      description: |
+        Optional but usually decisive. Console.app → search `skrepka`, or:
+
+        ```sh
+        log show --predicate 'subsystem CONTAINS "skrepka"' --last 10m
+        ```
+
+        Crash reports live in Console.app → **Crash Reports**. Read before you paste — a crash
+        report can carry clipboard contents in memory dumps.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: |
+        Screenshots, screen recordings, the other apps involved, whether another clipboard
+        manager is running, or anything unusual about your setup.
+    validations:
+      required: false
