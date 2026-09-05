@@ -22,7 +22,7 @@ enum PickerMetrics {
     }
 
     static func rowHeight(for item: ClipSummary) -> CGFloat {
-        item.thumbnail != nil && !item.isConcealed ? imageRowHeight : standardRowHeight
+        item.hasThumbnail && !item.isConcealed ? imageRowHeight : standardRowHeight
     }
 
     /// Height the panel wants for these results, before the screen clamps it.

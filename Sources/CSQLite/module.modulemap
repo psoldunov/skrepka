@@ -1,0 +1,16 @@
+// The system SQLite, for the Linux history store.
+//
+// macOS ships a `SQLite3` module in the SDK and Linux does not, so the Linux
+// conformance of `HistoryStoring` needs this shim to reach the C library at
+// all. It is declared unconditionally in Package.swift but depended on only
+// `.when(platforms: [.linux])`, so a macOS build never resolves it and never
+// asks pkg-config for a `sqlite3.pc` that Apple does not ship.
+//
+// D-3 chose raw SQLite over GRDB: the Linux store's needs are one table, a hash
+// lookup, a sorted fetch and a delete-where, so there is no ORM-shaped problem
+// and no dependency risk worth taking.
+module CSQLite [system] {
+    header "shim.h"
+    link "sqlite3"
+    export *
+}

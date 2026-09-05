@@ -3,6 +3,14 @@ import Testing
 
 @testable import SkrepkaCore
 
+// The same shim `ClipItem` uses, so the parity tests below reach the same
+// SHA-256 the type does rather than a second one.
+#if canImport(CryptoKit)
+    import CryptoKit
+#else
+    import Crypto
+#endif
+
 @Suite("Clip item")
 struct ClipItemTests {
     private func payload(_ text: String) -> ClipPayload {
@@ -113,5 +121,56 @@ struct ClipItemTests {
             PasteboardType.rtf: Data(count: 25),
         ])
         #expect(payload.byteCount == 35)
+    }
+
+    // MARK: - Cross-platform hash parity
+
+    // `contentHash` is the sync model's identity: two peers decide they hold
+    // the same clipping by comparing it. `ClipItem` reaches SHA-256 through
+    // CryptoKit on Apple platforms and swift-crypto everywhere else, and
+    // swift-crypto's claim to be source-identical is a claim rather than a
+    // guarantee this repo can see. So the digest is pinned to literals, which
+    // fail on whichever platform drifts instead of silently splitting the
+    // history in two.
+
+    @Test("SHA-256 matches the published vectors on whatever library is linked")
+    func sha256MatchesKnownAnswers() {
+        // FIPS 180-4 sample vectors — independent of anything Skrepka does with
+        // the digest, so this fails only if the crypto library itself is wrong.
+        #expect(
+            ClipItemTests.digest(of: "abc")
+                == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        )
+        #expect(
+            ClipItemTests.digest(of: "")
+                == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        )
+    }
+
+    @Test("A text item's content hash is byte-identical on every platform")
+    func textContentHashIsPinned() {
+        let item = ClipItem(kind: .text, text: "skrepka", payload: payload("skrepka"))
+        // SHA-256 of "text" + "skrepka" — the kind, then the text, which is
+        // what ``ClipKind/identityTypes`` being nil means.
+        #expect(item.contentHash == "a0627af32ff3103c966d57e22999e928165ea968868bb03ee7458ff7fa3702fd")
+    }
+
+    @Test("A payload-hashed item's content hash is byte-identical on every platform")
+    func payloadContentHashIsPinned() {
+        let item = ClipItem(
+            kind: .image,
+            text: "",
+            payload: ClipPayload(representations: [PasteboardType.png: Data([1, 2, 3])])
+        )
+        // SHA-256 of "image" + "public.png" + 0x01 0x02 0x03 — the other branch
+        // of the hash, where the ranked representation carries identity.
+        #expect(item.contentHash == "c2ef824d64dfa99c2d04695f7acc0da4773c85f8e35ac0a88c3777c088141178")
+    }
+
+    /// Hex digest of a string, through whichever SHA-256 ``ClipItem`` linked.
+    private static func digest(of string: String) -> String {
+        var hasher = SHA256()
+        hasher.update(data: Data(string.utf8))
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 }

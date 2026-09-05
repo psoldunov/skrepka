@@ -19,7 +19,7 @@ struct RetentionPolicyTests {
             isPinned: pinned,
             isConcealed: false,
             imageSize: nil,
-            thumbnail: nil
+            hasThumbnail: false
         )
     }
 

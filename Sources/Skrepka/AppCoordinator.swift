@@ -27,7 +27,7 @@ final class AppCoordinator {
     // Internal rather than private: `AppCoordinator+Diagnostics.swift` is the
     // other half of this type, and Swift scopes `private` to the file.
     let gatherer = DiagnosticsGatherer()
-    let poller: PasteboardPoller
+    let watcher: ClipboardWatcher
     var statusItem: StatusItemController?
     var welcomeWindow: WelcomeWindowController?
 
@@ -77,11 +77,12 @@ final class AppCoordinator {
         self.startupError = startupError
         self.storage = storage
 
-        poller = PasteboardPoller(
+        watcher = ClipboardWatcher(
+            source: PasteboardReader(),
             rules: preferences.captureRules,
             sourceProvider: {
                 // NSWorkspace carries no main-actor annotation in the macOS 26
-                // SDK, so reading it from the poller actor is sanctioned.
+                // SDK, so reading it from the watcher actor is sanctioned.
                 NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             }
         )
@@ -122,22 +123,22 @@ final class AppCoordinator {
     func stop() {
         captureTask?.cancel()
         captureTask = nil
-        Task { await poller.stop() }
+        Task { await watcher.stop() }
     }
 
     /// Re-reads preferences after the user changes them in Settings.
     func preferencesChanged() {
         store.retention = preferences.retentionPolicy
         let rules = preferences.captureRules
-        Task { await poller.updateRules(rules) }
+        Task { await watcher.updateRules(rules) }
         statusItem?.refreshShortcut()
     }
 
     // MARK: - Capture
 
     private func startCaptureLoop() {
-        captureTask = Task { [weak self, poller, store] in
-            let stream = await poller.start()
+        captureTask = Task { [weak self, watcher, store] in
+            let stream = await watcher.start()
             for await decision in stream {
                 self?.captureHealth.record(decision)
                 self?.refreshHealth()
@@ -197,9 +198,9 @@ final class AppCoordinator {
         // The system prompt already offers to open Settings, so Skrepka's own
         // notice would just stack a second dialog on top of it.
         let didPrompt = shouldPaste && requestAccessibilityIfNeeded()
-        Task { [pasteService, poller] in
+        Task { [pasteService, watcher] in
             // Skrepka is about to own the pasteboard; do not re-record our own write.
-            await poller.pause()
+            await watcher.pause()
             let outcome = await pasteService.deliver(
                 PasteService.Request(
                     payload: payload,
@@ -210,7 +211,7 @@ final class AppCoordinator {
                     shouldPaste: shouldPaste
                 )
             )
-            await poller.resume()
+            await watcher.resume()
 
             if case .copiedOnly(let reason) = outcome, let reason, !didPrompt {
                 presentNotice(reason)

@@ -6,7 +6,24 @@
 #
 # No `project`/`schemes`: those force Xcode mode. In a package root Periphery
 # reads Package.swift and builds every target itself.
-retain_public: false
+# Public API is retained because the package now ships libraries whose consumers
+# are outside it. `SkrepkaSync` is built deliberately ahead of its callers — the
+# app target wires it in Phase 3 and the Linux daemon in Phase 6 — and the
+# `SkrepkaLinux` product exists to be linked by something this repository does
+# not contain. With this false, every public symbol without an in-module caller
+# reads as dead: it reported 130 findings on the sync branch, 125 of them
+# `SyncTLS`, `FrameCodec`, `BonjourDiscovery` and `KeychainTrustStore` being
+# exactly as unreferenced as a not-yet-wired library is supposed to be.
+#
+# It was `false` from the first commit and that was right then: one app plus one
+# library it alone imported, where public meant "used across the two targets" and
+# an unreferenced public symbol really was dead. Adding a library product is what
+# changed the answer.
+#
+# The scan still earns its keep — unused internal and private declarations,
+# assign-only properties, and redundant protocol requirements are all still
+# reported, and those are where this check has actually been finding things.
+retain_public: true
 retain_objc_accessible: true
 retain_swift_ui_previews: true
 strict: true

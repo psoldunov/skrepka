@@ -9,24 +9,23 @@ import SwiftUI
 /// kind symbol, so text rows stay compact.
 struct ClipThumbnailView: View {
     let item: ClipSummary
+    /// Already resolved by the list, from `ThumbnailCache`. Nil means a kind
+    /// symbol — the entry has no picture, is concealed, or would not decode.
+    ///
+    /// Handed in rather than looked up here so the resolution happens once per
+    /// row that is actually built, and synchronously: a row that fetched its own
+    /// preview asynchronously would draw a symbol first and swap it for the
+    /// picture a frame later, which reads as the list flickering as it scrolls.
+    let image: NSImage?
 
     /// Square side for non-image rows.
     static let symbolSide: CGFloat = 30
     /// Image rows get a landscape preview at this size.
     static let previewSize = CGSize(width: 84, height: 48)
 
-    /// The decoded thumbnail, or nil when the row should show a kind symbol.
-    ///
-    /// Cached: this is read on every body evaluation, and decoding a 256-point
-    /// PNG per visible row per keystroke is real work on the main actor.
-    private var previewImage: NSImage? {
-        guard !item.isConcealed else { return nil }
-        return ThumbnailCache.shared.image(for: item)
-    }
-
     var body: some View {
         Group {
-            if let image = previewImage {
+            if let image {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)

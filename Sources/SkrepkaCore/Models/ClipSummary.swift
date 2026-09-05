@@ -1,10 +1,14 @@
 import Foundation
 
-/// A history row without its payload.
+/// A history row without its payload, and without its picture.
 ///
-/// The picker holds hundreds of these; the full ``ClipPayload`` of an image
-/// entry can be tens of megabytes, so payloads stay in the store until an entry
-/// is actually pasted. The thumbnail is small enough to carry inline.
+/// The store holds one of these per entry the retention cap allows and the
+/// picker draws about twenty, so a summary carries only what a row needs to be
+/// listed, ranked and measured. The full ``ClipPayload`` of an image entry can
+/// be tens of megabytes and stays in the store until the entry is pasted; the
+/// thumbnail is smaller but there is one per picture, so it stays there too and
+/// is read by id when a row draws. ``hasThumbnail`` is the part the list needs —
+/// it decides the row's height and whether to ask for the bytes at all.
 public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let id: UUID
     public let kind: ClipKind
@@ -14,8 +18,12 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let isPinned: Bool
     public let isConcealed: Bool
     public let imageSize: ClipItem.ImageSize?
-    /// Small PNG rendering for image entries.
-    public let thumbnail: Data?
+    /// Whether the store holds a rendered preview for this entry.
+    ///
+    /// Not the same question as "is this an image": an entry learned from a peer
+    /// carries the picture's dimensions and none of its bytes, so it has an
+    /// ``imageSize`` and no thumbnail.
+    public let hasThumbnail: Bool
 
     public init(
         id: UUID,
@@ -26,7 +34,7 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         isPinned: Bool,
         isConcealed: Bool,
         imageSize: ClipItem.ImageSize?,
-        thumbnail: Data?
+        hasThumbnail: Bool
     ) {
         self.id = id
         self.kind = kind
@@ -36,7 +44,7 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         self.isPinned = isPinned
         self.isConcealed = isConcealed
         self.imageSize = imageSize
-        self.thumbnail = thumbnail
+        self.hasThumbnail = hasThumbnail
     }
 
     /// Single-line preview, masked when the entry came from a password manager.
@@ -65,6 +73,6 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     /// `.file`, so a copied text document would count. A thumbnail is the
     /// honest signal: one exists only where something decoded to a picture.
     public var isPicture: Bool {
-        kind == .image || thumbnail != nil
+        kind == .image || hasThumbnail
     }
 }

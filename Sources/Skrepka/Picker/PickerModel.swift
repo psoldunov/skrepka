@@ -1,11 +1,14 @@
+import AppKit
 import Foundation
 import Observation
 import SkrepkaCore
 
 /// State the picker view reads and the intent it sends back.
 ///
-/// Holds no AppKit and makes no decisions about pasteboards or windows — the
-/// coordinator owns those. This is the seam that keeps the view declarative.
+/// Makes no decisions about pasteboards or windows — the coordinator owns
+/// those. This is the seam that keeps the view declarative. The one piece of
+/// AppKit it touches is ``thumbnail(for:)``, which hands the list a decoded
+/// `NSImage` so a row does not resolve its own picture.
 @MainActor
 @Observable
 final class PickerModel {
@@ -52,6 +55,7 @@ final class PickerModel {
     /// assuming nobody has copied anything.
     let captureHealth: CaptureHealth
     private let matcher = Matcher()
+    private let thumbnails: ThumbnailCache
 
     /// Sends a chosen entry back to the coordinator.
     var onChoose: ((ClipSummary, PasteStyle) -> Void)?
@@ -65,11 +69,22 @@ final class PickerModel {
     init(store: HistoryStore, captureHealth: CaptureHealth) {
         self.captureHealth = captureHealth
         self.store = store
+        thumbnails = ThumbnailCache(store: store)
         refreshResults()
         observeStore()
     }
 
     var isEmpty: Bool { results.isEmpty }
+
+    /// The row's picture, decoded once and cached.
+    ///
+    /// Asked for by the list as it builds each row, so only rows that are drawn
+    /// read anything: `ClipSummary` no longer carries the bytes, and a
+    /// `LazyVStack` builds about twenty rows for a history of thousands.
+    /// Synchronous, so a row never draws a placeholder it then replaces.
+    func thumbnail(for item: ClipSummary) -> NSImage? {
+        thumbnails.image(for: item)
+    }
 
     var selection: ClipSummary? {
         let results = results

@@ -5,13 +5,26 @@ import Foundation
 /// Pure and synchronous: no pasteboard, no clock, no storage. This is where the
 /// privacy rules live, so they are covered by tests rather than by hope.
 public struct CaptureRules: Sendable {
+    /// The default per-item ceiling, named rather than spelled inline so the
+    /// sync target can be checked against it.
+    ///
+    /// `SkrepkaSync` restates this number as `SyncLimits.maximumPayloadBytes` —
+    /// it cannot import `SkrepkaCore`, which does not build on Linux — and
+    /// `SyncLimitsTests` fails if the two ever drift. An item too large to
+    /// capture is too large to receive, and two limits that can disagree is one
+    /// limit and one bug.
+    public static let defaultMaximumItemBytes = 32 * 1024 * 1024
+
     /// Per-item ceiling. Above this the entry is dropped rather than stored;
     /// a 200 MB screenshot is not history, it is a memory leak.
     public let maximumItemBytes: Int
     /// Bundle identifiers the user never wants recorded.
     public let excludedBundleIDs: Set<String>
 
-    public init(maximumItemBytes: Int = 32 * 1024 * 1024, excludedBundleIDs: Set<String> = []) {
+    public init(
+        maximumItemBytes: Int = CaptureRules.defaultMaximumItemBytes,
+        excludedBundleIDs: Set<String> = []
+    ) {
         self.maximumItemBytes = maximumItemBytes
         self.excludedBundleIDs = excludedBundleIDs
     }

@@ -15,7 +15,7 @@ struct MatcherTests {
             isPinned: pinned,
             isConcealed: concealed,
             imageSize: nil,
-            thumbnail: nil
+            hasThumbnail: false
         )
     }
 
