@@ -67,18 +67,43 @@ struct StatusItemIconTests {
 
     @Test("The badge changes what is drawn")
     func badgeChangesTheMark() throws {
-        // The badge clears a ring and fills a dot, so coverage must move. An
-        // identical figure would mean the badge silently did nothing.
+        // The badge adds a dot and reserves air around it, which scales the
+        // wire down to make room. An identical figure would mean the badge
+        // silently did nothing.
         let plain = try inkCoverage(length: 18, scale: 8)
         let badged = try inkCoverage(length: 18, scale: 8, badged: true)
         #expect(abs(plain - badged) > 0.005)
     }
 
+    @Test("The attention dot keeps clear of the wire")
+    func badgeStaysOffTheWire() {
+        // Nothing is cut out of the mark to make room for the dot, so the gap
+        // between them is the whole mechanism and the gap is what gets pinned.
+        // The mark is one closed loop running well outside the badge, so any
+        // part of it reaching into the clearance disc has to cross this
+        // boundary — and 720 samples space the checks 1.8 units apart, against
+        // a wire 115 units wide.
+        let clearance = StatusItemIcon.badgeDisc(radius: StatusItemIcon.badgeClearance)
+            .boundingBoxOfPath
+        let mark = PaperclipPath.outline()
+        let onTheWire = (0..<720).filter { step in
+            let angle = Double(step) / 720 * 2 * .pi
+            return mark.contains(
+                CGPoint(
+                    x: clearance.midX + clearance.width / 2 * cos(angle),
+                    y: clearance.midY + clearance.height / 2 * sin(angle)
+                ),
+                using: .winding
+            )
+        }
+        #expect(onTheWire.isEmpty)
+    }
+
     @Test("The badged mark still inks a sensible share of the box")
     func badgedMarkStaysLegible() throws {
-        // Guards the failure the two-pass drawing exists to avoid: filling the
-        // combined path even-odd punched the stroked wire's own overlaps into
-        // holes, which collapsed coverage.
+        // The badge's clearance is unioned into the box being fitted, so it
+        // buys the dot its gap by shrinking the wire. Too much and the wire
+        // thins away; too little and the dot lands on it. Neither fails loudly.
         let badged = try inkCoverage(length: 18, scale: 8, badged: true)
         #expect(badged > 0.05)
         #expect(badged < 0.6)
