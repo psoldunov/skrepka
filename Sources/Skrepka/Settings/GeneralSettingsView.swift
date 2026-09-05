@@ -132,9 +132,9 @@ struct GeneralSettingsView: View {
 private struct AppIdentityHeader: View {
     var body: some View {
         HStack(spacing: 13) {
-            Image(systemName: "list.clipboard.fill")
-                .font(.system(size: 26, weight: .light))
-                .foregroundStyle(.tint)
+            PaperclipMark()
+                .fill(.tint)
+                .frame(width: 27, height: 27)
                 .frame(width: 46, height: 46)
                 .background {
                     RoundedRectangle(cornerRadius: 11)

@@ -10,9 +10,7 @@ struct EmptyStateView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 30, weight: .light))
-                .foregroundStyle(isBlocked ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+            glyph
 
             Text(title)
                 .font(.system(size: 14, weight: .medium))
@@ -26,9 +24,31 @@ struct EmptyStateView: View {
         .padding(30)
     }
 
-    private var symbol: String {
-        if isBlocked { return "exclamationmark.triangle" }
-        return hasQuery ? "magnifyingglass" : "clipboard"
+    /// What sits above the wording. An idle history is the one state that is
+    /// about Skrepka rather than about something going wrong, so it shows the
+    /// app's own mark; the other two describe the problem and keep a system
+    /// symbol.
+    private enum Glyph {
+        case mark
+        case system(name: String, warning: Bool)
+    }
+
+    private var glyphKind: Glyph {
+        if isBlocked { return .system(name: "exclamationmark.triangle", warning: true) }
+        return hasQuery ? .system(name: "magnifyingglass", warning: false) : .mark
+    }
+
+    @ViewBuilder private var glyph: some View {
+        switch glyphKind {
+        case .mark:
+            PaperclipMark()
+                .fill(.tertiary)
+                .frame(width: 34, height: 34)
+        case .system(let name, let warning):
+            Image(systemName: name)
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(warning ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+        }
     }
 
     /// The blocked wording comes from ``DiagnosticsProblem``, which owns it for

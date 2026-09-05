@@ -56,9 +56,9 @@ struct WelcomeView: View {
 
     private var header: some View {
         VStack(spacing: 5) {
-            Image(systemName: "list.clipboard.fill")
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(.tint)
+            PaperclipMark()
+                .fill(.tint)
+                .frame(width: 40, height: 40)
             Text("Skrepka is running")
                 .font(.system(size: 18, weight: .semibold))
             Text("It lives in the menu bar — there is no Dock icon.")
