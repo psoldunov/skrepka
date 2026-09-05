@@ -1,15 +1,15 @@
 import Foundation
 
-/// Generates row previews off the main actor.
+/// Reads what a row needs off the copied content, off the main actor.
 ///
 /// ``HistoryStore`` is main-actor because it owns the SwiftData main context,
 /// and capture runs on every clipboard change. Previewing a copied *file* means
-/// opening it, and that read is only as fast as the volume it sits on: a stale
-/// SMB mount blocks until the mount times out, and a large original on an
-/// external disk costs real milliseconds. Neither belongs on the actor drawing
-/// the menu bar and the picker.
+/// opening it, and measuring a copied *folder* means walking it; both are only
+/// as fast as the volume they sit on, and a stale SMB mount blocks until the
+/// mount times out. Neither belongs on the actor drawing the menu bar and the
+/// picker.
 ///
-/// An actor rather than a detached task per capture, so previews are generated
+/// An actor rather than a detached task per capture, so details are produced
 /// one at a time in the order they were asked for. Two copies in quick
 /// succession do not race to decode at once.
 public actor ThumbnailRenderer {
@@ -19,10 +19,12 @@ public actor ThumbnailRenderer {
         self.maker = maker
     }
 
-    /// A preview for the item, or nil when its kind has no picture to show or
-    /// the payload turns out not to hold one.
-    func preview(for item: ClipItem) -> ThumbnailMaker.Preview? {
-        guard item.kind.canPreview else { return nil }
-        return maker.makePreview(from: item.payload)
+    /// The preview and the size for an item. Either half is nil when the entry
+    /// has none to give — see ``ClipKind/canPreview`` and ``ContentSize``.
+    func details(for item: ClipItem) -> ClipDetails {
+        ClipDetails(
+            preview: item.kind.canPreview ? maker.makePreview(from: item.payload) : nil,
+            byteCount: ContentSize.byteCount(of: item)
+        )
     }
 }

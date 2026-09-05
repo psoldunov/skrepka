@@ -14,6 +14,8 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let isPinned: Bool
     public let isConcealed: Bool
     public let imageSize: ClipItem.ImageSize?
+    /// Size of the copied content, when one could be measured.
+    public let byteCount: Int?
     /// Small PNG rendering for image entries.
     public let thumbnail: Data?
 
@@ -26,6 +28,7 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         isPinned: Bool,
         isConcealed: Bool,
         imageSize: ClipItem.ImageSize?,
+        byteCount: Int?,
         thumbnail: Data?
     ) {
         self.id = id
@@ -36,7 +39,23 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         self.isPinned = isPinned
         self.isConcealed = isConcealed
         self.imageSize = imageSize
+        self.byteCount = byteCount
         self.thumbnail = thumbnail
+    }
+
+    /// The content's size as the row subtitle shows it, or nil when there is
+    /// nothing to show.
+    ///
+    /// Decimal units, matching what Finder reports for the same file: the
+    /// `.file` style counts a kilobyte as 1000 bytes, so a row and Get Info do
+    /// not disagree about the same file.
+    ///
+    /// Withheld from a concealed entry along with everything else about it. A
+    /// password manager's payload is text and gets no size anyway, but the rule
+    /// belongs with the other one rather than resting on that.
+    public var sizeText: String? {
+        guard !isConcealed, let byteCount else { return nil }
+        return byteCount.formatted(.byteCount(style: .file, spellsOutZero: false))
     }
 
     /// Single-line preview, masked when the entry came from a password manager.

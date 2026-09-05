@@ -65,7 +65,7 @@ public final class HistoryStore {
     public func capture(_ item: ClipItem) async -> Bool {
         // Generated before the context is touched, so no SwiftData work spans
         // the suspension.
-        let preview = await thumbnailRenderer.preview(for: item)
+        let details = await thumbnailRenderer.details(for: item)
 
         do {
             if let existing = try recordMatching(contentHash: item.contentHash) {
@@ -76,13 +76,18 @@ public final class HistoryStore {
                 // — so a repeat copy lands here, and this is the one place that
                 // can correct it.
                 existing.kindRaw = item.kind.rawValue
-                backfillPreview(preview, into: existing)
+                // A size the first capture could not take: the entry predates
+                // sizes, or the folder was too large to walk that time. An
+                // existing measurement is kept when this one came back empty,
+                // so a moved file does not lose the size it was copied at.
+                existing.byteCount = details.byteCount ?? existing.byteCount
+                backfillPreview(details.preview, into: existing)
                 try context.save()
                 reload()
                 return true
             }
 
-            let record = try ClipRecordMapping.makeRecord(from: item, preview: preview)
+            let record = try ClipRecordMapping.makeRecord(from: item, details: details)
             context.insert(record)
             try context.save()
             reload()
