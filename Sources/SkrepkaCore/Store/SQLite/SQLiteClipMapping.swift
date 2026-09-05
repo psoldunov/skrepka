@@ -32,6 +32,7 @@
                 isPinned: row.isPinned,
                 isConcealed: row.isConcealed,
                 imageSize: imageSize,
+                byteCount: row.contentByteCount,
                 hasThumbnail: row.thumbnail != nil
             )
         }

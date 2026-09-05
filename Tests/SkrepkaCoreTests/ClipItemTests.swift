@@ -92,6 +92,21 @@ struct ClipItemTests {
         )
     }
 
+    @Test("A folder hashes the same as the file entry it used to be recorded as")
+    func folderSharesFileHashDomain() {
+        // Every folder in a history stored before folders were told apart is
+        // recorded as `.file`. Feeding the case into the hash would make the
+        // `.folder` capture of that same folder today a second, separate row —
+        // and would leave the stale one saying "File" for good.
+        let payload = ClipPayload(representations: [
+            PasteboardType.fileURL: Data("file:///Users/me/Nextcloud/".utf8)
+        ])
+        #expect(
+            ClipItem(kind: .file, text: "Nextcloud", payload: payload).contentHash
+                == ClipItem(kind: .folder, text: "Nextcloud", payload: payload).contentHash
+        )
+    }
+
     @Test("Multi-line text previews as one line")
     func previewCollapsesLines() {
         let item = ClipItem(kind: .text, text: "line one\n\n  line two  ", payload: payload("x"))

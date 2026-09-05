@@ -23,6 +23,10 @@
         let contentHash: String
         let imageWidth: Int?
         let imageHeight: Int?
+        /// `ClipRecord.byteCount` — the size of the copied thing, measured where
+        /// it was copied. Always nil today: measuring it needs the detail pass,
+        /// which is AppKit and arrives here with the preview in Phase 7.
+        let contentByteCount: Int?
         let thumbnail: Data?
         let pinnedAt: Date?
         let pinnedBy: String?
@@ -33,11 +37,12 @@
         /// for.
         static let columns = """
             id, kind_raw, "text", source_bundle_id, created_at, is_pinned, is_concealed, \
-            content_hash, image_width, image_height, thumbnail, pinned_at, pinned_by, origin_device_id
+            content_hash, image_width, image_height, content_byte_count, thumbnail, pinned_at, \
+            pinned_by, origin_device_id
             """
 
         static let insert = """
-            INSERT INTO clip (\(columns)) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO clip (\(columns)) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
 
         /// Parameters for ``insert``, in its column order.
@@ -53,6 +58,7 @@
                 .value(contentHash),
                 .value(imageWidth),
                 .value(imageHeight),
+                .value(contentByteCount),
                 .value(thumbnail),
                 .value(pinnedAt),
                 .value(pinnedBy),
@@ -86,10 +92,11 @@
             self.contentHash = contentHash
             imageWidth = statement.integer(8)
             imageHeight = statement.integer(9)
-            thumbnail = statement.blob(10)
-            pinnedAt = statement.date(11)
-            pinnedBy = statement.text(12)
-            originDeviceID = statement.text(13)
+            contentByteCount = statement.integer(10)
+            thumbnail = statement.blob(11)
+            pinnedAt = statement.date(12)
+            pinnedBy = statement.text(13)
+            originDeviceID = statement.text(14)
         }
 
         private init(
@@ -103,6 +110,7 @@
             contentHash: String,
             imageWidth: Int?,
             imageHeight: Int?,
+            contentByteCount: Int?,
             thumbnail: Data?,
             pinnedAt: Date?,
             pinnedBy: String?,
@@ -118,6 +126,7 @@
             self.contentHash = contentHash
             self.imageWidth = imageWidth
             self.imageHeight = imageHeight
+            self.contentByteCount = contentByteCount
             self.thumbnail = thumbnail
             self.pinnedAt = pinnedAt
             self.pinnedBy = pinnedBy
@@ -142,6 +151,7 @@
                 contentHash: item.contentHash,
                 imageWidth: item.imageSize?.width,
                 imageHeight: item.imageSize?.height,
+                contentByteCount: nil,
                 thumbnail: nil,
                 pinnedAt: nil,
                 pinnedBy: nil,
@@ -166,6 +176,7 @@
                 contentHash: meta.contentHash,
                 imageWidth: meta.imageWidth,
                 imageHeight: meta.imageHeight,
+                contentByteCount: nil,
                 thumbnail: nil,
                 pinnedAt: meta.isPinned.timestamp,
                 pinnedBy: meta.isPinned.deviceID.hex,

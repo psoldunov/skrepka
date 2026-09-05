@@ -10,8 +10,9 @@
     /// The clipboard history: persistence, de-duplication, pinning and eviction.
     ///
     /// Main-actor because it owns `ModelContainer.mainContext` and publishes
-    /// ``items`` straight to the picker. The projection that keeps ``items`` in
-    /// step with the database is in `HistoryStore+Projection.swift`; the sync
+    /// ``items`` straight to the picker. The capture path is in
+    /// `HistoryStore+Capture.swift` and the projection that keeps ``items`` in
+    /// step with the database in `HistoryStore+Projection.swift`; the sync
     /// surface is in `HistoryStore+Sync.swift`, `HistoryStore+Merge.swift` and
     /// `HistoryStore+Pairing.swift`.
     @MainActor
@@ -55,7 +56,10 @@
         public var localDeviceID: SyncDeviceID?
 
         private let container: ModelContainer
-        private let thumbnailRenderer: ThumbnailRenderer
+        /// Not private: the capture path that uses it is
+        /// `HistoryStore+Capture.swift`, and an extension in another file cannot
+        /// see a private member.
+        let thumbnailRenderer: ThumbnailRenderer
         var context: ModelContext { container.mainContext }
 
         /// - Parameter location: where the SQLite store lives, or nil for memory
@@ -98,68 +102,6 @@
             let directory = support.appending(path: bundleID, directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             return directory.appending(path: "skrepka.store", directoryHint: .notDirectory)
-        }
-
-        // MARK: - Capture
-
-        /// Stores a newly captured item, collapsing a repeat copy onto the entry it
-        /// duplicates rather than adding a second row.
-        ///
-        /// Asynchronous because previewing a copied file means reading it, and that
-        /// read belongs off this actor — see ``ThumbnailRenderer``. Captures arrive
-        /// one at a time from the poller's stream, so the suspension does not
-        /// interleave two of them.
-        @discardableResult
-        public func capture(_ item: ClipItem) async -> Bool {
-            // Generated before the context is touched, so no SwiftData work spans
-            // the suspension.
-            let preview = await thumbnailRenderer.preview(for: item)
-
-            do {
-                if let existing = try recordMatching(contentHash: item.contentHash) {
-                    existing.createdAt = item.createdAt
-                    existing.sourceBundleID = item.sourceBundleID ?? existing.sourceBundleID
-                    backfillPreview(preview, into: existing)
-                    try context.save()
-                    project(upserts: [existing])
-                    return true
-                }
-
-                let record = try ClipRecordMapping.makeRecord(
-                    from: item,
-                    preview: preview,
-                    originDeviceID: localDeviceID?.hex
-                )
-                context.insert(record)
-                try context.save()
-                project(upserts: [record])
-                applyRetention()
-                return true
-            } catch {
-                // The list is maintained by delta, so a mutation that threw before
-                // it could publish one leaves `items` describing a store that has
-                // moved on. Rebuilding is the recovery path — see ``reload()``.
-                reload()
-                SkrepkaLog.store.error("Failed to store clipboard entry: \(error.localizedDescription)")
-                return false
-            }
-        }
-
-        /// Fills in a preview the entry never got.
-        ///
-        /// An entry stored before `.file` earned previews has no thumbnail, and so
-        /// does one whose file was unreadable at the time. A repeat copy is the only
-        /// chance to fix that: nothing else revisits a row, and the de-duplication
-        /// above is what a repeat copy hits. Without this those rows keep a generic
-        /// document icon for good.
-        ///
-        /// An existing thumbnail is left alone. The row is a snapshot of the copy
-        /// that made it, and replacing it would silently rewrite history.
-        private func backfillPreview(_ preview: ThumbnailMaker.Preview?, into record: ClipRecord) {
-            guard record.thumbnailData == nil, let preview else { return }
-            record.thumbnailData = preview.thumbnail
-            record.imageWidth = preview.pixelSize?.width
-            record.imageHeight = preview.pixelSize?.height
         }
 
         // MARK: - Reading

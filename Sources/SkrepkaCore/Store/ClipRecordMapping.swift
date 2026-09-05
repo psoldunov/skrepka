@@ -23,19 +23,24 @@
             return ClipPayload(representations: representations)
         }
 
-        /// - Parameter originDeviceID: `SyncDeviceID.hex` of this machine, or `nil`
-        ///   when it has no sync identity yet.
+        /// - Parameters:
+        ///   - details: what the off-actor detail pass read off the copied content
+        ///     — see ``ThumbnailRenderer``.
+        ///   - originDeviceID: `SyncDeviceID.hex` of this machine, or `nil` when it
+        ///     has no sync identity yet.
         static func makeRecord(
             from item: ClipItem,
-            preview: ThumbnailMaker.Preview?,
+            details: ClipDetails,
             originDeviceID: String? = nil
         ) throws -> ClipRecord {
             // The pixel size comes from decoding the image, which only the preview
-            // step does — the pure capture rules never touch AppKit imaging.
-            let imageSize = preview?.pixelSize ?? item.imageSize
+            // step does — the capture rules never touch AppKit imaging.
+            let imageSize = details.preview?.pixelSize ?? item.imageSize
             return ClipRecord(
                 id: item.id,
-                kindRaw: item.kind.rawValue,
+                // The capture rules call every file URL a `.file`; only the detail
+                // pass can say it is a folder, and only when the disk answered.
+                kindRaw: (details.kind ?? item.kind).rawValue,
                 text: item.text,
                 sourceBundleID: item.sourceBundleID,
                 createdAt: item.createdAt,
@@ -44,7 +49,8 @@
                 contentHash: item.contentHash,
                 imageWidth: imageSize?.width,
                 imageHeight: imageSize?.height,
-                thumbnailData: preview?.thumbnail,
+                byteCount: details.byteCount,
+                thumbnailData: details.preview?.thumbnail,
                 payloadData: try encode(item.payload),
                 // Written here, in the one place a row is created from a capture,
                 // so it cannot be forgotten: it describes the payload beside it and
@@ -72,6 +78,7 @@
                 isPinned: record.isPinned,
                 isConcealed: record.isConcealed,
                 imageSize: imageSize,
+                byteCount: record.byteCount,
                 hasThumbnail: record.thumbnailData != nil
             )
         }

@@ -27,6 +27,14 @@
         var contentHash: String = ""
         var imageWidth: Int?
         var imageHeight: Int?
+        /// Size of the copied content, when one could be measured. Optional with no
+        /// default, so a store written before sizes existed migrates by leaving it
+        /// nil rather than claiming every old entry is zero bytes.
+        ///
+        /// Local to this machine and deliberately not synced: a file's size
+        /// describes a path only the machine that copied it has — see
+        /// ``SkrepkaSync/SyncClipMeta``.
+        var byteCount: Int?
         /// Small PNG preview. Inline: it is read for every visible row.
         var thumbnailData: Data?
         /// Every pasteboard representation, property-list encoded.
@@ -72,6 +80,7 @@
             contentHash: String,
             imageWidth: Int?,
             imageHeight: Int?,
+            byteCount: Int?,
             thumbnailData: Data?,
             payloadData: Data,
             pinnedAt: Date? = nil,
@@ -89,6 +98,7 @@
             self.contentHash = contentHash
             self.imageWidth = imageWidth
             self.imageHeight = imageHeight
+            self.byteCount = byteCount
             self.thumbnailData = thumbnailData
             self.payloadData = payloadData
             self.pinnedAt = pinnedAt

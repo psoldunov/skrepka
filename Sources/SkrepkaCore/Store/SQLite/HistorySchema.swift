@@ -17,12 +17,20 @@
     /// representation index are one table here rather than a property-list blob
     /// plus a denormalised column. See ``representationTable``.
     enum HistorySchema {
-        /// Bumped when a column changes. There is nothing to migrate yet — the
-        /// Linux store has no installed base
-        /// ([D-8](../../../docs/linux-sync/open-questions.md)) — but the version is
-        /// read as well as written, which is the half that makes it a hook rather
-        /// than a decoration. See ``install(on:)``.
-        static let version = 1
+        /// Bumped when a column changes, and read as well as written — which is
+        /// what makes it a hook rather than a decoration. See ``install(on:)``.
+        ///
+        /// - 1: the original three tables.
+        /// - 2: `clip.content_byte_count`, following `ClipRecord.byteCount` onto
+        ///   this engine.
+        ///
+        /// The Linux store still has no installed base
+        /// ([D-8](../../../docs/linux-sync/open-questions.md)), so v2 is reached
+        /// almost only by a fresh `CREATE TABLE`. ``migrations`` exists anyway
+        /// because a developer's own store from last week is exactly the database
+        /// `CREATE TABLE IF NOT EXISTS` would silently leave a column short, and
+        /// every insert against it would then fail on a column name.
+        static let version = 2
 
         /// Applied to the connection before anything else touches it.
         ///
@@ -50,6 +58,12 @@
         /// tombstone uses. Neither is `UNIQUE`: the SwiftData side has no unique
         /// constraint either and de-duplicates by hand, and adding one here would
         /// make an insert *throw* where macOS silently keeps one row.
+        ///
+        /// `content_byte_count` is `ClipRecord.byteCount`, spelled longer than the
+        /// property because ``representationTable`` already has a `byte_count` and
+        /// the two measure different things: this one is the size of the copied
+        /// file, folder or picture, that one is the size of one representation of
+        /// it. A query joining both would otherwise name the same column twice.
         static let clipTable = """
             CREATE TABLE IF NOT EXISTS clip (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -62,6 +76,7 @@
                 content_hash TEXT NOT NULL,
                 image_width INTEGER,
                 image_height INTEGER,
+                content_byte_count INTEGER,
                 thumbnail BLOB,
                 pinned_at REAL,
                 pinned_by TEXT,
@@ -151,6 +166,22 @@
         /// newer build's columns are missing from. The check comes before the
         /// pragmas for the same reason: `journal_mode` is a persistent property of
         /// the file, not a setting on this connection.
+        /// What each version added to a database created by the one before it,
+        /// keyed by the version it produces.
+        ///
+        /// Only reached by a database an older build already created: a fresh one
+        /// gets every column from the `CREATE TABLE` above, and stamps ``version``
+        /// without running any of these. That is what makes each statement safe to
+        /// leave out of the fresh path — the two must always agree, and
+        /// `SQLiteHistoryStoreTests` opens an upgraded store and a fresh one and
+        /// asserts they hold the same set of columns. A *set*, because
+        /// `ALTER TABLE ADD COLUMN` can only append: the two tables declare their
+        /// columns in different orders and nothing here cares, since every
+        /// statement names the columns it wants through `SQLiteClipRow.columns`.
+        static let migrations: [Int: String] = [
+            2: "ALTER TABLE clip ADD COLUMN content_byte_count INTEGER"
+        ]
+
         static func install(on database: SQLiteDatabase) throws {
             let installed = try installedVersion(of: database)
             guard installed <= version else {
@@ -164,6 +195,16 @@
             try database.execute(pairedDeviceTable)
 
             guard installed < version else { return }
+            // Skipped entirely for a database nothing has stamped: version 0 is
+            // both a brand new file and one written before this pragma existed,
+            // and the `CREATE TABLE`s above have just given either every column.
+            // Running an `ALTER TABLE` on that is "duplicate column name".
+            if installed > 0 {
+                for step in (installed + 1)...version {
+                    guard let statement = migrations[step] else { continue }
+                    try database.execute(statement)
+                }
+            }
             try database.execute("PRAGMA user_version = \(version)")
         }
 

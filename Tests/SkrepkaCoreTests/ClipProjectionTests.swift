@@ -24,6 +24,7 @@ struct ClipProjectionTests {
             isPinned: pinned,
             isConcealed: false,
             imageSize: nil,
+            byteCount: nil,
             hasThumbnail: false
         )
     }

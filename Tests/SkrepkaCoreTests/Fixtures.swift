@@ -1,90 +1,35 @@
-// AppKit + ImageIO. Only HistoryStoreTests and ThumbnailMakerTests use it, and
-// both are excluded too, so this drags nothing else off Linux.
-#if canImport(AppKit)
+import Foundation
+import Testing
 
-    import AppKit
-    import Foundation
-    import ImageIO
-    import Testing
-    import UniformTypeIdentifiers
+@testable import SkrepkaCore
 
-    @testable import SkrepkaCore
-
-    /// Real image bytes and real files on disk, shared by the store and thumbnail
-    /// suites.
-    ///
-    /// Real rather than placeholder because ImageIO is the thing under test in both
-    /// and it will not be fooled by a stand-in.
-    enum Fixtures {
-        static func png(width: Int, height: Int) throws -> Data {
-            let rep = try #require(bitmap(width: width, height: height, hasAlpha: true))
-            rep.size = CGSize(width: width, height: height)
-            return try #require(rep.representation(using: .png, properties: [:]))
-        }
-
-        static func makeDirectory() throws -> URL {
-            let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-                .appending(path: "skrepka-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            return directory
-        }
-
-        static func writePNG(width: Int, height: Int, named name: String) throws -> URL {
-            let url = try makeDirectory().appending(path: name, directoryHint: .notDirectory)
-            try png(width: width, height: height).write(to: url)
-            return url
-        }
-
-        /// A JPEG carrying an EXIF orientation, for the rotated-photo cases.
-        ///
-        /// JPEG rather than PNG because EXIF orientation is what a camera writes and
-        /// what ImageIO reads back; `width` and `height` are the dimensions *stored*
-        /// on disk, which an orientation of 5 through 8 asks a reader to transpose.
-        static func writeJPEG(
-            width: Int,
-            height: Int,
-            orientation: Int,
-            named name: String
-        ) throws -> URL {
-            let url = try makeDirectory().appending(path: name, directoryHint: .notDirectory)
-            // JPEG carries no alpha channel, so the bitmap must not offer one.
-            let rep = try #require(bitmap(width: width, height: height, hasAlpha: false))
-            let image = try #require(rep.cgImage)
-            let destination = try #require(
-                CGImageDestinationCreateWithURL(
-                    url as CFURL,
-                    UTType.jpeg.identifier as CFString,
-                    1,
-                    nil
-                )
-            )
-            CGImageDestinationAddImage(
-                destination,
-                image,
-                [kCGImagePropertyOrientation: orientation] as CFDictionary
-            )
-            #expect(CGImageDestinationFinalize(destination))
-            return url
-        }
-
-        static func fileURLPayload(_ url: URL) -> ClipPayload {
-            ClipPayload(representations: [PasteboardType.fileURL: Data(url.absoluteString.utf8)])
-        }
-
-        private static func bitmap(width: Int, height: Int, hasAlpha: Bool) -> NSBitmapImageRep? {
-            NSBitmapImageRep(
-                bitmapDataPlanes: nil,
-                pixelsWide: width,
-                pixelsHigh: height,
-                bitsPerSample: 8,
-                samplesPerPixel: hasAlpha ? 4 : 3,
-                hasAlpha: hasAlpha,
-                isPlanar: false,
-                colorSpaceName: .deviceRGB,
-                bytesPerRow: 0,
-                bitsPerPixel: 0
-            )
-        }
+/// Real directories, real files and the payload that points at them.
+///
+/// No AppKit and no ImageIO, so this half builds on Linux and the suites that
+/// only need a path — `CaptureRulesTests`, `ContentSizeTests` — run on both
+/// platforms. Making a picture needs both, and lives in `Fixtures+Images.swift`.
+enum Fixtures {
+    static func makeDirectory() throws -> URL {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "skrepka-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 
-#endif
+    /// A directory named the way an application bundle is.
+    ///
+    /// On macOS the file system reports it as a package, and the extension alone
+    /// decides that — no `Info.plist` and no `Contents/` are needed, verified by
+    /// probing `.isPackageKey` on a bare `.app` directory. Elsewhere it is an
+    /// ordinary directory, which is all the callers outside `FileURLKindTests`
+    /// need it to be.
+    static func makePackage(named name: String) throws -> URL {
+        let url = try makeDirectory().appending(path: name, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    static func fileURLPayload(_ url: URL) -> ClipPayload {
+        ClipPayload(representations: [PasteboardType.fileURL: Data(url.absoluteString.utf8)])
+    }
+}

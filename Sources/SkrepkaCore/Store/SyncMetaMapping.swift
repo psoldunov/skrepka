@@ -61,6 +61,10 @@
                 contentHash: meta.contentHash,
                 imageWidth: meta.imageWidth,
                 imageHeight: meta.imageHeight,
+                // Nil rather than defaulted, so the reason is at the call site:
+                // a size measures the copied thing on the machine that copied
+                // it, and none crosses the wire — see ``SkrepkaSync/SyncClipMeta``.
+                byteCount: nil,
                 thumbnailData: nil,
                 payloadData: Data(),
                 pinnedAt: meta.isPinned.timestamp,

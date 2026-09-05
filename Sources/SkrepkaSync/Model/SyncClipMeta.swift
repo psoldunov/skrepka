@@ -6,6 +6,14 @@ import Foundation
 /// `kind` is a raw `String` rather than `SkrepkaCore.ClipKind` on purpose: this
 /// target must build on Linux, where `SkrepkaCore` does not, so everything it
 /// needs from the core crosses as a primitive.
+///
+/// **The content's size is deliberately not here.** A row shows one — see
+/// `SkrepkaCore.ClipSummary.byteCount` — but for a file or a folder it is the
+/// size of a path only the machine that made the copy has, and sending it would
+/// have a peer display a measurement of something it cannot see. For an image
+/// it would be a second, less precise copy of what ``representations`` already
+/// carries per representation. A receiver measures what it holds or shows
+/// nothing, which is the same rule it follows for a thumbnail.
 public struct SyncClipMeta: Sendable, Hashable, Codable {
     /// Content identity. Two machines copying the same string converge on this
     /// and on nothing else — a locally generated `UUID` cannot.
