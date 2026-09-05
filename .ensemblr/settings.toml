@@ -1,6 +1,6 @@
 #:schema https://www.ensemblr.dev/schemas/settings.schema.json
 
-# Clippy is a SwiftPM package, not an Xcode project: there is no scheme and no
+# Skrepka is a SwiftPM package, not an Xcode project: there is no scheme and no
 # dev server. Every button below drives the same `swift` toolchain and the same
 # .build directory that scripts/doctor.sh does.
 
@@ -10,7 +10,7 @@
 # agree with them. `xcode-select -p` points at CommandLineTools, whose toolchain
 # ships no libSwiftDataMacros.dylib (it lives only under Xcode's
 # MacOSX.platform), so an unpinned `swift build` fails on every @Model in
-# Sources/ClippyCore/Store/ — and a SwiftPM scratch directory keyed to a
+# Sources/SkrepkaCore/Store/ — and a SwiftPM scratch directory keyed to a
 # different toolchain forces a full rebuild on every switch, which is what makes
 # mixed buttons feel so slow. README.md already states Xcode 26 is required.
 #
@@ -81,20 +81,20 @@ command = "env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun sw
 icon = "paintbrush"
 
 [scripts.run.bundle]
-# Produce build/Clippy.app without stopping or relaunching a running instance.
+# Produce build/Skrepka.app without stopping or relaunching a running instance.
 command = "scripts/bundle.sh"
 icon = "package"
 
 [scripts.run.notarize]
 # Build, sign with a secure timestamp, submit to Apple's notary service, staple
-# the ticket, and leave build/Clippy.zip ready to send to someone else.
+# the ticket, and leave build/Skrepka.zip ready to send to someone else.
 #
 # Not part of the edit loop: it costs a round-trip to Apple's timestamp server
 # plus a notary submission that usually takes a few minutes. scripts/bundle.sh
 # stays fast and unnotarized for local runs; this is the button for a build that
 # leaves the machine.
 #
-# Needs a one-time notarytool keychain profile named `clippy` — the script
+# Needs a one-time notarytool keychain profile named `skrepka` — the script
 # prints the exact `store-credentials` command when it cannot find one.
 command = "scripts/notarize.sh"
 icon = "shield-check"

@@ -11,7 +11,7 @@
 #   Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/
 #     usr/lib/swift/host/plugins/libSwiftDataMacros.dylib
 #
-# so an unpinned `swift build` fails on every @Model in Sources/ClippyCore/
+# so an unpinned `swift build` fails on every @Model in Sources/SkrepkaCore/
 # Store/ with "plugin for module 'SwiftDataMacros' not found". A SwiftPM
 # scratch directory is also keyed to the toolchain that wrote it, so alternating
 # between a pinned script and an unpinned one forces a full rebuild each time.
@@ -24,7 +24,7 @@ export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Develope
 
 if [[ ! -d "${DEVELOPER_DIR}" ]]; then
 	echo "error: DEVELOPER_DIR does not exist: ${DEVELOPER_DIR}" >&2
-	echo "Clippy needs a full Xcode 26 install; CommandLineTools cannot build it." >&2
+	echo "Skrepka needs a full Xcode 26 install; CommandLineTools cannot build it." >&2
 	exit 1
 fi
 

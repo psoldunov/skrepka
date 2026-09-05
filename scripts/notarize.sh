@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Produces a build/Clippy.app that launches on someone else's Mac, plus the
-# build/Clippy.zip to hand them.
+# Produces a build/Skrepka.app that launches on someone else's Mac, plus the
+# build/Skrepka.zip to hand them.
 #
 # Nothing here involves the App Store. Notarization is the Developer ID path:
 # Apple scans the binary, returns a ticket, and Gatekeeper stops blocking it.
-# Without a ticket, `spctl -a -t exec build/Clippy.app` answers
+# Without a ticket, `spctl -a -t exec build/Skrepka.app` answers
 #
 #   rejected
 #   source=Unnotarized Developer ID
@@ -23,15 +23,15 @@
 #     So the archive that was submitted does NOT contain the ticket, and the
 #     zip has to be rebuilt AFTER stapling. Ship the second one.
 #   * The signature needs a secure timestamp, which scripts/bundle.sh omits by
-#     default. CLIPPY_NOTARIZE=1 turns it on.
+#     default. SKREPKA_NOTARIZE=1 turns it on.
 #
-# The build is universal (CLIPPY_UNIVERSAL=1) because this is the copy that
+# The build is universal (SKREPKA_UNIVERSAL=1) because this is the copy that
 # goes to other people's Macs, and four Intel models still run macOS 26. See
 # the comment on ARCHITECTURES in scripts/bundle.sh.
 #
 # Credentials come from a notarytool keychain profile, created once:
 #
-#   xcrun notarytool store-credentials clippy \
+#   xcrun notarytool store-credentials skrepka \
 #     --apple-id <your-apple-id> --team-id <team-id> --password <app-specific-password>
 #
 # An app-specific password is generated at appleid.apple.com, not your Apple ID
@@ -44,21 +44,21 @@ cd "$(dirname "$0")/.."
 
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
-APP_NAME="Clippy"
+APP_NAME="Skrepka"
 APP="build/${APP_NAME}.app"
 ZIP="build/${APP_NAME}.zip"
 SUBMISSION_JSON="build/notarization.json"
 LOG_JSON="build/notarization-log.json"
-NOTARY_PROFILE="${CLIPPY_NOTARY_PROFILE:-clippy}"
-NOTARY_TIMEOUT="${CLIPPY_NOTARY_TIMEOUT:-30m}"
+NOTARY_PROFILE="${SKREPKA_NOTARY_PROFILE:-skrepka}"
+NOTARY_TIMEOUT="${SKREPKA_NOTARY_TIMEOUT:-30m}"
 
 # Builds and signs with a secure timestamp, and refuses to fall back to ad-hoc
 # signing -- an ad-hoc signature can never be notarized.
 #
-# CLIPPY_REVEAL=0 because the .app at this point has no ticket yet. Revealing it
+# SKREPKA_REVEAL=0 because the .app at this point has no ticket yet. Revealing it
 # here would put the un-notarized build in front of the user, which is the one
 # copy of it that must not be sent anywhere.
-CLIPPY_NOTARIZE=1 CLIPPY_REVEAL=0 CLIPPY_UNIVERSAL=1 scripts/bundle.sh
+SKREPKA_NOTARIZE=1 SKREPKA_REVEAL=0 SKREPKA_UNIVERSAL=1 scripts/bundle.sh
 
 # Read back from the artifact rather than duplicating the identity string that
 # scripts/bundle.sh owns. Only used to make the error hint below copy-pasteable.
@@ -124,6 +124,6 @@ echo "✓ ${ZIP} — notarized and stapled, safe to send"
 #
 # `|| true` for the same reason as in bundle.sh -- no window server, no Finder,
 # and the artifacts are already on disk.
-if [[ "${CLIPPY_REVEAL:-1}" == "1" ]]; then
+if [[ "${SKREPKA_REVEAL:-1}" == "1" ]]; then
 	open -R "${ZIP}" || true
 fi

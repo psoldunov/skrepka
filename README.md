@@ -1,4 +1,4 @@
-# Clippy
+# Skrepka
 
 A clipboard-history manager for macOS 26. Lives in the menu bar with no Dock
 icon; press ⌘⇧V anywhere and a Liquid Glass picker opens over whatever app you
@@ -21,9 +21,9 @@ macOS 26. Xcode 26 to build.
 
 ```sh
 scripts/run.sh        # build, bundle, sign, launch
-scripts/bundle.sh     # produce build/Clippy.app only
+scripts/bundle.sh     # produce build/Skrepka.app only
 scripts/doctor.sh     # the quality gate
-scripts/make-icon.sh  # redraw Sources/Clippy/Resources/AppIcon.icns
+scripts/make-icon.sh  # redraw Sources/Skrepka/Resources/AppIcon.icns
 ```
 
 Launch with `scripts/run.sh` rather than running the binary directly. TCC
@@ -32,11 +32,11 @@ inherits the terminal's grants instead of exercising the real permission path.
 
 ### Architecture
 
-`scripts/bundle.sh` builds for the machine it runs on. `CLIPPY_UNIVERSAL=1`
+`scripts/bundle.sh` builds for the machine it runs on. `SKREPKA_UNIVERSAL=1`
 builds an arm64 + x86_64 binary instead:
 
 ```sh
-CLIPPY_UNIVERSAL=1 scripts/bundle.sh
+SKREPKA_UNIVERSAL=1 scripts/bundle.sh
 ```
 
 `scripts/notarize.sh` sets it, because that is the build that goes to other
@@ -52,7 +52,7 @@ loop pays neither.
 ### Signing
 
 `scripts/bundle.sh` signs with a Developer ID identity, overridable via
-`CLIPPY_SIGN_IDENTITY`. This is not cosmetic: an ad-hoc signature pins the
+`SKREPKA_SIGN_IDENTITY`. This is not cosmetic: an ad-hoc signature pins the
 designated requirement to the binary's cdhash, which changes on every source
 edit, so macOS treats each rebuild as a new app and drops the Accessibility
 grant. A Developer ID requirement names only the bundle id and team, so the
@@ -64,11 +64,11 @@ warns.
 The app icon is a gem clip with eyes holding a stack of notes — a nod to the
 Office assistant the app is named after. It is drawn in code, not in a design
 tool: `scripts/make-icon.swift` renders the vectors once per iconset size and
-`scripts/make-icon.sh` packs them into `Sources/Clippy/Resources/AppIcon.icns`.
+`scripts/make-icon.sh` packs them into `Sources/Skrepka/Resources/AppIcon.icns`.
 Pass a palette name (`sand`, `ink`, `graphite`, `sage`) to try another; `sand`
 ships. `--preview <dir>` writes every palette at 1024 and 64 px for comparison.
 
-The menu bar mark is drawn too, by `StatusItemIcon` in `ClippyCore` — the same
+The menu bar mark is drawn too, by `StatusItemIcon` in `SkrepkaCore` — the same
 gem clip, thinned and flattened into an 18pt template image, with the eyes kept
 as pupils since a template image is alpha only. A test pins its ink coverage to
 a band, because a wire drawn too heavy reads as a blob and one drawn too light
@@ -83,20 +83,20 @@ not assumed from the icon's own corners.
 
 - **None** for capturing history or for the global shortcut. The hotkey goes
   through Carbon's `RegisterEventHotKey`, which needs no grant.
-- **Accessibility**, only to paste into the frontmost app — Clippy synthesises
-  ⌘V. It asks the first time you paste something. Decline it and Clippy falls
+- **Accessibility**, only to paste into the frontmost app — Skrepka synthesises
+  ⌘V. It asks the first time you paste something. Decline it and Skrepka falls
   back to copying, which you then paste yourself. That fallback is also
   available deliberately: turn off "Paste automatically" in Settings.
 
 ## Layout
 
 ```
-Sources/ClippyCore/    models, storage, pasteboard, search — testable, no UI
-Sources/Clippy/        app shell, panel, SwiftUI views, platform glue
-Tests/ClippyCoreTests/ Swift Testing
+Sources/SkrepkaCore/    models, storage, pasteboard, search — testable, no UI
+Sources/Skrepka/        app shell, panel, SwiftUI views, platform glue
+Tests/SkrepkaCoreTests/ Swift Testing
 ```
 
-`ClippyCore` is a plain SwiftPM library with no window-server dependency, so
+`SkrepkaCore` is a plain SwiftPM library with no window-server dependency, so
 `swift test` runs in well under a second. The app target holds only what cannot
 run without a live window.
 
@@ -120,7 +120,8 @@ unreferenced type across modules; expect to drop it eventually.
 
 ## Storage
 
-SwiftData at `~/Library/Application Support/com.psoldunov.clippy/clippy.store`.
-Image payloads use `@Attribute(.externalStorage)`, so large blobs land beside the
+SwiftData at
+`~/Library/Application Support/com.psoldunov.skrepka/skrepka.store`. Image
+payloads use `@Attribute(.externalStorage)`, so large blobs land beside the
 database rather than inside a row. The picker holds only lightweight summaries
 plus a small thumbnail; a full payload is read only when an entry is pasted.
