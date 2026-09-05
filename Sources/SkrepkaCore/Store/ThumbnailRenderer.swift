@@ -30,22 +30,32 @@
         /// Everything about an entry that needed the copied thing opened. Any part
         /// is nil when the entry has none to give — see ``FileURLKind``,
         /// ``ClipKind/canPreview`` and ``ContentSize``.
+        ///
+        /// The file system is asked once, here, and the answer is read by both
+        /// the kind and the size. They want overlapping things from the same
+        /// lookup, and on a mount that has stopped responding a second one is a
+        /// second full stall — see ``CopiedFile``.
         func details(for item: ClipItem) -> ClipDetails {
-            let kind = refinedKind(for: item)
+            let file = copiedFile(for: item)
+            let kind = file.flatMap(FileURLKind.kind(of:))
             return ClipDetails(
                 kind: kind,
                 // The refined kind, so a directory that turned out to be a plain
                 // folder is never opened looking for a picture it cannot hold.
                 preview: (kind ?? item.kind).canPreview ? maker.makePreview(from: item.payload) : nil,
-                byteCount: ContentSize.byteCount(of: item)
+                byteCount: ContentSize.byteCount(of: item, file: file)
             )
         }
 
-        /// What the entry's file URL actually points at, for the one kind the
-        /// capture rules cannot settle on their own.
-        private func refinedKind(for item: ClipItem) -> ClipKind? {
+        /// What the file system says about the entry's file URL, for the kinds
+        /// that have one.
+        ///
+        /// Nil for an entry that names no file, and for a path the file system
+        /// would not describe. Both readers already turn that into "nothing to
+        /// say", so the two are not told apart here.
+        private func copiedFile(for item: ClipItem) -> CopiedFile? {
             guard item.kind.isFileSystemEntry, let url = item.payload.fileURL else { return nil }
-            return FileURLKind.kind(ofFileAt: url)
+            return CopiedFile(at: url)
         }
     }
 

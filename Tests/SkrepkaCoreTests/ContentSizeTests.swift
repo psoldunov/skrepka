@@ -9,6 +9,14 @@ struct ContentSizeTests {
         ClipItem(kind: kind, text: "entry", payload: payload)
     }
 
+    /// The size the detail pass would land on, taking the one file-system lookup
+    /// `ThumbnailRenderer` takes rather than a second one of its own — see
+    /// `CopiedFile`. Nil for a path the file system will not describe, which is
+    /// what the caller passes on.
+    private func measure(_ item: ClipItem) -> Int? {
+        ContentSize.byteCount(of: item, file: item.payload.fileURL.flatMap(CopiedFile.init(at:)))
+    }
+
     private func write(_ byteCount: Int, to url: URL) throws {
         try Data(repeating: 0x41, count: byteCount).write(to: url)
     }
@@ -22,7 +30,7 @@ struct ContentSizeTests {
         let file = directory.appending(path: "notes.txt", directoryHint: .notDirectory)
         try write(5000, to: file)
 
-        let measured = ContentSize.byteCount(of: item(kind: .file, payload: Fixtures.fileURLPayload(file)))
+        let measured = measure(item(kind: .file, payload: Fixtures.fileURLPayload(file)))
         // The logical size, not the size on disk: a 5,000-byte file occupies
         // two 4 KB blocks, and Finder's Get Info leads with 5,000 too.
         #expect(measured == 5000)
@@ -37,9 +45,7 @@ struct ContentSizeTests {
         try write(1000, to: directory.appending(path: "a.bin", directoryHint: .notDirectory))
         try write(234, to: nested.appending(path: "b.bin", directoryHint: .notDirectory))
 
-        let measured = ContentSize.byteCount(
-            of: item(kind: .folder, payload: Fixtures.fileURLPayload(directory))
-        )
+        let measured = measure(item(kind: .folder, payload: Fixtures.fileURLPayload(directory)))
         #expect(measured == 1234)
     }
 
@@ -54,9 +60,7 @@ struct ContentSizeTests {
             withDestinationURL: file
         )
 
-        let measured = ContentSize.byteCount(
-            of: item(kind: .folder, payload: Fixtures.fileURLPayload(directory))
-        )
+        let measured = measure(item(kind: .folder, payload: Fixtures.fileURLPayload(directory)))
         #expect(measured == 1000)
     }
 
@@ -68,7 +72,7 @@ struct ContentSizeTests {
 
         // `.app` classifies as `.file` — see `FileURLKind` — but its size is
         // still everything inside it, which is what Finder reports too.
-        let measured = ContentSize.byteCount(of: item(kind: .file, payload: Fixtures.fileURLPayload(bundle)))
+        let measured = measure(item(kind: .file, payload: Fixtures.fileURLPayload(bundle)))
         #expect(measured == 700)
     }
 
@@ -78,7 +82,7 @@ struct ContentSizeTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let gone = directory.appending(path: "gone.bin", directoryHint: .notDirectory)
 
-        #expect(ContentSize.byteCount(of: item(kind: .file, payload: Fixtures.fileURLPayload(gone))) == nil)
+        #expect(measure(item(kind: .file, payload: Fixtures.fileURLPayload(gone))) == nil)
     }
 
     // MARK: - The deadline
@@ -130,14 +134,14 @@ struct ContentSizeTests {
         ])
         // One picture, offered twice. Adding both would report a 300-byte
         // screenshot as 1.2 kB.
-        #expect(ContentSize.byteCount(of: item(kind: .image, payload: payload)) == 300)
+        #expect(measure(item(kind: .image, payload: payload)) == 300)
     }
 
     @Test("Text-shaped kinds have no size worth showing")
     func textHasNoSize() {
         let payload = ClipPayload(representations: [PasteboardType.string: Data("hello".utf8)])
-        #expect(ContentSize.byteCount(of: item(kind: .text, payload: payload)) == nil)
-        #expect(ContentSize.byteCount(of: item(kind: .richText, payload: payload)) == nil)
-        #expect(ContentSize.byteCount(of: item(kind: .link, payload: payload)) == nil)
+        #expect(measure(item(kind: .text, payload: payload)) == nil)
+        #expect(measure(item(kind: .richText, payload: payload)) == nil)
+        #expect(measure(item(kind: .link, payload: payload)) == nil)
     }
 }

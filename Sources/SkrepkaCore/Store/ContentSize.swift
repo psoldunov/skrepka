@@ -13,11 +13,16 @@ enum ContentSize {
     /// a kind with no size worth showing, a file that has moved or been
     /// deleted, or a folder too large to measure inside
     /// ``DirectorySize/deadline``.
-    static func byteCount(of item: ClipItem) -> Int? {
+    ///
+    /// - Parameter file: what the file system said about the copied path, or
+    ///   nil when the entry names no file or the file system would not answer.
+    ///   Passed in rather than looked up here because ``FileURLKind`` needs the
+    ///   same lookup and one is enough — see ``CopiedFile``.
+    static func byteCount(of item: ClipItem, file: CopiedFile?) -> Int? {
         switch item.kind {
         case .file, .folder:
-            guard let url = item.payload.fileURL else { return nil }
-            return byteCount(ofFileAt: url)
+            guard let file else { return nil }
+            return byteCount(of: file)
         case .image:
             return imageByteCount(in: item.payload)
         case .text, .richText, .link:
@@ -30,11 +35,17 @@ enum ContentSize {
     /// A package takes the directory path: `ChatGPT.app` classifies as a file
     /// — see ``FileURLKind`` — but its size is still everything inside it,
     /// which is the number Finder reports for it too.
-    static func byteCount(ofFileAt url: URL) -> Int? {
-        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-        else { return nil }
-        guard values.isDirectory == true else { return values.fileSize }
-        return DirectorySize.byteCount(ofDirectoryAt: url)
+    ///
+    /// ``CopiedFile/Shape/unknown`` takes the file branch and reports
+    /// ``CopiedFile/fileSize``, which is nil in that situation anyway.
+    /// ``FileURLKind`` refuses to answer at all on the same input, and both are
+    /// right: a wrong *kind* is a mislabelled row that outlives the copy, where
+    /// a missing *size* is one line the subtitle leaves off.
+    static func byteCount(of file: CopiedFile) -> Int? {
+        switch file.shape {
+        case .folder, .package: DirectorySize.byteCount(ofDirectoryAt: file.url)
+        case .file, .unknown: file.fileSize
+        }
     }
 
     /// Size of the richest image representation on the pasteboard.

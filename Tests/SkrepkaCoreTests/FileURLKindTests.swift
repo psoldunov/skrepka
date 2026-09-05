@@ -1,7 +1,10 @@
 // Fenced to Apple platforms, unlike the type it tests, which compiles anywhere.
-// `.isPackageKey` is Finder's presentation model: swift-corelibs-foundation has
-// no notion of a bundle, so asserting that `ChatGPT.app` is a file rather than a
-// folder is an assertion about macOS. Phase 7 gives Linux its own answer.
+// Not because `.isPackageKey` is unavailable off Darwin — swift-corelibs-
+// foundation answers it, and answers `true` for a bare `ChatGPT.app` directory,
+// verified by probing Swift 6.3 on `aarch64-unknown-linux-gnu`. The fence is
+// here because the *rest* of the detail pass is: `ThumbnailRenderer` is AppKit-
+// gated, so nothing on Linux asks a file URL what kind it is until Phase 7
+// gives that platform its own answer.
 #if canImport(AppKit)
 
     import Foundation
@@ -11,8 +14,21 @@
 
     /// Telling a copied folder from a copied file, which only the file system can
     /// do — and saying so when it will not.
+    ///
+    /// Goes through `CopiedFile` rather than round a shortcut, because that is
+    /// the seam production uses: `ThumbnailRenderer` makes one lookup and reads
+    /// the kind off it. A test that probed separately would stop describing the
+    /// call it is meant to cover.
     @Suite("File URL kind")
     struct FileURLKindTests {
+        /// The kind the detail pass would land on for a path, exactly as
+        /// `ThumbnailRenderer.details(for:)` derives it — nil for a file system
+        /// that would not answer as well as for one that answered without
+        /// saying.
+        private func kind(at url: URL) -> ClipKind? {
+            CopiedFile(at: url).flatMap(FileURLKind.kind(of:))
+        }
+
         @Test("A plain directory is a folder")
         func directoryIsFolder() throws {
             // The bug: Finder writes one `public.file-url` whether the user copied
@@ -21,7 +37,7 @@
             let directory = try Fixtures.makeDirectory()
             defer { try? FileManager.default.removeItem(at: directory) }
 
-            #expect(FileURLKind.kind(ofFileAt: directory) == .folder)
+            #expect(kind(at: directory) == .folder)
         }
 
         @Test("An application bundle is a file, not a folder")
@@ -32,7 +48,7 @@
             let bundle = try Fixtures.makePackage(named: "ChatGPT.app")
             defer { try? FileManager.default.removeItem(at: bundle.deletingLastPathComponent()) }
 
-            #expect(FileURLKind.kind(ofFileAt: bundle) == .file)
+            #expect(kind(at: bundle) == .file)
         }
 
         @Test("A regular file is a file")
@@ -40,7 +56,7 @@
             let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
             defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
-            #expect(FileURLKind.kind(ofFileAt: url) == .file)
+            #expect(kind(at: url) == .file)
         }
 
         @Test("A path the disk will not describe answers nothing at all")
@@ -53,7 +69,10 @@
             defer { try? FileManager.default.removeItem(at: directory) }
             let missing = directory.appending(path: "gone", directoryHint: .notDirectory)
 
-            #expect(FileURLKind.kind(ofFileAt: missing) == nil)
+            // Nil at the lookup, before the kind rules are consulted at all —
+            // there is nothing for them to read.
+            #expect(CopiedFile(at: missing) == nil)
+            #expect(kind(at: missing) == nil)
         }
     }
 
