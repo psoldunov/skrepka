@@ -19,10 +19,14 @@ Two things that will be declined regardless of how well they are written:
   nothing else. Anything the macOS 26 SDK ships is fair game; anything it does
   not is a finding, not a workaround opportunity.
 
-A Linux port and LAN sync between the two have been investigated and written up
-in [`docs/linux-sync-consideration.md`](docs/linux-sync-consideration.md).
-Nothing there is committed to. Read it before proposing either, so the research
-is not repeated.
+A Linux port and LAN sync between the two are designed in
+[`docs/linux-sync-consideration.md`](docs/linux-sync-consideration.md) and
+planned phase by phase in [`docs/linux-sync/`](docs/linux-sync/README.md). The
+work is committed to but not started. Read both before proposing anything in
+that area, so the research is not repeated — and if you are picking up a piece
+of it, start with
+[`open-questions.md`](docs/linux-sync/open-questions.md), which holds the nine
+decisions already taken and the fourteen questions still open.
 
 ## What you need
 
