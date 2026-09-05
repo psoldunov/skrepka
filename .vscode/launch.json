@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:schoenberg}",
+            "name": "Debug Skrepka",
+            "target": "Skrepka",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Skrepka"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:schoenberg}",
+            "name": "Release Skrepka",
+            "target": "Skrepka",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Skrepka"
+        }
+    ]
+}
