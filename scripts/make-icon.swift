@@ -1,4 +1,4 @@
-// Renders the Clippy app icon: a gem clip with eyes, a nod to the old Office
+// Renders the Skrepka app icon: a gem clip with eyes, a nod to the old Office
 // assistant, drawn as vectors and rasterised once per iconset size so no size
 // is a resampled copy of another.
 //
