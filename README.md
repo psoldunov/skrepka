@@ -156,7 +156,7 @@ unreferenced type across modules; expect to drop it eventually.
 ## Storage
 
 SwiftData at
-`~/Library/Application Support/com.psoldunov.skrepka/skrepka.store`. Image
+`~/Library/Application Support/dev.soldunov.skrepka/skrepka.store`. Image
 payloads use `@Attribute(.externalStorage)`, so large blobs land beside the
 database rather than inside a row. The picker holds only lightweight summaries
 plus a small thumbnail; a full payload is read only when an entry is pasted.

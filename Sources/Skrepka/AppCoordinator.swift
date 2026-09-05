@@ -52,7 +52,7 @@ final class AppCoordinator {
         let preferences = Preferences()
         self.preferences = preferences
 
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.psoldunov.skrepka"
+        let bundleID = Bundle.main.bundleIdentifier ?? "dev.soldunov.skrepka"
         var startupError: String?
         var storage: DiagnosticsSnapshot.Storage
         let store: HistoryStore

@@ -3,7 +3,7 @@ import os
 /// Subsystem-scoped loggers. Errors are logged with context here and surfaced
 /// to the user in the UI layer — never swallowed in either place.
 public enum SkrepkaLog {
-    private static let subsystem = "com.psoldunov.skrepka"
+    private static let subsystem = "dev.soldunov.skrepka"
 
     public static let store = Logger(subsystem: subsystem, category: "store")
     public static let clipboard = Logger(subsystem: subsystem, category: "clipboard")
