@@ -200,11 +200,15 @@ fi
 # archive and it fails exactly the way `submit` would. Running it first turns a
 # missing credential from a failure after the build into one before it.
 #
-# It also tells apart the two cases an offline keychain lookup cannot, both
-# measured against notarytool 1.0 rather than assumed:
+# It also tells apart the two cases an offline keychain lookup cannot:
 #
 #   no profile      exit 69, "No Keychain password item found for profile: ..."
 #   bad password    exit 1,  "HTTP status code: 401. Invalid credentials. ..."
+#
+# The first was measured against notarytool 1.1.2 (41). The second is from
+# notarytool's documented 401 handling and has not been reproduced here -- it
+# needs a stored profile with a deliberately wrong password. Nothing below
+# depends on either number.
 #
 # Two codes for one kind of problem, so the exit status is a fragile test. What
 # both failures do share is an empty stdout -- neither printed a byte of the
@@ -227,8 +231,8 @@ CREDENTIALS_RESPONSE="$(xcrun notarytool history \
 
 if [[ -z "${CREDENTIALS_RESPONSE}" ]]; then
 	echo "error: no answer from the notary service using ${CREDENTIALS_SOURCE}." >&2
-	echo "error: if the message above is about credentials, supply them one of" >&2
-	echo "error: these two ways:" >&2
+	echo "error: if the message above is about credentials, supply them" >&2
+	echo "error: one of these ways:" >&2
 	credentials_hint
 	exit 1
 fi
