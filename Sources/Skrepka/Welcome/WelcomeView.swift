@@ -1,16 +1,15 @@
-import AppKit
-import Combine
 import KeyboardShortcuts
 import SkrepkaCore
 import SwiftUI
 
 /// The one-time introduction.
 ///
-/// Its real job is the permission: macOS gates programmatic reads of the
+/// Its real job is the two permissions. macOS gates programmatic reads of the
 /// general pasteboard, and the alert fires on Skrepka's first read whenever that
 /// happens to be. Doing one deliberate read from here puts the alert in front
 /// of a window that explains what is asking and why, instead of over whatever
-/// app the user was in twenty minutes later.
+/// app the user was in twenty minutes later. ``PasteBackCard`` does the same for
+/// Accessibility, which paste-back needs and which is on by default.
 struct WelcomeView: View {
     /// Width only. The height is whatever the content needs — see
     /// ``WelcomeWindowController`` — because a fixed height clipped the footer
@@ -42,6 +41,7 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                 shortcutCard
                 permissionCard
+                PasteBackCard(preferences: coordinator.preferences)
             }
             .padding(.horizontal, SettingsMetrics.horizontalPadding)
 
@@ -49,15 +49,9 @@ struct WelcomeView: View {
         }
         .frame(width: Self.windowWidth)
         .background(SettingsBackdrop().ignoresSafeArea())
-        .onAppear(perform: refreshAccess)
-        // Granting happens in System Settings, so returning to Skrepka is the
-        // only moment the policy can be re-read. The capture side needs no
-        // notification — it is observed.
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-        ) { _ in
-            refreshAccess()
-        }
+        // Only the System Settings policy needs this. The capture side is
+        // observed, and ``PasteBackCard`` refreshes its own permission.
+        .refreshOnActivation(refreshAccess)
     }
 
     private var header: some View {
@@ -79,7 +73,7 @@ struct WelcomeView: View {
         SettingsCard(title: "Shortcut", footer: "Change it in Settings. It needs no permission.") {
             SettingsRow(title: "Open Skrepka", symbol: "command") {
                 Text(shortcutDescription)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(SettingsMetrics.controlFont)
                     .foregroundStyle(.secondary)
             }
         }
@@ -94,7 +88,7 @@ struct WelcomeView: View {
                 subtitle: permissionSubtitle,
                 symbol: "doc.on.clipboard"
             ) {
-                permissionControl
+                clipboardControl.permissionControl()
             }
         }
     }
@@ -105,20 +99,20 @@ struct WelcomeView: View {
     /// click past permission requests, so a granted state shows no button at
     /// all.
     @ViewBuilder
-    private var permissionControl: some View {
+    private var clipboardControl: some View {
         switch clipboardStatus {
         case .working:
             StatusIndicator(state: .good)
         case .blocked:
-            Button("Open Settings") {
+            Button(SettingsMetrics.widestPermissionLabel) {
                 SystemSettingsLink.open(SystemSettingsLink.pasteboard)
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(SettingsMetrics.controlFont)
         case .unknown:
             Button(didRequestAccess ? "Asked" : "Allow") {
                 Task { await requestAccess() }
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(SettingsMetrics.controlFont)
             .disabled(didRequestAccess)
         }
     }
@@ -134,7 +128,7 @@ struct WelcomeView: View {
             Spacer()
             Button("Done", action: onFinish)
                 .keyboardShortcut(.defaultAction)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsMetrics.controlFont)
                 .disabled(clipboardStatus != .working)
         }
         .padding(.horizontal, SettingsMetrics.horizontalPadding)
@@ -142,19 +136,25 @@ struct WelcomeView: View {
         .padding(.bottom, 20)
     }
 
+    /// One line each, beside the widest control this row can show — the same
+    /// constraint ``PasteBackCard`` writes its subtitles to.
     private var permissionSubtitle: String {
         switch clipboardStatus {
         case .working: "Skrepka is recording what you copy."
-        case .blocked: "macOS is blocking Skrepka from reading it."
+        case .blocked: "macOS is blocking Skrepka's reads."
         case .unknown: "macOS asks before an app may read it."
         }
     }
 
     /// Short enough to stay on one line at this width. A wrapped footer left an
     /// orphan on the second line and pushed the buttons down for no gain.
+    ///
+    /// The "nothing else to set up" closer belongs to ``PasteBackCard``, the
+    /// last card in the window. Claiming it here was how the welcome window came
+    /// to contradict the menu bar warning sitting right above it.
     private var permissionFooter: String {
         switch clipboardStatus {
-        case .working: "Nothing else to set up. Copy something and press the shortcut."
+        case .working: "This is all Skrepka needs to build your history."
         case .blocked: DiagnosticsProblem.clipboardAccessDenied.remedy
         case .unknown:
             didRequestAccess

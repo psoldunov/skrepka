@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SkrepkaCore
 import SwiftUI
 
@@ -36,12 +35,7 @@ struct DiagnosticsSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear(perform: refresh)
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-        ) { _ in
-            refresh()
-        }
+        .refreshOnActivation(refresh)
     }
 
     @ViewBuilder
@@ -88,16 +82,30 @@ struct DiagnosticsSettingsView: View {
             subtitle: "Optional. Without it Skrepka copies and you press ⌘V.",
             symbol: "arrow.down.doc"
         ) {
-            StatusIndicator(state: snapshot.isAccessibilityTrusted ? .good : .warning)
+            StatusIndicator(state: accessibilityState(snapshot))
         }
 
-        if !snapshot.isAccessibilityTrusted && snapshot.pasteAutomatically {
+        if !snapshot.pasteBackStatus.isSettled {
             SettingsNotice(
                 tone: .warning,
                 message: DiagnosticsProblem.accessibilityMissing.summary,
                 actionTitle: "Open Accessibility Settings",
                 action: AccessibilityPermission.openSettings
             )
+        }
+    }
+
+    /// A missing permission is only a warning when something wants it.
+    ///
+    /// Reading `isAccessibilityTrusted` alone put an orange triangle beside a
+    /// feature the user had switched off, with no notice under it and no
+    /// problem in the menu bar — a warning about nothing. The muted dash is the
+    /// same one ``PasteBackCard`` shows for the same state.
+    private func accessibilityState(_ snapshot: DiagnosticsSnapshot) -> StatusIndicator.State {
+        switch snapshot.pasteBackStatus {
+        case .working: .good
+        case .notNeeded: .neutral
+        case .notAsked, .awaitingSettings: .warning
         }
     }
 

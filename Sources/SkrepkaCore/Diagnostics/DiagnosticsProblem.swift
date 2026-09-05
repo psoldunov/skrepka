@@ -17,15 +17,17 @@ public enum DiagnosticsProblem: Sendable, Hashable, CaseIterable {
     /// Ranked, because showing three warnings at once tells the user nothing
     /// about which to fix first. Storage failing loses everything; capture
     /// being blocked loses everything new; paste-back is a convenience.
+    /// Both permissions arrive as their own status type rather than as the raw
+    /// booleans behind them, so the rule for "is this one a problem" lives in
+    /// ``ClipboardStatus`` and ``PasteBackStatus`` and is not restated here.
     public static func ranked(
         storage: DiagnosticsSnapshot.Storage,
         clipboardStatus: ClipboardStatus,
-        pasteAutomatically: Bool,
-        isAccessibilityTrusted: Bool
+        pasteBack: PasteBackStatus
     ) -> DiagnosticsProblem? {
         if case .inMemory = storage { return .storageUnavailable }
         if clipboardStatus == .blocked { return .clipboardAccessDenied }
-        if pasteAutomatically && !isAccessibilityTrusted { return .accessibilityMissing }
+        if !pasteBack.isSettled { return .accessibilityMissing }
         return nil
     }
 

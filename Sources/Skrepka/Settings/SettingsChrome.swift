@@ -11,6 +11,17 @@ enum SettingsMetrics {
     static let horizontalPadding: CGFloat = 22
     static let rowHorizontalPadding: CGFloat = 14
     static let rowVerticalPadding: CGFloat = 10
+    /// The longest label any permission row's trailing control shows.
+    ///
+    /// ``PermissionControl`` renders this invisibly behind every one of them to
+    /// size the slot, so the width is measured rather than guessed. Add a
+    /// longer label anywhere and this is the one line to update.
+    static let widestPermissionLabel = "Open Settings"
+
+    /// The type every small control in a card is set in — buttons, the shortcut
+    /// readout, Done. Shared so ``PermissionControl``'s invisible sizer measures
+    /// exactly what the visible button renders.
+    static let controlFont = Font.system(size: 12, weight: .medium)
 }
 
 /// Puts a view on a glass surface.
@@ -36,9 +47,44 @@ struct GlassSurface: ViewModifier {
     }
 }
 
+/// Gives a permission row's trailing control the same width in every state.
+///
+/// Without it the row is sized by whichever control happens to be on screen, so
+/// swapping a tick for "Open Settings" narrows the text column, wraps the
+/// subtitle onto a second line and grows the row — the window jumps as a
+/// permission changes hands.
+///
+/// The width comes from an invisible copy of the longest label rather than a
+/// constant, because a constant is wrong in both directions: too small and
+/// "Open Settings" truncates silently under Accessibility ▸ Bold Text, too
+/// large and every spare point comes out of the text column beside it, where
+/// the subtitles then wrap. `hidden()` documents that a view "remains in the
+/// view hierarchy and affects layout", so the stack is always exactly as wide
+/// as that button really renders, at whatever font metrics are in force.
+struct PermissionControl: ViewModifier {
+    func body(content: Content) -> some View {
+        ZStack(alignment: .trailing) {
+            Button(SettingsMetrics.widestPermissionLabel) {}
+                .font(SettingsMetrics.controlFont)
+                .hidden()
+                // `hidden()` promises no interaction, but says nothing about
+                // the accessibility tree — VoiceOver must not find a button
+                // that is not there.
+                .accessibilityHidden(true)
+            content
+        }
+    }
+}
+
 extension View {
     func glassSurface(cornerRadius: CGFloat = SettingsMetrics.cornerRadius) -> some View {
         modifier(GlassSurface(cornerRadius: cornerRadius))
+    }
+
+    /// Pins a permission row's trailing control to one width in every state.
+    /// See ``PermissionControl``.
+    func permissionControl() -> some View {
+        modifier(PermissionControl())
     }
 }
 

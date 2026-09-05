@@ -67,14 +67,26 @@ public struct DiagnosticsSnapshot: Sendable, Hashable {
         )
     }
 
+    /// Whether Skrepka can paste back, and whether it needs to be able to.
+    ///
+    /// No `didRequest`: a snapshot is assembled long after any prompt and has
+    /// no way to know one happened, so this reports ``PasteBackStatus/notAsked``
+    /// where the welcome card would say ``PasteBackStatus/awaitingSettings``.
+    /// Nothing reading a snapshot distinguishes them.
+    public var pasteBackStatus: PasteBackStatus {
+        PasteBackStatus(
+            isAccessibilityTrusted: isAccessibilityTrusted,
+            pasteAutomatically: pasteAutomatically
+        )
+    }
+
     /// The one problem worth putting in front of the user, or nil when there is
     /// none.
     public var primaryProblem: DiagnosticsProblem? {
         DiagnosticsProblem.ranked(
             storage: storage,
             clipboardStatus: clipboardStatus,
-            pasteAutomatically: pasteAutomatically,
-            isAccessibilityTrusted: isAccessibilityTrusted
+            pasteBack: pasteBackStatus
         )
     }
 }
