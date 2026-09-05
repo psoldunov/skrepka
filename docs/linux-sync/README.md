@@ -1,8 +1,42 @@
 # Linux Skrepka and LAN sync — implementation plan
 
-**Status: committed to, and not started.** All eight phases are in scope
-([D-6](open-questions.md#d-6), 2026-09-05) and no code exists for any of it yet.
-Nine decisions are settled; fourteen research questions are open.
+**Status, 2026-09-05: Phases 1 and 2 done, Phase 4 done bar its `doctor-linux`
+polish, ten of the fourteen research questions answered.** All eight phases are in scope
+([D-6](open-questions.md#d-6)). Nine decisions are settled. The four questions
+still open ([OQ-1](open-questions.md#oq-1) to [OQ-4](open-questions.md#oq-4))
+need hardware — a second Apple device, a real GNOME session, a real KWin session
+— rather than time.
+
+Next is [Phase 3](phase-3-macos-sync.md): the macOS app wiring —
+`SyncCoordinator`, live push, the pairing sheet, the Sync settings pane and
+`skrepka-sync-probe`. It is the first phase whose definition of done is a
+twelve-step manual runbook, so it needs someone at the keyboard. After it,
+[Phase 5](phase-5-linux-clipboard.md) needs a real compositor.
+
+What is left of [Phase 4](phase-4-core-on-linux.md) is small: its storage week is
+done and `scripts/doctor-linux.sh` exists, so only the tooling notes in its
+step 8 remain.
+
+What exists today, and both quality gates are green over it:
+
+| | |
+|---|---|
+| `Sources/SkrepkaSync/` | Phase 1 complete — 29 files, model, canonical-CBOR wire codec (canonical on decode as well as encode: non-shortest heads and out-of-order map keys are refused), merge engine. No networking, no `SkrepkaCore` dependency, green on Linux |
+| `Sources/SkrepkaCore/` | compiles on Linux: 24 of 34 files. `ClipboardSource`, the `PasteboardAccess` split, the CryptoKit and logging shims, file-scope guards on the ten that cannot |
+| `scripts/linux.sh` | runs any command inside the Linux image — Swift 6.3.3 aarch64, the same version the macOS toolchain ships |
+| `scripts/doctor-linux.sh` | the Linux quality gate, Phase 4's step 8, delivered early because everything after Phase 1 needs it |
+| `Sources/SkrepkaSync/Pairing/` + `Transport/` + `Discovery/` | Phase 2 — self-signed P-256 identity, the short authentication string, pinned-certificate TLS 1.3 over swift-nio, and Bonjour discovery. `LoopbackSyncTests` pairs, exchanges indexes and fetches a payload on **both** platforms |
+| `Sources/SkrepkaCore/Store/` | Phase 2 — three-entity schema, tombstones, the sync surface, and the merge apply path |
+| `Sources/SkrepkaCore/Store/SQLite/` | Phase 4's storage half — the Linux `HistoryStoring` conformance over raw SQLite (D-3), and `HistoryStoringTests` running one suite against both engines |
+| `docker/Dockerfile.linux` | the Linux build image: Swift 6.3.3, SwiftLint 0.65.1, SQLite 3.45.1. Built by `scripts/linux-image.sh` |
+| `scripts/doctor.sh` | **303 tests / 36 suites green** |
+| `scripts/doctor-linux.sh` | **244 tests / 29 suites green, SwiftLint included** |
+
+Two things the plan assumed and that turned out to be false, both recorded in
+[`open-questions.md`](open-questions.md): `SwiftCBOR` is unsuitable and the codec
+is hand-rolled ([OQ-8](open-questions.md#oq-8)), and `Network.swiftinterface`
+does ship after all, so the installed interface outranks Apple's documentation
+for every Network framework signature ([OQ-7](open-questions.md#oq-7)).
 
 This directory is the executable half of
 [`docs/linux-sync-consideration.md`](../linux-sync-consideration.md). That
@@ -96,23 +130,28 @@ Nine, on 2026-09-05, recorded in full in
 | D-8 | One machine, expendable history — migration is not a constraint | [Phase 2](phase-2-plumbing.md) |
 | D-9 | The Mac app stays native; the Linux port never degrades it | [Phase 2](phase-2-plumbing.md), [Phase 4](phase-4-core-on-linux.md) |
 
-The fourteen research questions are all still open.
+Ten of the fourteen research questions were answered on 2026-09-05.
 
 ## Gates
 
-Two things gate the plan and neither is a coding task.
+Two things gated the plan and neither was a coding task. One is cleared; the
+other still needs hardware.
 
-1. **Phase 0 gates the whole design's honesty.** If Universal Clipboard hands
+1. **[OQ-10](open-questions.md#oq-10) and [OQ-11](open-questions.md#oq-11) gated
+   Phase 4** — both asked whether Swift on Linux can do a thing this plan
+   assumes it can, and both came back **yes**. `Observation` works, `@MainActor`
+   works, and Avahi is reachable from Swift over D-Bus without shelling out.
+   Swift is the right language for the Linux side.
+2. **Phase 0 still gates the design's honesty.** If Universal Clipboard hands
    over a promise rather than bytes, Skrepka has a bug today with no sync
-   involved — see [OQ-2](open-questions.md#oq-2).
-2. **[OQ-10](open-questions.md#oq-10) and [OQ-11](open-questions.md#oq-11) gate
-   Phase 4.** Both ask whether Swift on Linux can do a thing this plan assumes
-   it can. Spike them *before* Phase 4 commits a month to that answer.
+   involved — see [OQ-2](open-questions.md#oq-2). It needs a second Apple
+   device, so nothing here can close it.
 
-The fourteen research questions are in
+The four questions still open — [OQ-1](open-questions.md#oq-1) to
+[OQ-4](open-questions.md#oq-4) — are in
 [`open-questions.md`](open-questions.md) alongside the nine decisions, which
-are settled. Nothing else is waiting on a judgement call — what is left is
-work and verification.
+are settled, and the ten answers. Nothing is waiting on a judgement call; what
+is left is work, verification, and three pieces of hardware.
 
 ## The Linux environment
 
@@ -146,12 +185,38 @@ One operational note: under Claude Code's default sandbox the Docker socket at
 `~/.orbstack/run/docker.sock` is not reachable, so agent-run Linux spikes need
 that permission granted first.
 
+**`scripts/linux.sh` is the entry point**, added 2026-09-05, over the image
+`scripts/linux-image.sh` builds from `docker/Dockerfile.linux`. It runs any command
+inside `swift:6.3-noble` with the repository bind-mounted at the same absolute
+path it has on the host, as the host user, building into `.build-linux` rather
+than `.build` — the two toolchains produce incompatible module caches and
+sharing one scratch directory forces a full rebuild on every switch. The image
+is pinned to Swift **6.3.3**, the same version the macOS toolchain ships, because
+"compiles on Linux" is only a useful claim when the two compilers agree on the
+language.
+
 ## Quality gate
 
 `scripts/doctor.sh` stays green on the macOS side throughout — that is the
-definition of done in this repo and none of this changes it. Phase 4 establishes
-`scripts/doctor-linux.sh` as its equivalent, and Phases 5 through 8 are held to
-it.
+definition of done in this repo and none of this changes it.
+`scripts/doctor-linux.sh` is its Linux equivalent and **already exists**: Phase 4
+nominally delivers it, but everything from Phase 1 onward needs it, so it was
+written early. It re-enters the container by itself when run from macOS and runs
+natively on Linux.
+
+Two findings live inside that script because they are the kind of thing that
+gets "simplified" back out:
+
+- **`swift test` has neither `--product` nor `--target`.** It builds the whole
+  package, so `--filter` selects what *runs*, never what *compiles*.
+  `Package.swift` therefore fences the macOS-only app target out on Linux with a
+  `#if os(macOS)` append after the `Package(...)` call — a `#if` is not valid as
+  a container-literal element.
+- **Repeated `--target` is a false green.** `swift build --target A --target B`
+  exits 0 while building only the last one. Any gate written that way lies. The
+  `SkrepkaLinux` product covers both portable targets in one invocation, and it
+  has to be `type: .static` — `--product` refuses an automatic library product
+  and silently falls back to building everything.
 
 ## Shape of each phase document
 

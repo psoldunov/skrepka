@@ -57,7 +57,7 @@ Keep it narrow. The protocol is what *sync* needs — `syncIndex`, `applyRemote`
 ### 2. `SyncCoordinator`
 
 The one object that owns the sync lifetime, hanging off `AppCoordinator`
-alongside `poller`, `store` and `statusItem` — so there stays exactly one place
+alongside `watcher`, `store` and `statusItem` — so there stays exactly one place
 to look for what owns what.
 
 It owns: the `PeerDiscovery` browser and advertiser, the `SyncServer`, one
@@ -72,15 +72,15 @@ not in a log line nobody reads.
 ### 3. Live push, both directions
 
 **Sending.** `SyncCoordinator` observes the same capture stream
-`AppCoordinator.startCaptureLoop()` consumes. Do not add a second poller.
+`AppCoordinator.startCaptureLoop()` consumes. Do not add a second watcher.
 Inline the bytes under `SyncLimits.livePushInlineLimit`; above it, push metadata
 and let the peer fetch, so a 20 MB screenshot never blocks the live channel.
 
 **Receiving.** The echo-suppression primitive already exists and should be
 reused rather than reinvented: `AppCoordinator.choose(_:style:)` already does
-`await poller.pause()` → write → `await poller.resume()`, and
-`PasteboardPoller.resume()` at
-`Sources/SkrepkaCore/Clipboard/PasteboardPoller.swift:69` re-reads
+`await watcher.pause()` → write → `await watcher.resume()`, and
+`ClipboardWatcher.resume()` at
+`Sources/SkrepkaCore/Clipboard/ClipboardWatcher.swift:112` re-reads
 `changeCount` so whatever happened while paused is discarded. A received live
 push does exactly the same dance.
 

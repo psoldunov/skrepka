@@ -28,7 +28,7 @@ So the header search is exhausted and only a running machine can answer it.
 **[OQ-2](open-questions.md#oq-2) — bytes or a promise?** If the receiving
 pasteboard is populated lazily, then `PasteboardReader.read` calling
 `item.data(forType:)` on every `changeCount` bump forces a Continuity fetch over
-the air. `Sources/SkrepkaCore/Clipboard/PasteboardPoller.swift` polls at 200 ms
+the air. `Sources/SkrepkaCore/Clipboard/ClipboardWatcher.swift` polls at 200 ms
 and `Sources/SkrepkaCore/Clipboard/PasteboardReader.swift:44` reads
 unconditionally, so every copy made on any of the user's Apple devices would
 silently pull data into this Mac in the background.

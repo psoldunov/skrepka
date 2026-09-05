@@ -64,7 +64,7 @@ is the work the design document does not account for.
 
 | File | Lines | The coupling | The seam |
 |---|---|---|---|
-| `Clipboard/PasteboardPoller` | 95 | holds a concrete `PasteboardReader`, which imports AppKit — see `PasteboardPoller.swift:17` and `:28` | a `ClipboardSource` protocol with `changeCount()` and `read(sourceBundleID:)`; `PasteboardReader` becomes its macOS conformance and Phase 5 writes the Linux ones |
+| `Clipboard/ClipboardWatcher` | 95 | held a concrete `PasteboardReader`, which imports AppKit — see `PasteboardPoller.swift:17` and `:28`, before the rename | a `ClipboardSource` protocol with `changeCount()` and `read(sourceBundleID:)`; `PasteboardReader` becomes its macOS conformance and Phase 5 writes the Linux ones. Renamed from `PasteboardPoller`, because a source that delivers notifications is never polled |
 | `Diagnostics/PasteboardAccess` | 51 | imports AppKit for one initialiser taking `NSPasteboard.AccessBehavior` | the enum is portable; wrap only `init(_:)` in `#if canImport(AppKit)`. On Linux the value is always `.alwaysAllow` — there is no equivalent gate |
 | `Diagnostics/ClipboardStatus` | 40 | takes a `PasteboardAccess` | falls out once the above is split |
 | `Diagnostics/DiagnosticsSnapshot` | 92 | stores a `PasteboardAccess` | same |
@@ -73,7 +73,7 @@ is the work the design document does not account for.
 | `Store/ClipRecordMapping` | 61 | names `ClipRecord` (SwiftData) and `ThumbnailMaker.Preview` (AppKit) | moves behind `HistoryStoring` with the SwiftData conformance; the SQLite one gets its own mapping |
 | `Store/ThumbnailRenderer` | 28 | wraps `ThumbnailMaker`, which imports AppKit | **defer the protocol** ([D-9](open-questions.md#d-9)). A `ThumbnailProducing` protocol with one real conformance and one nil-returning stub is a macOS cost with no macOS benefit. Exclude the file on Linux for now; introduce the protocol in Phase 7, when GdkPixbuf gives it a second real conformance |
 
-`PasteboardPoller` is the one to look at first. It is described everywhere as
+`ClipboardWatcher` is the one to look at first. It is described everywhere as
 pure logic and it is *nearly* that, but it constructs a concrete AppKit type in
 its own default argument. Introducing `ClipboardSource` is a small change with
 a large consequence: it is also the protocol Phase 5's two Wayland backends and
@@ -199,7 +199,7 @@ against every conformance; the SQLite implementation joins it as a third.
 1. Spike OQ-10, OQ-11 and OQ-12. Stop and reconsider if any comes back badly.
 2. Land the `PasteboardAccess` conditional split — it unblocks five files and
    246 lines of tests, and it is an hour.
-3. Land `ClipboardSource`, and make `PasteboardPoller` take it.
+3. Land `ClipboardSource`, and make `ClipboardWatcher` take it.
 4. Exclude `ThumbnailRenderer` on Linux. Do **not** introduce `ThumbnailProducing` yet — Phase 7 does, when it has a real second conformance ([D-9](open-questions.md#d-9)).
 5. Land the CryptoKit and logging shims.
 6. Guard the seven excluded test files.
