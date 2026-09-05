@@ -181,15 +181,10 @@
 
         // MARK: - The schema version
 
-        @Test("Installing stamps the version, and installing again does not rewrite it")
-        func installStampsTheVersionOnce() throws {
-            let database = try SQLiteDatabase(path: ":memory:")
-            try HistorySchema.install(on: database)
-            #expect(try HistorySchema.installedVersion(of: database) == HistorySchema.version)
-
-            try HistorySchema.install(on: database)
-            #expect(try HistorySchema.installedVersion(of: database) == HistorySchema.version)
-        }
+        // What the version means across builds — stamping, upgrading and the
+        // atomicity an upgrade rests on — is in HistorySchemaTests. This one stays
+        // here because refusing a future database is the store's own `init`
+        // declining to open a real file, not a property of the schema.
 
         /// `PRAGMA user_version` is the hook D-8 will migrate against, and a hook
         /// that overwrites whatever it finds is the guess it was meant to replace.
@@ -219,64 +214,7 @@
             #expect(try HistorySchema.installedVersion(of: raw) == newer)
         }
 
-        /// `CREATE TABLE IF NOT EXISTS` does nothing to a table that already
-        /// exists, so a column added to ``HistorySchema/clipTable`` reaches an
-        /// older database only through ``HistorySchema/migrations``. Forget the
-        /// migration and every insert against that database fails on a column
-        /// name — which is a state no fresh install can reproduce, so nothing else
-        /// in the suite would catch it.
-        @Test("A database from an older build gains the columns it is missing")
-        func anOlderDatabaseIsMigrated() throws {
-            let old = try SQLiteDatabase(path: ":memory:")
-            // Version 1's clip table: today's, less the column version 2 added.
-            try old.execute(
-                """
-                CREATE TABLE clip (
-                    id TEXT PRIMARY KEY NOT NULL,
-                    kind_raw TEXT NOT NULL,
-                    "text" TEXT NOT NULL,
-                    source_bundle_id TEXT,
-                    created_at REAL NOT NULL,
-                    is_pinned INTEGER NOT NULL,
-                    is_concealed INTEGER NOT NULL,
-                    content_hash TEXT NOT NULL,
-                    image_width INTEGER,
-                    image_height INTEGER,
-                    thumbnail BLOB,
-                    pinned_at REAL,
-                    pinned_by TEXT,
-                    origin_device_id TEXT
-                );
-                PRAGMA user_version = 1;
-                """
-            )
-
-            try HistorySchema.install(on: old)
-            #expect(try HistorySchema.installedVersion(of: old) == HistorySchema.version)
-
-            let fresh = try SQLiteDatabase(path: ":memory:")
-            try HistorySchema.install(on: fresh)
-            // The same columns, as a set rather than a list: `ALTER TABLE ADD
-            // COLUMN` can only append, so a migrated table declares the new column
-            // last where a fresh one declares it in the middle. Nothing depends on
-            // that — every statement in this store names its columns through
-            // `SQLiteClipRow.columns`, so the result set is ordered by the query
-            // and never by the table. What would break the positional reader is a
-            // column *missing*, which is exactly what this compares.
-            #expect(try Set(Self.columns(of: "clip", in: old)) == Set(Self.columns(of: "clip", in: fresh)))
-            #expect(try Self.columns(of: "clip", in: old).contains("content_byte_count"))
-        }
-
         // MARK: - Helpers
-
-        /// The table's column names in declaration order.
-        private static func columns(of table: String, in database: SQLiteDatabase) throws -> [String] {
-            var names: [String] = []
-            try database.query("PRAGMA table_info(\(table))") { statement in
-                if let name = statement.text(1) { names.append(name) }
-            }
-            return names
-        }
 
         private static func temporaryDirectory() -> URL {
             URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)

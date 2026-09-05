@@ -146,6 +146,22 @@
             );
             """
 
+        /// What each version added to a database created by the one before it,
+        /// keyed by the version it produces.
+        ///
+        /// Only reached by a database an older build already created: a fresh one
+        /// gets every column from the `CREATE TABLE` above, and stamps ``version``
+        /// without running any of these. That is what makes each statement safe to
+        /// leave out of the fresh path — the two must always agree, and
+        /// `HistorySchemaTests` opens an upgraded store and a fresh one and
+        /// asserts they hold the same set of columns. A *set*, because
+        /// `ALTER TABLE ADD COLUMN` can only append: the two tables declare their
+        /// columns in different orders and nothing here cares, since every
+        /// statement names the columns it wants through `SQLiteClipRow.columns`.
+        static let migrations: [Int: String] = [
+            2: "ALTER TABLE clip ADD COLUMN content_byte_count INTEGER"
+        ]
+
         /// Opens the schema on a fresh or existing connection.
         ///
         /// Every `CREATE` is `IF NOT EXISTS`, so this runs on every open rather than
@@ -166,22 +182,22 @@
         /// newer build's columns are missing from. The check comes before the
         /// pragmas for the same reason: `journal_mode` is a persistent property of
         /// the file, not a setting on this connection.
-        /// What each version added to a database created by the one before it,
-        /// keyed by the version it produces.
         ///
-        /// Only reached by a database an older build already created: a fresh one
-        /// gets every column from the `CREATE TABLE` above, and stamps ``version``
-        /// without running any of these. That is what makes each statement safe to
-        /// leave out of the fresh path — the two must always agree, and
-        /// `SQLiteHistoryStoreTests` opens an upgraded store and a fresh one and
-        /// asserts they hold the same set of columns. A *set*, because
-        /// `ALTER TABLE ADD COLUMN` can only append: the two tables declare their
-        /// columns in different orders and nothing here cares, since every
-        /// statement names the columns it wants through `SQLiteClipRow.columns`.
-        static let migrations: [Int: String] = [
-            2: "ALTER TABLE clip ADD COLUMN content_byte_count INTEGER"
-        ]
-
+        /// **``migrations`` and the stamp that records them land together or not at
+        /// all, and a later migration has to stay inside that transaction.** Apart
+        /// they are two separately committed statements, and the gap between them
+        /// is not recoverable: an `ALTER TABLE` that commits followed by a stamp
+        /// that does not — a crash, or one transient `SQLITE_FULL` on the header
+        /// write — leaves a database carrying the new column and still reading the
+        /// old version. The next open re-runs the same `ALTER TABLE` into
+        /// "duplicate column name", which throws out of here, out of
+        /// `SQLiteHistoryStore.init`, and out of every open after that. A store
+        /// nobody can reopen is a worse outcome than the upgrade never happening,
+        /// and one `BEGIN IMMEDIATE` is the whole difference: both statements roll
+        /// back — `ALTER TABLE` as DDL, `PRAGMA user_version` because it writes the
+        /// database header — so the pair is all-or-nothing and a failed upgrade is
+        /// simply retried on the next open. `pragmas` stays outside, because
+        /// `journal_mode` cannot be set inside a transaction at all.
         static func install(on database: SQLiteDatabase) throws {
             let installed = try installedVersion(of: database)
             guard installed <= version else {
@@ -195,17 +211,19 @@
             try database.execute(pairedDeviceTable)
 
             guard installed < version else { return }
-            // Skipped entirely for a database nothing has stamped: version 0 is
-            // both a brand new file and one written before this pragma existed,
-            // and the `CREATE TABLE`s above have just given either every column.
-            // Running an `ALTER TABLE` on that is "duplicate column name".
-            if installed > 0 {
-                for step in (installed + 1)...version {
-                    guard let statement = migrations[step] else { continue }
-                    try database.execute(statement)
+            try database.transaction {
+                // Skipped entirely for a database nothing has stamped: version 0 is
+                // both a brand new file and one written before this pragma existed,
+                // and the `CREATE TABLE`s above have just given either every column.
+                // Running an `ALTER TABLE` on that is "duplicate column name".
+                if installed > 0 {
+                    for step in (installed + 1)...version {
+                        guard let statement = migrations[step] else { continue }
+                        try database.execute(statement)
+                    }
                 }
+                try database.execute("PRAGMA user_version = \(version)")
             }
-            try database.execute("PRAGMA user_version = \(version)")
         }
 
         /// The version stamped on this database, or 0 for one nothing has stamped.
