@@ -188,6 +188,25 @@ struct DiagnosticsReportTests {
         #expect(snapshot(accessibility: false, pasteAutomatically: false).primaryProblem == nil)
     }
 
+    @Test("Paste-back status is the one rule the badge and the panes share")
+    func pasteBackStatusDrivesTheProblem() {
+        #expect(snapshot().pasteBackStatus == .working)
+        #expect(snapshot(accessibility: false).pasteBackStatus == .notAsked)
+        // Switched off is settled, so nothing warns about it anywhere.
+        #expect(snapshot(accessibility: false, pasteAutomatically: false).pasteBackStatus == .notNeeded)
+        #expect(snapshot(accessibility: true, pasteAutomatically: false).pasteBackStatus == .notNeeded)
+
+        // The badge is exactly `!isSettled`, so the two cannot drift.
+        for trusted in [true, false] {
+            for wanted in [true, false] {
+                let snap = snapshot(accessibility: trusted, pasteAutomatically: wanted)
+                #expect(
+                    (snap.primaryProblem == .accessibilityMissing) == !snap.pasteBackStatus.isSettled
+                )
+            }
+        }
+    }
+
     @Test("The report names the storage path and the problem")
     func reportCarriesTheEssentials() {
         let text = DiagnosticsReport.text(for: snapshot(access: .alwaysDeny))

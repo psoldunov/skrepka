@@ -50,8 +50,18 @@ struct DiagnosticsGatherer {
         DiagnosticsProblem.ranked(
             storage: storage,
             clipboardStatus: clipboardStatus(health: health),
-            pasteAutomatically: preferences.pasteAutomatically,
-            isAccessibilityTrusted: AccessibilityPermission.isTrusted
+            pasteBack: pasteBackStatus(preferences: preferences)
+        )
+    }
+
+    /// Whether paste-back is set up, or wanted at all.
+    ///
+    /// No `didRequest`: the badge has no idea whether a prompt has been shown,
+    /// and does not need one — it only asks whether the permission is settled.
+    func pasteBackStatus(preferences: Preferences) -> PasteBackStatus {
+        PasteBackStatus(
+            isAccessibilityTrusted: AccessibilityPermission.isTrusted,
+            pasteAutomatically: preferences.pasteAutomatically
         )
     }
 

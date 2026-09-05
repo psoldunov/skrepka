@@ -1,5 +1,3 @@
-import AppKit
-import Combine
 import KeyboardShortcuts
 import SkrepkaCore
 import SwiftUI
@@ -12,6 +10,16 @@ struct GeneralSettingsView: View {
     @State private var isAccessibilityTrusted = AccessibilityPermission.isTrusted
 
     private var preferences: Preferences { coordinator.preferences }
+
+    /// Whether the notice below the switch has anything to say. Derived rather
+    /// than spelled out, so this pane, the welcome card and the menu bar badge
+    /// cannot drift apart on what counts as a problem.
+    private var pasteBackStatus: PasteBackStatus {
+        PasteBackStatus(
+            isAccessibilityTrusted: isAccessibilityTrusted,
+            pasteAutomatically: preferences.pasteAutomatically
+        )
+    }
 
     var body: some View {
         AppIdentityHeader()
@@ -45,26 +53,16 @@ struct GeneralSettingsView: View {
                 .toggleStyle(.switch)
             }
 
-            if preferences.pasteAutomatically && !isAccessibilityTrusted {
+            if !pasteBackStatus.isSettled {
                 SettingsNotice(
                     tone: .warning,
                     message: DiagnosticsProblem.accessibilityMissing.summary,
-                    actionTitle: "Open Settings",
+                    actionTitle: SettingsMetrics.widestPermissionLabel,
                     action: AccessibilityPermission.openSettings
                 )
             }
         }
-        // Granting Accessibility happens in System Settings, not in the prompt,
-        // so the answer is only ever stale by the time we could read it there.
-        // The settings window is cached and reused, so `onAppear` alone would
-        // not fire again either — re-reading on activation is what catches the
-        // user coming back from System Settings.
-        .onAppear(perform: refreshAccessibility)
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-        ) { _ in
-            refreshAccessibility()
-        }
+        .refreshOnActivation(refreshAccessibility)
 
         SettingsCard(title: "Startup") {
             SettingsRow(
