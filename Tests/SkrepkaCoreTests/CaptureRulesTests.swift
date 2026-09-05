@@ -102,6 +102,23 @@ struct CaptureRulesTests {
         #expect(item.text == "shot.png")
     }
 
+    @Test("A file URL pointing at a folder is still captured as .file")
+    func doesNotConsultTheDiskForKind() throws {
+        // The rules run inside the poller's tick, which advances the change
+        // count before it reads: a blocking file-system call here does not slow
+        // a capture down, it loses the copies made while it blocks. So a folder
+        // reads as `.file` at this stage and `ThumbnailRenderer` corrects it —
+        // see `FileURLKindTests`.
+        let folder = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let representations = [PasteboardType.fileURL: Data(folder.absoluteString.utf8)]
+        let item = try #require(CaptureRules().decide(snapshot(representations)).item)
+        #expect(item.kind == .file)
+        // The trailing slash a directory URL carries is not part of the label.
+        #expect(item.text == folder.lastPathComponent)
+    }
+
     @Test("A bare URL is captured as .link")
     func capturesLink() throws {
         let representations = [PasteboardType.url: Data("https://example.com".utf8)]

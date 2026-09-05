@@ -47,10 +47,7 @@ public struct ThumbnailMaker: Sendable {
     /// `public.file-url` carries the absolute URL string and nothing else, so
     /// the picture is read from the file itself.
     private func previewFromReferencedFile(_ payload: ClipPayload) -> Preview? {
-        guard let data = payload.data(forType: PasteboardType.fileURL),
-            let string = String(data: data, encoding: .utf8),
-            let url = URL(string: string), url.isFileURL
-        else { return nil }
+        guard let url = payload.fileURL else { return nil }
         return ImageFileThumbnail.preview(ofFileAt: url, maximumEdge: Int(Self.maximumEdge))
     }
 

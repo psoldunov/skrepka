@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-05T13:38:46.692Z",
+	"generatedAt": "2026-09-05T20:16:18.000Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -45,6 +45,7 @@
 				"label": "macOS & third party",
 				"wraps": [
 					"pasteboard",
+					"filesystem",
 					"frontmost-app",
 					"keyboard-shortcuts",
 					"notary"
@@ -207,7 +208,7 @@
 						"path": "Sources/SkrepkaCore/Clipboard/PrivacyMarkers.swift"
 					}
 				],
-				"sublabel": "transient/concealed markers, app exclusions",
+				"sublabel": "markers, exclusions — pure, never the disk",
 				"type": "security"
 			},
 			{
@@ -218,7 +219,7 @@
 						"path": "Sources/SkrepkaCore/Store"
 					}
 				],
-				"sublabel": "SwiftData, retention, thumbnails",
+				"sublabel": "SwiftData, retention, previews, kind & size",
 				"type": "database"
 			},
 			{
@@ -311,6 +312,12 @@
 				"type": "external"
 			},
 			{
+				"id": "filesystem",
+				"label": "File system",
+				"sublabel": "the copied file, folder or package",
+				"type": "external"
+			},
+			{
 				"id": "frontmost-app",
 				"label": "Frontmost app",
 				"sublabel": "receives the synthesized ⌘V",
@@ -368,6 +375,12 @@
 				"label": "captures",
 				"to": "store",
 				"variant": "emphasis"
+			},
+			{
+				"from": "store",
+				"id": "e-store-filesystem",
+				"label": "kind, size, preview",
+				"to": "filesystem"
 			},
 			{
 				"from": "store",

@@ -90,7 +90,7 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
     /// it discards the newer one.
     static func hash(kind: ClipKind, text: String, payload: ClipPayload) -> String {
         var hasher = SHA256()
-        hasher.update(data: Data(kind.rawValue.utf8))
+        hasher.update(data: Data(kind.hashDomain.utf8))
         if let identityTypes = kind.identityTypes {
             hash(payload, preferring: identityTypes, into: &hasher)
         } else {

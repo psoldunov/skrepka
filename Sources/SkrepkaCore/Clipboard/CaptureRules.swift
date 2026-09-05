@@ -2,8 +2,18 @@ import Foundation
 
 /// Turns a ``PasteboardSnapshot`` into a ``CaptureDecision``.
 ///
-/// Pure and synchronous: no pasteboard, no clock, no storage. This is where the
-/// privacy rules live, so they are covered by tests rather than by hope.
+/// Pure and synchronous: no pasteboard, no clock, no storage, no file system.
+/// This is where the privacy rules live, so they are covered by tests rather
+/// than by hope.
+///
+/// Purity is load-bearing rather than tidy. This runs inside
+/// ``PasteboardPoller``'s tick, and that tick advances the change count before
+/// it reads, so anything that blocks here costs history: copies made during the
+/// stall are never seen, and when the poller wakes it captures only whatever is
+/// on the pasteboard by then. A `public.file-url` under an unresponsive mount
+/// is exactly such a stall, which is why telling a copied folder from a copied
+/// file — see ``FileURLKind`` — happens later, on ``ThumbnailRenderer``,
+/// alongside the other work that has to open the copied thing.
 public struct CaptureRules: Sendable {
     /// Per-item ceiling. Above this the entry is dropped rather than stored;
     /// a 200 MB screenshot is not history, it is a memory leak.
@@ -68,6 +78,11 @@ public struct CaptureRules: Sendable {
     }
 
     /// Richest representation wins, per ``PasteboardType/readOrder``.
+    ///
+    /// A `public.file-url` reads as ``ClipKind/file`` whatever is at the end of
+    /// it. Only the file system can say whether that is a folder, and asking it
+    /// from here would put a blocking disk call in the poller's tick;
+    /// ``ThumbnailRenderer`` refines the kind instead.
     static func kind(for payload: ClipPayload) -> ClipKind? {
         for type in PasteboardType.readOrder where payload.data(forType: type) != nil {
             switch type {
@@ -92,7 +107,7 @@ public struct CaptureRules: Sendable {
             guard let data = payload.data(forType: type),
                 let string = String(data: data, encoding: .utf8)
             else { continue }
-            return kind == .file ? Self.displayPath(forFileURL: string) : string
+            return kind.isFileSystemEntry ? Self.displayPath(forFileURL: string) : string
         }
         return ""
     }

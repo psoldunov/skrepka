@@ -19,13 +19,15 @@ enum ClipRecordMapping {
         return ClipPayload(representations: representations)
     }
 
-    static func makeRecord(from item: ClipItem, preview: ThumbnailMaker.Preview?) throws -> ClipRecord {
+    static func makeRecord(from item: ClipItem, details: ClipDetails) throws -> ClipRecord {
         // The pixel size comes from decoding the image, which only the preview
-        // step does — the pure capture rules never touch AppKit imaging.
-        let imageSize = preview?.pixelSize ?? item.imageSize
+        // step does — the capture rules never touch AppKit imaging.
+        let imageSize = details.preview?.pixelSize ?? item.imageSize
         return ClipRecord(
             id: item.id,
-            kindRaw: item.kind.rawValue,
+            // The capture rules call every file URL a `.file`; only the detail
+            // pass can say it is a folder, and only when the disk answered.
+            kindRaw: (details.kind ?? item.kind).rawValue,
             text: item.text,
             sourceBundleID: item.sourceBundleID,
             createdAt: item.createdAt,
@@ -34,7 +36,8 @@ enum ClipRecordMapping {
             contentHash: item.contentHash,
             imageWidth: imageSize?.width,
             imageHeight: imageSize?.height,
-            thumbnailData: preview?.thumbnail,
+            byteCount: details.byteCount,
+            thumbnailData: details.preview?.thumbnail,
             payloadData: try encode(item.payload)
         )
     }
@@ -55,6 +58,7 @@ enum ClipRecordMapping {
             isPinned: record.isPinned,
             isConcealed: record.isConcealed,
             imageSize: imageSize,
+            byteCount: record.byteCount,
             thumbnail: record.thumbnailData
         )
     }

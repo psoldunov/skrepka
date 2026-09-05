@@ -25,6 +25,16 @@ enum Fixtures {
         return directory
     }
 
+    /// A directory the file system reports as a package, which is what an
+    /// application bundle is. The extension alone decides it — no `Info.plist`
+    /// and no `Contents/` are needed, verified by probing `.isPackageKey` on a
+    /// bare `.app` directory.
+    static func makePackage(named name: String) throws -> URL {
+        let url = try makeDirectory().appending(path: name, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     static func writePNG(width: Int, height: Int, named name: String) throws -> URL {
         let url = try makeDirectory().appending(path: name, directoryHint: .notDirectory)
         try png(width: width, height: height).write(to: url)
