@@ -20,10 +20,10 @@ The formatter is not a matter of taste. When it disagrees with you, run
 
 Two targets, and the split is load-bearing:
 
-- `Sources/ClippyCore/` — models, storage, pasteboard reading, search, settings.
-  No SwiftUI views, no `NSWindow`, no hotkey registration. This target is where
-  the tests live, so anything you want tested goes here.
-- `Sources/Clippy/` — the app. SwiftUI scenes, `NSPanel` glue, `NSStatusItem`,
+- `Sources/SkrepkaCore/` — models, storage, pasteboard reading, search,
+  settings. No SwiftUI views, no `NSWindow`, no hotkey registration. This
+  target is where the tests live, so anything you want tested goes here.
+- `Sources/Skrepka/` — the app. SwiftUI scenes, `NSPanel` glue, `NSStatusItem`,
   hotkey registration, paste synthesis. Only what cannot run without a window
   server.
 
@@ -32,12 +32,12 @@ the AppKit glue for a surface sits next to the SwiftUI view it backs. Do not
 create `Views/`, `Models/`, `Services/` folders that collect one layer across
 every feature; they force four-directory edits for one change.
 
-Put new logic in `ClippyCore` by default. Move it to the app target only when it
-genuinely needs AppKit or a live window.
+Put new logic in `SkrepkaCore` by default. Move it to the app target only when
+it genuinely needs AppKit or a live window.
 
-`ClippyCore` must not `import SwiftUI` or `import AppKit` for view types. It may
-import AppKit for `NSPasteboard` and value types like `NSImage` — that is the
-line: data yes, views no.
+`SkrepkaCore` must not `import SwiftUI` or `import AppKit` for view types. It
+may import AppKit for `NSPasteboard` and value types like `NSImage` — that is
+the line: data yes, views no.
 
 ## State
 
@@ -54,7 +54,7 @@ Use the Observation framework. `@Observable` on model classes; never
 introduce them — SwiftUI tracks observable properties read in `body` directly.
 
 Views own no business logic. A view reads state and sends intent; the decision
-lives in `ClippyCore`.
+lives in `SkrepkaCore`.
 
 ## Concurrency
 
@@ -62,7 +62,7 @@ The app target is compiled with `.defaultIsolation(MainActor.self)`, so its
 declarations are `@MainActor` unless you say otherwise. Do not add redundant
 `@MainActor` there.
 
-`ClippyCore` is `nonisolated` by default. Mark the few UI-facing types
+`SkrepkaCore` is `nonisolated` by default. Mark the few UI-facing types
 `@MainActor` explicitly; leave pure logic alone.
 
 Background work goes in an `actor`. Per SE-0466, declarations inside an `actor`
@@ -150,7 +150,8 @@ anything it does not is a finding, not a workaround opportunity.
 ## Checklist
 
 - [ ] `./scripts/doctor.sh` is green
-- [ ] New logic landed in `ClippyCore`, not the app target, unless it needs AppKit
+- [ ] New logic landed in `SkrepkaCore`, not the app target, unless it needs
+      AppKit
 - [ ] Files grouped by feature; one primary type per file; under 300 lines
 - [ ] `@Observable` used; no `ObservableObject`/`@StateObject`/`@EnvironmentObject`
 - [ ] Background work in an `actor`; no `@unchecked Sendable`, no `nonisolated(unsafe)`

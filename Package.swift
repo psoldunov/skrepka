@@ -19,24 +19,24 @@ let appSwiftSettings: [SwiftSetting] = sharedSwiftSettings + [
 ]
 
 let package = Package(
-    name: "Clippy",
+    name: "Skrepka",
     platforms: [.macOS(.v26)],
     products: [
-        .executable(name: "Clippy", targets: ["Clippy"]),
-        .library(name: "ClippyCore", targets: ["ClippyCore"]),
+        .executable(name: "Skrepka", targets: ["Skrepka"]),
+        .library(name: "SkrepkaCore", targets: ["SkrepkaCore"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "3.0.1")
     ],
     targets: [
         .target(
-            name: "ClippyCore",
+            name: "SkrepkaCore",
             swiftSettings: sharedSwiftSettings
         ),
         .executableTarget(
-            name: "Clippy",
+            name: "Skrepka",
             dependencies: [
-                "ClippyCore",
+                "SkrepkaCore",
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
             ],
             // scripts/bundle.sh copies Resources/ straight into the .app, so
@@ -45,8 +45,8 @@ let package = Package(
             swiftSettings: appSwiftSettings
         ),
         .testTarget(
-            name: "ClippyCoreTests",
-            dependencies: ["ClippyCore"],
+            name: "SkrepkaCoreTests",
+            dependencies: ["SkrepkaCore"],
             swiftSettings: sharedSwiftSettings
         ),
     ]

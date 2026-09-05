@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Assembles and signs build/Clippy.app from the SwiftPM executable.
+# Assembles and signs build/Skrepka.app from the SwiftPM executable.
 #
 # SwiftPM cannot emit an .app bundle (its only product kinds are library,
 # executable and plugin), so the bundle is assembled by hand.
@@ -15,7 +15,7 @@
 # warning below is the honest report of that. The accessor SwiftPM generates for
 # `Bundle.module` probes exactly two paths and then calls fatalError --
 #
-#   Bundle.main.bundleURL/<Package>_<Target>.bundle    # = Clippy.app/<...>.bundle
+#   Bundle.main.bundleURL/<Package>_<Target>.bundle    # = Skrepka.app/<...>.bundle
 #   /absolute/path/to/.build/<triple>/<config>/<...>.bundle
 #
 # `Bundle.main.bundleURL` is the .app itself (measured, not assumed), so the
@@ -27,11 +27,11 @@
 # unnoticed here and crashed on every other Mac -- KeyboardShortcuts.Recorder
 # trapped in Bundle.module the moment Settings opened.
 #
-# So no resource bundle is shipped, and Clippy reaches none: the one dependency
+# So no resource bundle is shipped, and Skrepka reaches none: the one dependency
 # that has resources, KeyboardShortcuts, is used for hotkey registration and
 # storage only. Its Recorder and `Shortcut.description` both go through
-# Bundle.module, and Sources/Clippy/Settings/ShortcutRecorderView.swift and
-# Sources/Clippy/Platform/ShortcutFormatter.swift replace them.
+# Bundle.module, and Sources/Skrepka/Settings/ShortcutRecorderView.swift and
+# Sources/Skrepka/Platform/ShortcutFormatter.swift replace them.
 
 set -euo pipefail
 
@@ -39,12 +39,12 @@ cd "$(dirname "$0")/.."
 
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
-APP_NAME="Clippy"
+APP_NAME="Skrepka"
 CONFIGURATION="${CONFIGURATION:-release}"
 APP="build/${APP_NAME}.app"
-SIGN_IDENTITY="${CLIPPY_SIGN_IDENTITY:-Developer ID Application: Philipp Soldunov (MSU5X4VMMP)}"
+SIGN_IDENTITY="${SKREPKA_SIGN_IDENTITY:-Developer ID Application: Philipp Soldunov (MSU5X4VMMP)}"
 
-# Architecture. The edit loop builds for this Mac only; CLIPPY_UNIVERSAL=1 asks
+# Architecture. The edit loop builds for this Mac only; SKREPKA_UNIVERSAL=1 asks
 # for the arm64 + x86_64 binary that a build leaving the machine needs, and
 # scripts/notarize.sh sets it.
 #
@@ -60,7 +60,7 @@ SIGN_IDENTITY="${CLIPPY_SIGN_IDENTITY:-Developer ID Application: Philipp Solduno
 # .build/<triple>/<config> bin path as passing nothing, so the incremental
 # cache that scripts/setup.sh warms is untouched (measured with
 # `swift build --show-bin-path`, both ways).
-if [[ "${CLIPPY_UNIVERSAL:-0}" == "1" ]]; then
+if [[ "${SKREPKA_UNIVERSAL:-0}" == "1" ]]; then
 	ARCHITECTURES=(arm64 x86_64)
 else
 	ARCHITECTURES=("$(uname -m)")
@@ -121,7 +121,7 @@ fi
 
 echo "▸ Signing as: ${SIGN_IDENTITY}"
 if ! security find-identity -v -p codesigning | grep -qF "${SIGN_IDENTITY}"; then
-	if [[ "${CLIPPY_NOTARIZE:-0}" == "1" ]]; then
+	if [[ "${SKREPKA_NOTARIZE:-0}" == "1" ]]; then
 		echo "error: '${SIGN_IDENTITY}' is not in the keychain." >&2
 		echo "error: an ad-hoc signature cannot be notarized; refusing to build one." >&2
 		exit 1
@@ -141,8 +141,8 @@ fi
 #     trusted timestamp proves the signing happened while it was still valid.
 #     Without one, every copy stops launching the day the certificate expires.
 #
-# scripts/notarize.sh sets CLIPPY_NOTARIZE=1 and pays the round-trip.
-if [[ "${CLIPPY_NOTARIZE:-0}" == "1" ]]; then
+# scripts/notarize.sh sets SKREPKA_NOTARIZE=1 and pays the round-trip.
+if [[ "${SKREPKA_NOTARIZE:-0}" == "1" ]]; then
 	TIMESTAMP_ARGUMENT=(--timestamp)
 else
 	TIMESTAMP_ARGUMENT=(--timestamp=none)
@@ -156,11 +156,11 @@ echo "✓ ${APP}"
 
 # Building this script on its own means the .app IS the thing you wanted, so
 # hand it over. The two scripts that call bundle.sh as a step set
-# CLIPPY_REVEAL=0: run.sh launches the app instead, and notarize.sh reveals its
+# SKREPKA_REVEAL=0: run.sh launches the app instead, and notarize.sh reveals its
 # own artifact once the ticket is stapled.
 #
 # `|| true` because a build with no window server -- CI, ssh -- has no Finder to
 # reveal into, and a signed .app that already exists is not worth failing over.
-if [[ "${CLIPPY_REVEAL:-1}" == "1" ]]; then
+if [[ "${SKREPKA_REVEAL:-1}" == "1" ]]; then
 	open -R "${APP}" || true
 fi

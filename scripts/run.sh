@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build, bundle, sign and launch Clippy.
+# Build, bundle, sign and launch Skrepka.
 #
 # Launches via `open` rather than executing the binary directly: TCC attributes
 # permissions to the responsible process, so a shell-launched binary inherits
@@ -10,19 +10,19 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# CLIPPY_REVEAL=0 because this script launches the app; a Finder window opening
+# SKREPKA_REVEAL=0 because this script launches the app; a Finder window opening
 # over the thing you are about to run is noise, not a result.
-CLIPPY_REVEAL=0 scripts/bundle.sh
+SKREPKA_REVEAL=0 scripts/bundle.sh
 
 echo "▸ Stopping any running instance"
-pkill -x Clippy 2> /dev/null || true
+pkill -x Skrepka 2> /dev/null || true
 
 # Wait for it to actually go: launching while the old process is still
 # terminating makes LaunchServices reactivate the dying instance instead.
 for _ in $(seq 1 40); do
-	pgrep -x Clippy > /dev/null 2>&1 || break
+	pgrep -x Skrepka > /dev/null 2>&1 || break
 	sleep 0.1
 done
 
 echo "▸ Launching"
-open build/Clippy.app
+open build/Skrepka.app

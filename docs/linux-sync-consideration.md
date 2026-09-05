@@ -1,4 +1,4 @@
-# A Linux Clippy, and LAN sync between the two
+# A Linux Skrepka, and LAN sync between the two
 
 **Status: consideration. Nothing here is committed to and no code exists for
 any of it.** This is the written-down version of a design investigation, kept
@@ -12,8 +12,8 @@ support matrix rots; re-check before relying on it.
 
 ## 1. What the idea is
 
-A native Linux Clippy — its own history, its own picker, its own capture — that
-finds the macOS Clippy on the local network, pairs with it once, and shares
+A native Linux Skrepka — its own history, its own picker, its own capture — that
+finds the macOS Skrepka on the local network, pairs with it once, and shares
 history with it from then on.
 
 Explicitly not a cloud service, not an account, not a relay. Two or three of
@@ -24,7 +24,7 @@ one person's own machines on one LAN.
 Apple already moves the clipboard between Apple devices. Anything built here has
 to be honest about what it adds:
 
-| | Universal Clipboard | Clippy sync |
+| | Universal Clipboard | Skrepka sync |
 |---|---|---|
 | Items retained | one, overwritten by the next copy | full history |
 | Pins | no | yes |
@@ -46,7 +46,7 @@ Four distinct collisions, worst first.
 **3.1 — The lazy-fetch trap, which is a bug already shipping.** If Universal
 Clipboard populates the receiving Mac's pasteboard with a *promise* rather than
 bytes, then `PasteboardReader.read` calling `item.data(forType:)` on every
-`changeCount` bump forces a Continuity fetch over the air. Clippy polls at
+`changeCount` bump forces a Continuity fetch over the air. Skrepka polls at
 200 ms and reads unconditionally, so every copy made on any of the user's Apple
 devices — the iPhone included — would silently pull data into this Mac in the
 background.
@@ -154,7 +154,7 @@ headless daemon and is unusable for a GTK GUI, which needs glibc, GL and D-Bus.
 
 ## 5. Swift on Linux — what actually ports
 
-`Sources/ClippyCore/` is 2141 lines across 31 files. Excluding the eight files
+`Sources/SkrepkaCore/` is 2141 lines across 31 files. Excluding the eight files
 that import AppKit or SwiftData leaves **1294 lines / 23 files — 60% by line,
 74% by file** — and it is the load-bearing 60%: `CaptureRules`,
 `PrivacyMarkers`, `Matcher`, `ClipItem` hashing, `Preferences`,
@@ -167,7 +167,7 @@ that import AppKit or SwiftData leaves **1294 lines / 23 files — 60% by line,
 | `UserDefaults` | yes, swift-corelibs-foundation | — |
 | `CryptoKit` | no | **swift-crypto, source-identical** — it compiles its API surface down to nothing on Apple platforms and re-exports CryptoKit. `import CryptoKit` → `import Crypto`; `SHA256.hash(data:)` unchanged. One line. |
 | `SwiftData` | no | SQLite directly, or GRDB. `ClipRecord` + `HistoryStore` is ~260 lines to rewrite. |
-| `os.Logger` | no | swift-log. `ClippyLog.swift` is 13 lines. |
+| `os.Logger` | no | swift-log. `SkrepkaLog.swift` is 13 lines. |
 | `AppKit`, `ImageIO`, `UniformTypeIdentifiers` | no | GTK / GdkPixbuf / shared-mime-info |
 
 ### GUI toolkit
@@ -176,7 +176,7 @@ Ranked, bluntly. A half-dead binding is a finding, not an option.
 
 1. **`stackotter/swift-cross-ui`** — alive (1739★, commit the day this was
    written), GTK backend. No tray icon and no floating-palette window role, both
-   of which Clippy needs.
+   of which Skrepka needs.
 2. **`rhx/SwiftGtk`** — raw GTK4 bindings, alive but thin.
 3. **`AparokshaUI/adwaita-swift` — DEAD.** Archived 2024-10-17, along with every
    other repo in that organisation. Verified via the GitHub API. Do not build on
@@ -193,7 +193,7 @@ Wayland and X11.
 needs the AppIndicator extension, which distributions package but do not install
 by default.
 
-**Working assumption:** Swift + GTK4, so the 60% of `ClippyCore` that ports is
+**Working assumption:** Swift + GTK4, so the 60% of `SkrepkaCore` that ports is
 actually reused and there is one language across both platforms.
 
 ---
@@ -202,32 +202,32 @@ actually reused and there is one language across both platforms.
 
 ```
 Sources/
-  ClippyCore/            phase 4 splits its storage behind a HistoryStoring
-                         protocol and shims CryptoKit/os.Logger; otherwise
-                         unchanged, and must stay Linux-clean
-  ClippySync/            phase 1 — portable. No AppKit, no SwiftData, no
-                         Network. Compiles on Linux from day one. Depends on
-                         swift-crypto, swift-nio, swift-nio-ssl, SwiftCBOR.
-  Clippy/                macOS app; phase 3 adds Sources/Clippy/Sync/
-  clippy-sync-probe/     phase 3 — headless test peer, never touches NSPasteboard
-  ClippyLinuxPlatform/   phase 5 — ext-data-control-v1 and XFixes backends
-  clippyd/               phase 6 — daemon, Avahi discovery, D-Bus, CLI
-  ClippyLinuxUI/         phase 7 — GTK4 picker, tray, portal hotkey
+  SkrepkaCore/          phase 4 splits its storage behind a HistoryStoring
+                        protocol and shims CryptoKit/os.Logger; otherwise
+                        unchanged, and must stay Linux-clean
+  SkrepkaSync/          phase 1 — portable. No AppKit, no SwiftData, no
+                        Network. Compiles on Linux from day one. Depends on
+                        swift-crypto, swift-nio, swift-nio-ssl, SwiftCBOR.
+  Skrepka/              macOS app; phase 3 adds Sources/Skrepka/Sync/
+  skrepka-sync-probe/   phase 3 — headless test peer, never touches NSPasteboard
+  SkrepkaLinuxPlatform/ phase 5 — ext-data-control-v1 and XFixes backends
+  skrepkad/             phase 6 — daemon, Avahi discovery, D-Bus, CLI
+  SkrepkaLinuxUI/       phase 7 — GTK4 picker, tray, portal hotkey
 ```
 
-Phase numbers are §12. `ClippySync` is the only target both platforms link, and
+Phase numbers are §12. `SkrepkaSync` is the only target both platforms link, and
 it is deliberately the one with the fewest dependencies.
 
-`ClippySync` layout, following the repo's group-by-feature rule:
+`SkrepkaSync` layout, following the repo's group-by-feature rule:
 
 ```
-Sources/ClippySync/
+Sources/SkrepkaSync/
   Model/      PeerIdentity, SyncDeviceID, PeerPlatform, RepresentationKey,
               SyncClipMeta, Tombstone, LWWRegister
   Wire/       Frame, FrameCodec, SyncMessage, ProtocolVersion
   Merge/      MergeEngine, MergeAction
   Pairing/    DeviceCertificate, ShortAuthString, PairingSession, TrustStore
-  Transport/  SyncServer, SyncClient, SyncConnection, TLSConfiguration+Clippy
+  Transport/  SyncServer, SyncClient, SyncConnection, TLSConfiguration+Skrepka
   Discovery/  PeerDiscovery (protocol), ServiceDescriptor,
               BonjourDiscovery (#if canImport(Network))
 ```
@@ -331,8 +331,9 @@ GTK4's built-in serializers, for reference: `image/png`, `image/tiff`,
 
 ### Discovery
 
-Bonjour / DNS-SD, service type `_clippy._tcp` (11 characters; RFC 6763 §7.2
-caps the service name at 15 bytes).
+Bonjour / DNS-SD, service type `_skrepka._tcp` — the Service Name is `skrepka`,
+7 characters, inside the fifteen RFC 6763 §7.2 allows (the leading underscore is
+not counted).
 
 TXT record, each string under the 255-byte limit of RFC 6763 §6.1:
 
@@ -514,7 +515,7 @@ anything else here.
 
 ---
 
-### Phase 1 — `ClippySync`: the portable protocol core
+### Phase 1 — `SkrepkaSync`: the portable protocol core
 
 New target, `sharedSwiftSettings` (no `.defaultIsolation`), depending on
 swift-crypto and SwiftCBOR. No AppKit, no SwiftData, no Network. **This target
@@ -525,7 +526,7 @@ accumulating in it.
 Build `Model/`, `Wire/` and `Merge/` per §6. Everything here is pure and
 synchronous.
 
-**Tests** (`Tests/ClippySyncTests/`): frame codec round-trips including a 33 MB
+**Tests** (`Tests/SkrepkaSyncTests/`): frame codec round-trips including a 33 MB
 rejection; merge convergence, by applying two divergent histories in both orders
 and asserting identical results; tombstone-beats-insert; retention-emits-no-
 tombstone; UTI↔MIME round-trip; `PeerPlatform` defaulting live push off for
@@ -549,7 +550,7 @@ demonstrable.
 `clear()` start writing tombstones; `applyRetention()` deliberately does not.
 Reuse `recordMatching(contentHash:)`.
 
-⚠️ §14 item 9 gates this — existing users have a populated `clippy.store`, and
+⚠️ §14 item 9 gates this — existing users have a populated `skrepka.store`, and
 this is the one place on the whole roadmap that can destroy data.
 
 **Identity and pairing.** Certificate generation, SAS derivation, trust store
@@ -574,7 +575,7 @@ SAS, per-peer rows carrying the live-push toggle. Live push plumbed through the
 existing `PasteboardPoller.pause()` / `resume()` seam plus the recently-received
 hash set.
 
-**`clippy-sync-probe`:** an executable second peer with a file-backed store,
+**`skrepka-sync-probe`:** an executable second peer with a file-backed store,
 advertising `plat=linux`, speaking the full protocol and **never touching
 `NSPasteboard`**.
 
@@ -597,14 +598,14 @@ it is Linux.
 
 ---
 
-### Phase 4 — `ClippyCore` on Linux
+### Phase 4 — `SkrepkaCore` on Linux
 
 The first phase with no macOS deliverable. Goal: `swift build` succeeds on
-Linux for `ClippyCore` and `ClippySync`, and their tests pass there.
+Linux for `SkrepkaCore` and `SkrepkaSync`, and their tests pass there.
 
 - `import CryptoKit` → `import Crypto` behind `#if canImport(CryptoKit)`. One
   line, source-identical API.
-- `ClippyLog` → swift-log behind the same kind of shim. Thirteen lines.
+- `SkrepkaLog` → swift-log behind the same kind of shim. Thirteen lines.
 - **Storage rewrite.** `HistoryStore`'s SwiftData implementation becomes one
   conformance of a `HistoryStoring` protocol; a SQLite/GRDB implementation
   becomes the other. ~260 lines, and the mapping layer
@@ -615,7 +616,7 @@ Linux for `ClippyCore` and `ClippySync`, and their tests pass there.
 - **Establish `scripts/doctor-linux.sh`** — the Linux quality gate. Without it
   the next four phases have no definition of done.
 
-**Done when:** `Tests/ClippyCoreTests` and `Tests/ClippySyncTests` pass on
+**Done when:** `Tests/SkrepkaCoreTests` and `Tests/SkrepkaSyncTests` pass on
 Linux, unchanged. They are the same tests; that is the point of the 60%.
 
 ⚠️ Do this in a container or VM pinned to the target distributions, not on
@@ -629,7 +630,7 @@ whatever Linux box is nearest.
 
 The capture and paste half, headless. No GUI yet.
 
-New target `ClippyLinuxPlatform`:
+New target `SkrepkaLinuxPlatform`:
 
 - **`ExtDataControlReader`** — `ext-data-control-v1`. Covers KDE Plasma 6.6+,
   Sway, Hyprland, niri, COSMIC. Falls back to `wlr-data-control` v2 where only
@@ -666,9 +667,10 @@ Phases 4 and 5 joined together and put on the network.
   project to Swift on Linux.
 - Wire `ClipboardBackend` → `CaptureRules` → `HistoryStoring` → `SyncCoordinator`.
   The middle two are the ported code from Phase 4; only the ends are new.
-- **`clippyd`** with a systemd user unit.
-- A `clippy` CLI — `list`, `copy <n>`, `pair`, `peers`, `doctor` — which is both
-  a usable interface and the thing that makes the daemon testable without a GUI.
+- **`skrepkad`** with a systemd user unit.
+- A `skrepka` CLI — `list`, `copy <n>`, `pair`, `peers`, `doctor` — which is
+  both a usable interface and the thing that makes the daemon testable without
+  a GUI.
 - **D-Bus interface** on the session bus. Not optional: it is how the GNOME
   Shell extension talks to the daemon in Phase 7, and designing it now avoids
   retrofitting.
@@ -723,7 +725,7 @@ CopyQ ships an extension for.
 
 Budget for extensions.gnome.org review as calendar time, not effort. The
 extension must degrade honestly: if it is not installed, the daemon says so in
-`clippy doctor` and in the Settings UI, rather than silently capturing nothing.
+`skrepka doctor` and in the Settings UI, rather than silently capturing nothing.
 
 **Packaging.** `.deb` and `.rpm`, per §4:
 
@@ -732,7 +734,7 @@ extension must degrade honestly: if it is not installed, the daemon says so in
   client with a security context, and a GNOME Shell extension cannot register
   from a sandbox either.
 - **AppImage** is possible for the binary alone but cannot carry the extension.
-- **Static Linux SDK** (musl, fully static) suits `clippyd` and is unusable for
+- **Static Linux SDK** (musl, fully static) suits `skrepkad` and is unusable for
   the GTK GUI, which needs glibc, GL and D-Bus. If a headless-only package is
   ever wanted, that is the tool for it.
 
@@ -748,10 +750,10 @@ systemd, and a fresh machine can pair with the Mac from a clean install.
 | Phase | Deliverable | Rough size |
 |---|---|---|
 | 0 | Universal Clipboard spike, and possibly a standalone bug fix | ½ day |
-| 1 | `ClippySync` — model, wire, merge, all pure | 2–3 days |
+| 1 | `SkrepkaSync` — model, wire, merge, all pure | 2–3 days |
 | 2 | Storage, identity, transport, discovery | 1 week |
-| 3 | macOS sync shipping, proven against `clippy-sync-probe` | 1 week |
-| 4 | `ClippyCore` compiling and passing its tests on Linux | 1–1½ weeks |
+| 3 | macOS sync shipping, proven against `skrepka-sync-probe` | 1 week |
+| 4 | `SkrepkaCore` compiling and passing its tests on Linux | 1–1½ weeks |
 | 5 | Linux clipboard read/write, headless | 1½ weeks |
 | 6 | **Linux daemon — real Mac ↔ Linux sync** | 1½ weeks |
 | 7 | Linux GUI | 2–3 weeks |
@@ -809,7 +811,7 @@ installed interface before any code depends on them.
 8. `SwiftCBOR` maturity and its behaviour on malformed input.
 9. Whether adding optional properties to an existing `@Model` is a lightweight
    SwiftData migration on macOS 26, or needs a `SchemaMigrationPlan`. Existing
-   users have a populated `clippy.store` and this is the one item on the list
+   users have a populated `skrepka.store` and this is the one item on the list
    that can destroy data.
 10. Avahi service registration from Swift (§9).
 
