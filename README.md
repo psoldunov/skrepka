@@ -161,6 +161,21 @@ payloads use `@Attribute(.externalStorage)`, so large blobs land beside the
 database rather than inside a row. The picker holds only lightweight summaries
 plus a small thumbnail; a full payload is read only when an entry is pasted.
 
+## Contributing
+
+Bug reports and feature requests go through the
+[issue templates](https://github.com/psoldunov/skrepka/issues/new/choose).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers what you need to build Skrepka, where
+code goes, and what a pull request should carry — the short version being that
+a green `scripts/doctor.sh` is the definition of done.
+
+Found a vulnerability? Do not open a public issue.
+[SECURITY.md](SECURITY.md) has the private route, and the threat model that
+says what counts as one for a clipboard manager.
+
+Everyone taking part is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

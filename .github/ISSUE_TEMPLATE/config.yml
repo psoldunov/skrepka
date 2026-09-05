@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/psoldunov/skrepka/security/advisories/new
+    about: Never open a public issue for a vulnerability. This form is private — see SECURITY.md.
+  - name: Question about using Skrepka
+    url: https://github.com/psoldunov/skrepka/blob/master/README.md
+    about: Install, permissions, shortcuts, storage location and the build scripts are all covered in the README.
+  - name: Contributing and the quality gate
+    url: https://github.com/psoldunov/skrepka/blob/master/CONTRIBUTING.md
+    about: What you need to build Skrepka, where code goes, and what a pull request should carry.
