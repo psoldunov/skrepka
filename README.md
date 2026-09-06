@@ -7,7 +7,8 @@ are in, without taking focus away from it.
 ![The Skrepka picker open over Safari, showing recent clipboard entries with
 their source app and a ⌘N shortcut on each row](docs/images/picker.png)
 
-- Text, rich text, URLs, files and images, with inline image previews
+- Text, rich text, URLs, files and images, with inline image previews — a copy
+  of several files stays one row and pastes back as all of them
 - Type to filter; ↑↓ to move; ↩ to paste into the app you were using
 - ⌘1–⌘9 paste that row outright, ⇧⌘↩ pastes as plain text, ⌘P pins
 - Pinned entries never age out
