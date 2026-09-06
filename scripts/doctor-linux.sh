@@ -74,6 +74,27 @@ fi
 # Native Linux run.
 # ---------------------------------------------------------------------------
 
+# `Package.resolved` is put back exactly as it was found, and this is a
+# correctness measure rather than tidiness.
+#
+# Package.swift fences the macOS-only app target — and its KeyboardShortcuts
+# dependency — out of the manifest on Linux, so SwiftPM resolves a genuinely
+# smaller graph here and rewrites the lockfile to match. That file is tracked.
+# Left alone, every Linux gate run stages a lockfile with the macOS pin deleted
+# and a different `originHash`, and whoever commits next commits it.
+#
+# Restored rather than prevented: `--only-use-versions-from-resolved-file`
+# refuses a graph that does not match the file, which is exactly the graph this
+# platform has. Saving and putting back is the version that works on both.
+RESOLVED_BACKUP=""
+if [[ -f Package.resolved ]]; then
+	RESOLVED_BACKUP="$(mktemp)"
+	cp Package.resolved "${RESOLVED_BACKUP}"
+	# EXIT alone: this script ends by calling `exit`, and a trap on EXIT runs
+	# for that as well as for a signal.
+	trap 'if [[ -n "${RESOLVED_BACKUP}" ]]; then cp "${RESOLVED_BACKUP}" Package.resolved; rm -f "${RESOLVED_BACKUP}"; fi' EXIT
+fi
+
 # swift-format ships inside the Linux toolchain at /usr/bin/swift-format, same
 # major version as the macOS one, and takes the same flags the macOS gate uses.
 # There is no `xcrun` here, so it is invoked directly.

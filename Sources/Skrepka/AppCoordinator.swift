@@ -28,6 +28,10 @@ final class AppCoordinator {
     // other half of this type, and Swift scopes `private` to the file.
     let gatherer = DiagnosticsGatherer()
     let watcher: ClipboardWatcher
+    /// Everything sync owns: identity, the two listeners, discovery, one link
+    /// per paired peer. Built here so there stays exactly one place to look for
+    /// what owns what; it does nothing until the user switches sync on.
+    let sync: SyncCoordinator
     var statusItem: StatusItemController?
     var welcomeWindow: WelcomeWindowController?
 
@@ -52,30 +56,10 @@ final class AppCoordinator {
         let preferences = Preferences()
         self.preferences = preferences
 
-        let bundleID = Bundle.main.bundleIdentifier ?? "dev.soldunov.skrepka"
-        var startupError: String?
-        var storage: DiagnosticsSnapshot.Storage
-        let store: HistoryStore
-        do {
-            let url = try HistoryStore.defaultStoreURL(bundleID: bundleID)
-            store = try HistoryStore(location: url, retention: preferences.retentionPolicy)
-            storage = .onDisk(path: url.path(percentEncoded: false))
-        } catch {
-            SkrepkaLog.store.error("Falling back to in-memory history: \(error.localizedDescription)")
-            startupError =
-                "Skrepka could not open its history database, so this session will not be saved. \(error.localizedDescription)"
-            // An in-memory store keeps the app usable rather than dead on launch.
-            // If even that fails SwiftData itself is unusable, and failing loudly
-            // beats limping on with a broken object graph.
-            guard let fallback = try? HistoryStore(location: nil) else {
-                fatalError("SwiftData could not create an in-memory store; Skrepka cannot run.")
-            }
-            store = fallback
-            storage = .inMemory(reason: error.localizedDescription)
-        }
-        self.store = store
-        self.startupError = startupError
-        self.storage = storage
+        let opened = Self.openStore(retention: preferences.retentionPolicy)
+        store = opened.store
+        startupError = opened.startupError
+        storage = opened.storage
 
         watcher = ClipboardWatcher(
             source: PasteboardReader(),
@@ -87,7 +71,55 @@ final class AppCoordinator {
             }
         )
         pickerModel = PickerModel(store: store, captureHealth: captureHealth)
-        panelController = PickerPanelController(model: pickerModel)
+        let panelController = PickerPanelController(model: pickerModel)
+        self.panelController = panelController
+        sync = SyncCoordinator(
+            preferences: preferences,
+            store: store,
+            livePushReceiver: LivePushReceiver(
+                watcher: watcher,
+                // Read through a closure rather than handed the controller: the
+                // receiver's one rule about the picker is "not while it is
+                // open", and that needs a boolean rather than a panel.
+                isPickerVisible: { panelController.isVisible }
+            )
+        )
+    }
+
+    /// Opens the on-disk history, or says why it could not.
+    ///
+    /// Lifted out of `init` because it is the one part of construction with a
+    /// decision in it, and because a failure here is a thing the user is told
+    /// about rather than a crash.
+    ///
+    /// An in-memory store keeps the app usable rather than dead on launch. If
+    /// even that fails, SwiftData itself is unusable and failing loudly beats
+    /// limping on with a broken object graph.
+    private static func openStore(
+        retention: RetentionPolicy
+    ) -> (store: HistoryStore, storage: DiagnosticsSnapshot.Storage, startupError: String?) {
+        let bundleID = Bundle.main.bundleIdentifier ?? "dev.soldunov.skrepka"
+        do {
+            let url = try HistoryStore.defaultStoreURL(bundleID: bundleID)
+            return (
+                try HistoryStore(location: url, retention: retention),
+                .onDisk(path: url.path(percentEncoded: false)),
+                nil
+            )
+        } catch {
+            SkrepkaLog.store.error("Falling back to in-memory history: \(error.localizedDescription)")
+            guard let fallback = try? HistoryStore(location: nil) else {
+                fatalError("SwiftData could not create an in-memory store; Skrepka cannot run.")
+            }
+            return (
+                fallback,
+                .inMemory(reason: error.localizedDescription),
+                """
+                Skrepka could not open its history database, so this session will not be saved. \
+                \(error.localizedDescription)
+                """
+            )
+        }
     }
 
     // MARK: - Lifecycle
@@ -118,12 +150,16 @@ final class AppCoordinator {
         startCaptureLoop()
         refreshHealth()
         showWelcomeIfNeeded()
+        Task { [sync] in await sync.start() }
     }
 
     func stop() {
         captureTask?.cancel()
         captureTask = nil
-        Task { await watcher.stop() }
+        Task { [sync, watcher] in
+            await watcher.stop()
+            await sync.stop()
+        }
     }
 
     /// Re-reads preferences after the user changes them in Settings.
@@ -147,6 +183,11 @@ final class AppCoordinator {
                     continue
                 }
                 await store.capture(item)
+                // The same stream, not a second watcher: one `changeCount`, one
+                // source of truth about what was copied. Live push is offered
+                // after the store has it, so a peer never learns about a
+                // clipping this machine failed to keep.
+                self?.sync.offerLivePush(item)
             }
         }
     }

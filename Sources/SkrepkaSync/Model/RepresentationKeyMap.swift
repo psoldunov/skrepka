@@ -103,4 +103,28 @@ public enum RepresentationKeyMap {
         guard let canonical = canonical(forLinuxTarget: target) else { return nil }
         return RepresentationKey(canonical: canonical, origin: target)
     }
+
+    /// Wire-keyed payload bytes re-keyed by macOS uniform type identifier.
+    ///
+    /// Keyed off ``RepresentationKey/canonical`` and never off
+    /// ``RepresentationKey/origin``: the origin is the *sender's* own name for
+    /// the representation, which is a Linux MIME target when the sender was
+    /// Linux, and a macOS store or pasteboard indexed by one of those would name
+    /// a type nothing here can serve.
+    ///
+    /// A key with no macOS type is dropped rather than stored under an invented
+    /// one. This map refusing to name it means no pasteboard here can carry
+    /// those bytes, and a row claiming otherwise would paste garbage.
+    ///
+    /// Lives here rather than at either call site because there are two — the
+    /// store that persists a peer's item and the receiver that puts a live push
+    /// on the clipboard — and two spellings of one mapping is how they drift.
+    public static func utiKeyed(_ payloads: [RepresentationKey: Data]) -> [String: Data] {
+        var result: [String: Data] = [:]
+        for (key, data) in payloads {
+            guard let uti = uti(forCanonical: key.canonical) else { continue }
+            result[uti] = data
+        }
+        return result
+    }
 }

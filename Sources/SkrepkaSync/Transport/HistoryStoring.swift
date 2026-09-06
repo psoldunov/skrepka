@@ -22,8 +22,15 @@ import Foundation
 /// content up by hash and no more would answer those questions, which turns a
 /// paired peer into an oracle for whatever it can guess.
 public protocol HistoryStoring: Sendable {
-    /// Metadata for every syncable item created at or after `cursor`, or all of
-    /// them when it is nil. Never includes concealed content.
+    /// Metadata for every syncable item created **strictly after** `cursor`, or
+    /// all of them when it is nil. Never includes concealed content.
+    ///
+    /// Strictly after, so a caller that takes the newest `createdAt` it received
+    /// as its next cursor does not re-fetch that item on every round for ever.
+    /// The cost is the other boundary: an item created in the same millisecond
+    /// as the cursor is not offered again, which is why a caller that must not
+    /// miss anything asks for the whole index instead of carrying a cursor at
+    /// all.
     func syncIndex(since cursor: Date?) async throws -> [SyncClipMeta]
 
     /// Applies a merge plan.
@@ -43,6 +50,10 @@ public protocol HistoryStoring: Sendable {
     /// tail of the plan never landed.
     func applyRemote(_ actions: [MergeAction]) async throws
 
+    /// Deletions recorded **strictly after** `cursor`, or all of them when it
+    /// is nil. Expired records are included: `MergeEngine` applies
+    /// ``SyncLimits/tombstoneRetention`` against its own clock, and filtering
+    /// here as well would put the expiry rule in two places that can disagree.
     func tombstones(since cursor: Date?) async throws -> [Tombstone]
     func recordTombstone(_ tombstone: Tombstone) async throws
 
@@ -58,5 +69,19 @@ public protocol HistoryStoring: Sendable {
 
     /// Records an item learned from a peer, with whatever payload bytes came
     /// with it.
+    ///
+    /// **Refuses concealed content**, which is the receiving half of the rule
+    /// ``syncIndex(since:)`` and ``payload(for:key:)`` enforce on the way out.
+    /// `MergeEngine` has no store to consult, so this is the only layer that can
+    /// apply it to something a peer offered.
+    ///
+    /// Identity is `contentHash`, so a second offer of content already held adds
+    /// no second item. It is not a no-op: an offer carrying bytes for an item
+    /// that has none fills them in.
+    ///
+    /// **Bytes already held are never replaced.** A peer can name content this
+    /// device captured itself — the hash is over the content, not over who has
+    /// it — so a conformance that overwrote would let a peer substitute its own
+    /// bytes for the user's under a hash that still matches the original.
     func capture(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async throws
 }

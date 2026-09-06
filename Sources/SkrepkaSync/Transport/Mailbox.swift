@@ -31,9 +31,9 @@ private let defaultMailboxCapacity = 16
 /// second `receive()` arrive while the first is still parked. An earlier version
 /// of this type kept one waiter and overwrote it, which drops a
 /// `CheckedContinuation` on the floor — a permanent hang and a
-/// `SWIFT TASK CONTINUATION MISUSE`. The design already names three readers of
-/// one stream (``SyncResponder``, ``SyncInitiator``, and Phase 3's live push),
-/// so waiters are held in arrival order and woken in it.
+/// `SWIFT TASK CONTINUATION MISUSE`. One connection has two readers
+/// (``SyncResponder`` and ``SyncInitiator``) and each of them parks here, so
+/// waiters are held in arrival order and woken in it.
 ///
 /// **The queue is bounded.** `autoRead` is on, so the event loop keeps reading
 /// and decoding whether or not anyone is draining. Nothing else applies

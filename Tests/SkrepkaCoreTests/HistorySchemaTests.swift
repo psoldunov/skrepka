@@ -43,8 +43,15 @@
             // `SQLiteClipRow.columns`, so the result set is ordered by the query
             // and never by the table. What would break the positional reader is a
             // column *missing*, which is exactly what this compares.
-            #expect(try Set(Self.columns(of: "clip", in: old)) == Set(Self.columns(of: "clip", in: fresh)))
+            for table in ["clip", "clip_representation", "tombstone", "paired_device"] {
+                #expect(
+                    try Set(Self.columns(of: table, in: old))
+                        == Set(Self.columns(of: table, in: fresh)),
+                    "\(table) drifted between an upgraded database and a fresh one"
+                )
+            }
             #expect(try Self.columns(of: "clip", in: old).contains("content_byte_count"))
+            #expect(try Self.columns(of: "paired_device", in: old).contains("live_push_choice"))
         }
 
         /// The half-applied upgrade — column added, version not stamped — is the
@@ -102,46 +109,76 @@
 
         /// A database holding version 1's schema and stamped as such.
         ///
-        /// **Frozen.** This is the `clip` table as version 1 shipped it, not a copy
-        /// of ``HistorySchema/clipTable`` kept in step with it — the whole point is
-        /// to be the thing today's schema has moved away from. It grows only by
-        /// ``HistorySchema/migrations`` running against it, never by hand, and a
-        /// column added to `clipTable` belongs in a migration rather than here.
+        /// **Frozen.** These are the tables as version 1 shipped them, not a copy
+        /// of ``HistorySchema`` kept in step with it — the whole point is to be the
+        /// thing today's schema has moved away from. They grow only by
+        /// ``HistorySchema/migrations`` running against them, never by hand, and a
+        /// column added to a table in `HistorySchema` belongs in a migration rather
+        /// than here.
         ///
-        /// Forgetting it is safe: a `clipTable` column with no migration makes the
-        /// two tables' column sets differ and `anOlderDatabaseIsMigrated` goes red.
-        /// *Editing* it is what would be quiet — adding a column here that
-        /// `clipTable` already has would make both sides agree while this fixture
-        /// claimed a shape version 1 never had, hiding the missing migration it was
-        /// meant to catch. Hence the count below: 14 is a historical fact about a
-        /// released schema, so pinning it costs nothing and no legitimate change
-        /// ever moves it.
+        /// Forgetting a migration is safe: a column with no migration makes the two
+        /// databases' column sets differ and `anOlderDatabaseIsMigrated` goes red.
+        /// *Editing* this is what would be quiet — adding a column here that the
+        /// current schema already has would make both sides agree while this
+        /// fixture claimed a shape version 1 never had, hiding the missing
+        /// migration it was meant to catch. Hence the counts below: they are
+        /// historical facts about a released schema, so pinning them costs nothing
+        /// and no legitimate change ever moves them.
+        ///
+        /// **Every table version 1 had, not only the one under test.** A table this
+        /// fixture omits is created from scratch by `install`, in *today's* shape —
+        /// and then the migration that adds a column to it runs against a table
+        /// that already has it, which is "duplicate column name" and a red test
+        /// that says nothing about the change being made. A version 1 database had
+        /// all four of these, so this has all four.
         private static func versionOneDatabase() throws -> SQLiteDatabase {
             let database = try SQLiteDatabase(path: ":memory:")
-            try database.execute(
-                """
-                CREATE TABLE clip (
-                    id TEXT PRIMARY KEY NOT NULL,
-                    kind_raw TEXT NOT NULL,
-                    "text" TEXT NOT NULL,
-                    source_bundle_id TEXT,
-                    created_at REAL NOT NULL,
-                    is_pinned INTEGER NOT NULL,
-                    is_concealed INTEGER NOT NULL,
-                    content_hash TEXT NOT NULL,
-                    image_width INTEGER,
-                    image_height INTEGER,
-                    thumbnail BLOB,
-                    pinned_at REAL,
-                    pinned_by TEXT,
-                    origin_device_id TEXT
-                );
-                PRAGMA user_version = 1;
-                """
-            )
+            try database.execute(Self.versionOneSchema)
             #expect(try columns(of: "clip", in: database).count == 14)
+            #expect(try columns(of: "paired_device", in: database).count == 6)
             return database
         }
+
+        /// Version 1's four tables, verbatim, and the stamp that says so.
+        private static let versionOneSchema = """
+            CREATE TABLE clip (
+                id TEXT PRIMARY KEY NOT NULL,
+                kind_raw TEXT NOT NULL,
+                "text" TEXT NOT NULL,
+                source_bundle_id TEXT,
+                created_at REAL NOT NULL,
+                is_pinned INTEGER NOT NULL,
+                is_concealed INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                image_width INTEGER,
+                image_height INTEGER,
+                thumbnail BLOB,
+                pinned_at REAL,
+                pinned_by TEXT,
+                origin_device_id TEXT
+            );
+            CREATE TABLE clip_representation (
+                clip_id TEXT NOT NULL REFERENCES clip(id) ON DELETE CASCADE,
+                "type" TEXT NOT NULL,
+                byte_count INTEGER NOT NULL,
+                bytes BLOB,
+                PRIMARY KEY (clip_id, "type")
+            );
+            CREATE TABLE tombstone (
+                content_hash TEXT PRIMARY KEY NOT NULL,
+                deleted_at REAL NOT NULL,
+                device_id TEXT NOT NULL
+            );
+            CREATE TABLE paired_device (
+                device_id TEXT PRIMARY KEY NOT NULL,
+                device_name TEXT NOT NULL,
+                platform_raw TEXT NOT NULL,
+                certificate_der BLOB NOT NULL,
+                paired_at REAL NOT NULL,
+                highest_protocol_seen INTEGER
+            );
+            PRAGMA user_version = 1;
+            """
 
         /// The table's column names in declaration order.
         private static func columns(of table: String, in database: SQLiteDatabase) throws -> [String] {

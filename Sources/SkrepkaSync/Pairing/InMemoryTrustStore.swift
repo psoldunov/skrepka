@@ -10,6 +10,7 @@ public actor InMemoryTrustStore: TrustStore {
     private var identity: DeviceCertificate?
     private var peers: [SyncDeviceID: PairedPeer] = [:]
     private var protocolMarks: [SyncDeviceID: ProtocolVersion] = [:]
+    private var livePushChoices: [SyncDeviceID: LivePushChoice] = [:]
 
     /// - Parameter identity: an identity to start with. Passing one is what
     ///   lets a test use a fixture certificate instead of paying for key
@@ -40,6 +41,7 @@ public actor InMemoryTrustStore: TrustStore {
     public func forgetPairedPeer(_ deviceID: SyncDeviceID) {
         peers[deviceID] = nil
         protocolMarks[deviceID] = nil
+        livePushChoices[deviceID] = nil
     }
 
     public func highestProtocolVersion(for deviceID: SyncDeviceID) -> ProtocolVersion? {
@@ -48,5 +50,18 @@ public actor InMemoryTrustStore: TrustStore {
 
     public func recordProtocolVersion(_ version: ProtocolVersion, for deviceID: SyncDeviceID) {
         protocolMarks[deviceID] = max(protocolMarks[deviceID] ?? version, version)
+    }
+
+    public func livePushChoice(for deviceID: SyncDeviceID) -> LivePushChoice {
+        livePushChoices[deviceID] ?? .followsPlatformDefault
+    }
+
+    /// Does nothing for a device that is not paired, the same way
+    /// ``recordProtocolVersion(_:for:)`` does — the persistent stores have no
+    /// row to write on, and a fake that accepted the write would let a test
+    /// pass against a contract they cannot meet.
+    public func setLivePushChoice(_ choice: LivePushChoice, for deviceID: SyncDeviceID) {
+        guard peers[deviceID] != nil else { return }
+        livePushChoices[deviceID] = choice == .followsPlatformDefault ? nil : choice
     }
 }

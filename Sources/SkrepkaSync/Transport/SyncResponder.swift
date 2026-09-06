@@ -21,9 +21,15 @@ public typealias PairingConfirmation = @Sendable (PairingProposal) async -> Bool
 /// need one: ``SyncConnection/receive()`` refuses anything a
 /// ``PinPolicy/pairing`` connection may not carry, so the index and payload
 /// branches below are unreachable there. The check sits one layer down because
-/// this actor is one of several readers of the same stream — the initiator is
-/// another, and Phase 3's live-push reader will be a third — and a rule written
-/// into one reader is a rule the other two do not have.
+/// this actor is one of two readers of the same stream — ``SyncInitiator`` is
+/// the other — and a rule written into one reader is a rule the other does not
+/// have.
+///
+/// **Every unsolicited message a peer sends arrives here**, live push included:
+/// a device only pushes over the connection it dialled, where it holds the
+/// initiator's role, so the answering end of every connection is this one. See
+/// ``SyncInitiator`` for why that removes the need for a correlation identifier
+/// the design expected to need.
 public actor SyncResponder {
     /// Ceiling on ``offeredHashes``.
     ///
@@ -34,14 +40,18 @@ public actor SyncResponder {
     /// is the one a peer that is genuinely fetching is working from.
     private static let offeredHashLimit = 4096
 
-    private let connection: SyncConnection
-    private let session: PairingSession
-    private let trust: any TrustStore
-    private let store: any HistoryStoring
-    private let confirmPairing: PairingConfirmation
-    private let now: @Sendable () -> Date
+    // Internal rather than private: `SyncResponder+Pairing.swift` is the other
+    // half of this actor, and Swift scopes `private` to the file it is written
+    // in.
+    let connection: SyncConnection
+    let session: PairingSession
+    let trust: any TrustStore
+    let store: any HistoryStoring
+    let confirmPairing: PairingConfirmation
+    private let onLivePush: LivePushSink
+    let now: @Sendable () -> Date
 
-    private var proposal: PairingProposal?
+    var proposal: PairingProposal?
 
     /// Content hashes this connection has been offered, and so the only ones a
     /// `payloadRequest` on it may name.
@@ -52,12 +62,17 @@ public actor SyncResponder {
     /// — nil and non-nil answer it just as well as the bytes would.
     private var offeredHashes: Set<String> = []
 
+    /// - Parameter onLivePush: told about content the peer pushed live, after
+    ///   it has been stored. Defaults to doing nothing, which is what a
+    ///   headless peer wants: `skrepka-sync-probe` stores a live push and has
+    ///   no clipboard to put it on.
     public init(
         connection: SyncConnection,
         session: PairingSession,
         trust: any TrustStore,
         store: any HistoryStoring,
         confirmPairing: @escaping PairingConfirmation,
+        onLivePush: @escaping LivePushSink = { _, _ in },
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.connection = connection
@@ -65,6 +80,7 @@ public actor SyncResponder {
         self.trust = trust
         self.store = store
         self.confirmPairing = confirmPairing
+        self.onLivePush = onLivePush
         self.now = now
     }
 
@@ -92,6 +108,13 @@ public actor SyncResponder {
         }
     }
 
+    /// One message in, whatever it is answered with out.
+    ///
+    /// Split in two along the line the protocol already draws: a message that
+    /// asks this side for something, and a message that tells this side
+    /// something. The second group answers with nothing — a merge is applied,
+    /// not acknowledged — so keeping them apart is also what makes "which
+    /// messages produce a frame" readable at a glance.
     func replies(to message: SyncMessage) async throws -> [SyncMessage] {
         switch message {
         case .pairRequest:
@@ -102,68 +125,57 @@ public actor SyncResponder {
             try await answerIndexRequest(since: cursor)
         case .payloadRequest(let contentHash, let key, let offset):
             [try await answerPayloadRequest(contentHash: contentHash, key: key, offset: offset)]
+        case .ping(let nonce):
+            [.ping(nonce: nonce)]
+        default:
+            try await absorb(message)
+        }
+    }
+
+    /// The messages a peer sends to tell this side something, and the ones it
+    /// has no business sending at all.
+    private func absorb(_ message: SyncMessage) async throws -> [SyncMessage] {
+        switch message {
         case .indexOffer(let items, let tombstones, _):
             try await mergeOffer(items: items, tombstones: tombstones)
         case .tombstone(let tombstones):
             try await mergeOffer(items: [], tombstones: tombstones)
-        case .ping(let nonce):
-            [.ping(nonce: nonce)]
-        case .itemMeta, .payloadChunk, .livePush, .pairConfirm:
-            // Nothing this side asked for. Phase 3 gives the connection a
-            // second reader and these become live-push arrivals; until then a
-            // peer sending one unprompted gets silence rather than a hang-up.
-            // When `itemMeta` and `livePush` do start landing, their metadata
-            // goes through ``InboundClock`` the way ``mergeOffer(items:tombstones:)``
-            // does — a live push carries the same sender-stamped `createdAt`
-            // and pin register an index offer does.
+        case .livePush(let meta, let inline):
+            try await acceptLivePush(meta, inline: inline)
+        default:
+            // `itemMeta`, `payloadChunk` and `pairConfirm`: nothing this side
+            // asked for, and nothing this build sends unprompted, so a peer
+            // sending one gets silence rather than a hang-up. `itemMeta` is
+            // deliberately not wired to the live-push path it resembles — no
+            // sender exists for it, and a handler with no sender is an untested
+            // way into the store.
             []
         }
     }
 
-    /// Turns one `pairRequest` — and only one — into the answer the user chose.
+    /// Stores content a peer pushed live, then tells the sink about it.
     ///
-    /// The certificate handed to ``PairingSession/proposal(for:presentedCertificateDER:now:)``
-    /// is the connection's, not the request's. Under ``PinPolicy/pairing`` the
-    /// verification callback accepts any well-formed leaf, so the certificate in
-    /// the body is a claim and the one on the connection is the only thing the
-    /// peer has proved it holds.
-    private func answerPairRequest(_ message: SyncMessage) async throws -> SyncMessage {
-        guard proposal == nil else {
-            // Closed before throwing, the way ``SyncConnection/receive()``
-            // closes on a policy refusal: a throw alone leaves a peer that has
-            // already misused the connection holding an open socket.
-            await connection.close()
-            throw SyncTransportError.repeatedPairRequest
-        }
-        let proposal = try session.proposal(
-            for: message,
-            presentedCertificateDER: connection.peerCertificateDER,
-            now: now()
-        )
-        self.proposal = proposal
-        let accepted = await confirmPairing(proposal)
-        if accepted {
-            try await trust.savePairedPeer(proposal.peer)
-        }
-        return session.pairConfirm(proposal, accepted: accepted)
-    }
-
-    private func answerHello(_ message: SyncMessage) async throws -> SyncMessage {
-        guard let peer = PeerIdentity(hello: message) else {
-            throw SyncProtocolError.unexpectedMessage(expected: .hello, got: message.type)
-        }
-        guard peer.deviceID == connection.peerDeviceID else {
-            throw PairingError.identityChangedInsideTunnel(
-                before: connection.peerDeviceID,
-                after: peer.deviceID
-            )
-        }
-        try PairingSession.verifyNoDowngrade(
-            offered: peer.protocolVersion,
-            remembered: try await trust.highestProtocolVersion(for: peer.deviceID)
-        )
-        try await trust.recordProtocolVersion(peer.protocolVersion, for: peer.deviceID)
-        return session.localIdentity.hello
+    /// The metadata goes through ``InboundClock`` exactly as an index offer's
+    /// does — a live push carries the same sender-stamped `createdAt` and pin
+    /// register, and a peer whose clock is far ahead must not win every later
+    /// ordering because it arrived on a different message. An implausible push
+    /// is dropped whole and silently, the same answer ``mergeOffer(items:tombstones:)``
+    /// gives.
+    ///
+    /// Stored *before* the sink runs, and the sink's outcome is not consulted:
+    /// putting this on the clipboard is a convenience, keeping it in history is
+    /// the product. A sink that throws or hangs must not cost the row.
+    ///
+    /// Answers with no messages. A live push is applied, not acknowledged — see
+    /// ``SyncInitiator/push(_:payloads:)``.
+    private func acceptLivePush(
+        _ meta: SyncClipMeta,
+        inline: [RepresentationKey: Data]
+    ) async throws -> [SyncMessage] {
+        guard InboundClock.isPlausible(meta, receivedAt: now()) else { return [] }
+        try await store.capture(meta, payloads: inline)
+        await onLivePush(meta, inline)
+        return []
     }
 
     private func answerIndexRequest(since cursor: Date?) async throws -> [SyncMessage] {

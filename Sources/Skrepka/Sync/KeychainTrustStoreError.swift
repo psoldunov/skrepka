@@ -1,8 +1,3 @@
-// periphery:ignore:all
-//
-// The error type of `KeychainTrustStore`, which has no caller until Phase 3 —
-// see the directive at the top of that file for why it is written ahead of one.
-
 import Foundation
 
 /// Why the Keychain could not answer for this device's identity.

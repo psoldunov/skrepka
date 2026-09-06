@@ -89,6 +89,28 @@
             try context.save()
         }
 
+        /// The user's live-push choice for this peer, or
+        /// ``LivePushChoice/followsPlatformDefault`` when they have made none —
+        /// and the same answer for a device that is not paired, which has no
+        /// record to have made one on.
+        public func livePushChoice(for deviceID: SyncDeviceID) throws -> LivePushChoice {
+            LivePushChoice(storedValue: try pairedDeviceRecord(deviceID)?.livePushChoiceRaw)
+        }
+
+        /// Records the user's choice, or clears it back to the platform default.
+        ///
+        /// Does nothing for a device that is not paired: there is no record to
+        /// write on, and inventing one would turn a preference into a trusted
+        /// peer.
+        public func setLivePushChoice(
+            _ choice: LivePushChoice,
+            for deviceID: SyncDeviceID
+        ) throws {
+            guard let record = try pairedDeviceRecord(deviceID) else { return }
+            record.livePushChoiceRaw = choice.storedValue
+            try context.save()
+        }
+
         private func pairedDeviceRecord(_ deviceID: SyncDeviceID) throws -> PairedDeviceRecord? {
             let hex = deviceID.hex
             var descriptor = FetchDescriptor<PairedDeviceRecord>(

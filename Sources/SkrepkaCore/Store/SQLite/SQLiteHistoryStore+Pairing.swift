@@ -130,6 +130,35 @@
             )
         }
 
+        /// The user's live-push choice for this peer, or
+        /// ``LivePushChoice/followsPlatformDefault`` when they have made none —
+        /// and the same answer for a device that is not paired, which has no
+        /// row to have made one on.
+        public func livePushChoice(for deviceID: SyncDeviceID) throws -> LivePushChoice {
+            var stored: String?
+            try database.query(
+                "SELECT live_push_choice FROM paired_device WHERE device_id = ?",
+                [.value(deviceID.hex)]
+            ) { statement in
+                stored = statement.text(0)
+            }
+            return LivePushChoice(storedValue: stored)
+        }
+
+        /// Records the user's choice, or clears it back to the platform default.
+        ///
+        /// Does nothing for a device that is not paired: the `WHERE` matches no
+        /// row, and inventing one would turn a preference into a trusted peer.
+        public func setLivePushChoice(
+            _ choice: LivePushChoice,
+            for deviceID: SyncDeviceID
+        ) throws {
+            try database.run(
+                "UPDATE paired_device SET live_push_choice = ? WHERE device_id = ?",
+                [.value(choice.storedValue), .value(deviceID.hex)]
+            )
+        }
+
         /// Reads a row selected as ``columns``.
         ///
         /// `nil` when the row cannot be trusted to name its own peer. `PairedPeer`

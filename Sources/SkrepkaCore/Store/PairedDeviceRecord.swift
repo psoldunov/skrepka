@@ -43,6 +43,20 @@
         /// `nil` if it has never connected. Only ever raised — see
         /// `HistoryStore.recordProtocolVersion(_:for:)`.
         var highestProtocolSeen: Int?
+        /// `LivePushChoice.rawValue`, or `nil` where the user has expressed no
+        /// preference and design §3's platform default decides.
+        ///
+        /// A column for the same reason ``highestProtocolSeen`` is one: the rest
+        /// of this record is the pinning material, written once at pairing, and
+        /// this is written whenever the user flips a switch. It is stored beside
+        /// the peer rather than in preferences so that forgetting the peer
+        /// forgets the choice — an override keyed by device identifier in
+        /// `UserDefaults` would outlive the pairing and silently re-apply if the
+        /// same machine ever paired again.
+        ///
+        /// Decoded tolerantly, like ``platformRaw``: a value written by a newer
+        /// build reads as "no preference" rather than failing the row.
+        var livePushChoiceRaw: String?
 
         init(
             deviceIDHex: String,
@@ -50,7 +64,8 @@
             platformRaw: String,
             certificateDER: Data,
             pairedAt: Date,
-            highestProtocolSeen: Int?
+            highestProtocolSeen: Int?,
+            livePushChoiceRaw: String? = nil
         ) {
             self.deviceIDHex = deviceIDHex
             self.deviceName = deviceName
@@ -58,6 +73,7 @@
             self.certificateDER = certificateDER
             self.pairedAt = pairedAt
             self.highestProtocolSeen = highestProtocolSeen
+            self.livePushChoiceRaw = livePushChoiceRaw
         }
     }
 

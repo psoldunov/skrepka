@@ -99,4 +99,48 @@ extension HistoryStoringTests {
 
         #expect(try await store.pairedPeers().map(\.deviceName) == ["First", "Second"])
     }
+
+    /// Design §11 puts the live-push toggle on the paired-device record rather
+    /// than in preferences, and the reason is this test's last two assertions: a
+    /// preference keyed by device identifier would outlive the pairing, and
+    /// would silently re-apply if the same machine ever paired again.
+    @Test("A live-push choice is stored against the peer", arguments: HistoryStoreEngine.all)
+    func livePushChoiceIsStoredAgainstThePeer(engine: HistoryStoreEngine) async throws {
+        let store = try await Self.makeStore(engine)
+        let peer = EngineFixtures.peer(named: "Peer")
+        try await store.savePairedPeer(peer)
+
+        // Nothing recorded, so design §3's platform default decides.
+        #expect(try await store.livePushChoice(for: peer.deviceID) == .followsPlatformDefault)
+
+        try await store.setLivePushChoice(.on, for: peer.deviceID)
+        #expect(try await store.livePushChoice(for: peer.deviceID) == .on)
+        try await store.setLivePushChoice(.off, for: peer.deviceID)
+        #expect(try await store.livePushChoice(for: peer.deviceID) == .off)
+
+        // Clearing it goes back to the default rather than to "off".
+        try await store.setLivePushChoice(.followsPlatformDefault, for: peer.deviceID)
+        #expect(try await store.livePushChoice(for: peer.deviceID) == .followsPlatformDefault)
+
+        // Re-pairing does not reset a choice the user made about this machine.
+        try await store.setLivePushChoice(.off, for: peer.deviceID)
+        try await store.savePairedPeer(peer.renamed("Peer, renamed"))
+        #expect(try await store.livePushChoice(for: peer.deviceID) == .off)
+
+        // Forgetting it does, because a forgotten device is a stranger again.
+        try await store.forgetPairedPeer(peer.deviceID)
+        #expect(try await store.livePushChoice(for: peer.deviceID) == .followsPlatformDefault)
+    }
+
+    /// A preference is not a pairing. Writing one for a device nobody has
+    /// approved would create a record out of a setting.
+    @Test("A choice for an unpaired device is not recorded", arguments: HistoryStoreEngine.all)
+    func aChoiceForAStrangerIsNotRecorded(engine: HistoryStoreEngine) async throws {
+        let store = try await Self.makeStore(engine)
+        let stranger = EngineFixtures.peer(named: "Stranger").deviceID
+
+        try await store.setLivePushChoice(.on, for: stranger)
+        #expect(try await store.livePushChoice(for: stranger) == .followsPlatformDefault)
+        #expect(try await store.pairedPeers().isEmpty)
+    }
 }

@@ -47,6 +47,21 @@ struct SettingsView: View {
         }
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
         .background(SettingsBackdrop().ignoresSafeArea())
+        // On the window rather than on the Sync pane: a peer can ask to pair
+        // while the user is looking at any tab, and a sheet attached to a view
+        // that is not on screen never appears.
+        .sheet(
+            item: Binding(
+                get: { coordinator.sync.pendingPairing },
+                set: { if $0 == nil { coordinator.sync.dismissPairing() } }
+            )
+        ) { pairing in
+            PairingSheet(
+                pairing: pairing,
+                confirm: { coordinator.sync.answerPairing(true) },
+                cancel: { coordinator.sync.dismissPairing() }
+            )
+        }
     }
 
     @ViewBuilder
@@ -60,6 +75,8 @@ struct SettingsView: View {
             PrivacySettingsView(preferences: coordinator.preferences) {
                 coordinator.preferencesChanged()
             }
+        case .sync:
+            SyncSettingsView(coordinator: coordinator)
         case .diagnostics:
             DiagnosticsSettingsView(coordinator: coordinator)
         }

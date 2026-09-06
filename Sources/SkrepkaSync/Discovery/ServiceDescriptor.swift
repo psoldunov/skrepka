@@ -32,9 +32,10 @@ public struct ServiceDescriptor: Sendable, Hashable {
         public static let displayName = "name"
         public static let protocolVersion = "proto"
         public static let platform = "plat"
+        public static let pairingPort = "pair"
 
         public static let all: Set<String> = [
-            recordVersion, deviceID, displayName, protocolVersion, platform,
+            recordVersion, deviceID, displayName, protocolVersion, platform, pairingPort,
         ]
     }
 
@@ -59,18 +60,39 @@ public struct ServiceDescriptor: Sendable, Hashable {
     public let platform: PeerPlatform
     public let protocolVersion: ProtocolVersion
 
+    /// The port a peer that has never paired with this device may dial, or
+    /// `nil` while this device is not willing to pair.
+    ///
+    /// A second port because the two listeners cannot be one. ``port`` is
+    /// pinned — its TLS callback accepts only certificates the user has already
+    /// approved — and pairing is by construction a connection from a device
+    /// with nothing pinned, so a listener that accepted both would have to
+    /// accept any well-formed leaf on the port that also serves history. That
+    /// is the failure ``PinPolicy`` exists to prevent; a connection made under
+    /// ``PinPolicy/pairing`` may do nothing but pair, and one listener cannot be
+    /// under two policies.
+    ///
+    /// **Absent is a fact, not a gap.** The pairing listener runs only while the
+    /// user has asked to pair, so an omitted key says "this device is not
+    /// accepting new pairings", which a peer can show rather than fail on. It is
+    /// also the smaller attack surface: a stranger cannot complete a TLS
+    /// handshake at all with a device that is not currently pairing.
+    public let pairingPort: UInt16?
+
     public init(
         displayName: String,
         port: UInt16,
         deviceID: SyncDeviceID,
         platform: PeerPlatform,
-        protocolVersion: ProtocolVersion = .current
+        protocolVersion: ProtocolVersion = .current,
+        pairingPort: UInt16? = nil
     ) {
         self.displayName = ServiceDescriptor.clamped(displayName)
         self.port = port
         self.deviceID = deviceID
         self.platform = platform
         self.protocolVersion = protocolVersion
+        self.pairingPort = pairingPort
     }
 
     /// The record to advertise.
@@ -100,6 +122,9 @@ public struct ServiceDescriptor: Sendable, Hashable {
         entries.append(
             try TXTRecord.Entry(key: Key.protocolVersion, value: String(protocolVersion.rawValue)))
         entries.append(try TXTRecord.Entry(key: Key.platform, value: platform.rawValue))
+        if let pairingPort {
+            entries.append(try TXTRecord.Entry(key: Key.pairingPort, value: String(pairingPort)))
+        }
         return try TXTRecord(entries)
     }
 

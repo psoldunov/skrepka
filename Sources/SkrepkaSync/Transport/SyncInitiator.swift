@@ -4,10 +4,25 @@ import Foundation
 /// fetches a payload.
 ///
 /// Split from ``SyncResponder`` because the two roles read the same stream and
-/// only one of them may hold it at a time. Phase 2 makes the exchange strictly
+/// only one of them may hold it at a time. The exchange is strictly
 /// turn-taking — the initiator asks, the responder answers, nobody interrupts —
-/// which is why neither needs a correlation identifier on messages. Phase 3's
-/// live push is what breaks that and will need one.
+/// which is why neither needs a correlation identifier on messages.
+///
+/// **Live push does not break that, and the reason is which way it travels.**
+/// Phase 2 expected `livePush` to need a correlation identifier, on the
+/// assumption that either end might send one at any time. It does not, because
+/// a device only ever pushes over the connection it *dialled*, where it holds
+/// this role: see ``push(_:payloads:)``. So every unsolicited message on a
+/// connection travels initiator → responder, the responder answers messages one
+/// at a time in arrival order, and `livePush` expects no answer at all — there
+/// is nothing for a reply to be confused with. A `livePush` written between a
+/// request and its reply reaches the peer's responder loop as an ordinary
+/// message and produces no frame in return.
+///
+/// The alternative — one connection per pair, demultiplexed by message type —
+/// cannot disambiguate `hello`, `indexOffer` and `ping`, all of which are legal
+/// in both directions. That is what would have needed a correlation identifier,
+/// a wire change and a protocol v2 on the phase that first ships this to users.
 ///
 /// ``pair(at:)`` is the only method a ``PinPolicy/pairing`` connection reaches
 /// the end of. The rest throw
@@ -132,7 +147,42 @@ public actor SyncInitiator {
             remembered: try await trust.highestProtocolVersion(for: peer.deviceID)
         )
         try await trust.recordProtocolVersion(peer.protocolVersion, for: peer.deviceID)
+        // The name and platform a `pairRequest` never carried to this side. See
+        // ``PairedDeviceStoring/refreshPeerIdentity(_:)`` — without it the
+        // device that dialled to pair holds `unknown` as the peer's platform,
+        // and never pushes to it.
+        try await trust.refreshPeerIdentity(peer)
         return peer
+    }
+
+    // MARK: - Live push
+
+    /// Hands the peer what was just copied here.
+    ///
+    /// Sends and returns; there is no acknowledgement to wait for. A live push
+    /// the peer drops costs the user one clipboard handoff, and the item is
+    /// still in the index the next sync exchanges — so an acknowledgement would
+    /// buy nothing and would put a round trip on the path design §11 asks to
+    /// keep clear.
+    ///
+    /// `payloads` are the bytes as this device holds them.
+    /// ``LivePushPayload/inline(_:)`` decides which of them travel: under
+    /// ``SyncLimits/livePushInlineLimit`` in total they ride along, above it the
+    /// frame carries metadata alone and the peer fetches what it wants. The
+    /// caller does not make that call, so a 20 MB screenshot cannot block the
+    /// live channel because one call site forgot to check.
+    ///
+    /// **Safe to call while a request of this actor's is in flight**, and
+    /// deliberately not serialised against one: blocking a live push behind a
+    /// full index exchange is the delay this whole message exists to avoid. See
+    /// the type's note on why interleaving is safe —
+    /// ``SyncConnection/send(_:)`` is actor-isolated, so two frames cannot
+    /// interleave *within* a message, and a `livePush` between two messages is
+    /// just the next thing the peer's responder loop reads.
+    public func push(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async throws {
+        try await connection.send(
+            .livePush(meta: meta, inline: LivePushPayload.inline(payloads))
+        )
     }
 
     // MARK: - Index and payload

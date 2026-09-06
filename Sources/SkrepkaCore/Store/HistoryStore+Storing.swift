@@ -69,7 +69,7 @@
                 )
                 return
             }
-            let representations = Self.representations(from: payloads)
+            let representations = RepresentationKeyMap.utiKeyed(payloads)
             if let existing = try recordMatching(contentHash: meta.contentHash) {
                 try fillPayload(of: existing, with: representations)
                 return
@@ -125,20 +125,6 @@
         /// the canonical mapping is the fallback that answers either way.
         private static func localTypes(for key: RepresentationKey) -> [String] {
             [key.origin, RepresentationKeyMap.uti(forCanonical: key.canonical)].compactMap { $0 }
-        }
-
-        /// Wire-keyed payload bytes to a pasteboard-keyed payload.
-        ///
-        /// A key with no macOS type is dropped rather than stored under an invented
-        /// one: `RepresentationKeyMap` refusing to name it means no pasteboard here
-        /// can serve those bytes, and a row claiming otherwise would paste garbage.
-        private static func representations(from payloads: [RepresentationKey: Data]) -> [String: Data] {
-            var result: [String: Data] = [:]
-            for (key, data) in payloads {
-                guard let uti = RepresentationKeyMap.uti(forCanonical: key.canonical) else { continue }
-                result[uti] = data
-            }
-            return result
         }
     }
 

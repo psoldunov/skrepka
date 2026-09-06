@@ -133,7 +133,13 @@ struct LoopbackHarness {
         return ConnectedPair(server: server, serverSide: serverSide, client: client)
     }
 
-    func responder(for connection: SyncConnection) -> SyncResponder {
+    /// - Parameter onLivePush: told about content a peer pushed live. Defaults
+    ///   to doing nothing, which is what every test that is not about live push
+    ///   wants.
+    func responder(
+        for connection: SyncConnection,
+        onLivePush: @escaping LivePushSink = { _, _ in }
+    ) -> SyncResponder {
         SyncResponder(
             connection: connection,
             session: PairingSession(
@@ -143,6 +149,7 @@ struct LoopbackHarness {
             trust: serverTrust,
             store: serverStore,
             confirmPairing: { _ in true },
+            onLivePush: onLivePush,
             now: { now }
         )
     }

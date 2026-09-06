@@ -1,14 +1,3 @@
-// periphery:ignore:all
-//
-// Nothing constructs this until Phase 3 wires the sync stack into
-// AppCoordinator. It is the macOS `TrustStore` conformance, deliberately written
-// ahead of its caller: `SkrepkaSync` cannot name it, because that target has to
-// build on Linux, so the app target is the only place it can live — and an app
-// target exports no public API for `retain_public` to keep. Deleting it to
-// satisfy the scan would delete the reason `TrustStore` is a protocol at all.
-//
-// Remove this directive when AppCoordinator constructs one.
-
 import Foundation
 import Security
 import SkrepkaSync
@@ -81,6 +70,14 @@ nonisolated final class KeychainTrustStore: TrustStore {
 
     func recordProtocolVersion(_ version: ProtocolVersion, for deviceID: SyncDeviceID) async throws {
         try await peers.recordProtocolVersion(version, for: deviceID)
+    }
+
+    func livePushChoice(for deviceID: SyncDeviceID) async throws -> LivePushChoice {
+        try await peers.livePushChoice(for: deviceID)
+    }
+
+    func setLivePushChoice(_ choice: LivePushChoice, for deviceID: SyncDeviceID) async throws {
+        try await peers.setLivePushChoice(choice, for: deviceID)
     }
 
     // MARK: - Keychain

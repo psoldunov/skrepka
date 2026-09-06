@@ -53,6 +53,8 @@ protocol HistoryStoreConforming: Sendable {
     func forgetPairedPeer(_ deviceID: SyncDeviceID) async throws
     func highestProtocolVersion(for deviceID: SyncDeviceID) async throws -> ProtocolVersion?
     func recordProtocolVersion(_ version: ProtocolVersion, for deviceID: SyncDeviceID) async throws
+    func livePushChoice(for deviceID: SyncDeviceID) async throws -> LivePushChoice
+    func setLivePushChoice(_ choice: LivePushChoice, for deviceID: SyncDeviceID) async throws
 }
 
 // MARK: - Conformances

@@ -34,6 +34,7 @@ let package = Package(
         // instead" — and the fallback is exactly the everything-build this
         // product exists to avoid, KeyboardShortcuts and all.
         .library(name: "SkrepkaLinux", type: .static, targets: ["SkrepkaCore", "SkrepkaSync"]),
+        .executable(name: "skrepka-sync-probe", targets: ["skrepka-sync-probe"]),
     ],
     dependencies: [
         // SHA-256 for device identity and the short authentication string.
@@ -102,15 +103,44 @@ let package = Package(
             name: "SkrepkaCoreTests",
             dependencies: [
                 "SkrepkaCore", "SkrepkaSync",
+                // `ProbeContentHashTests` is the one test that links the probe
+                // and the real store, because the probe reproduces
+                // `ClipItem.contentHash` without being able to see it.
+                "SkrepkaProbe",
                 // `ClipItemTests` pins `contentHash` to literal digests on both
                 // platforms, so it needs the same SHA-256 `ClipItem` linked.
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
             ],
             swiftSettings: sharedSwiftSettings
         ),
+        // A headless second peer, for exercising sync by hand. Depends on
+        // `SkrepkaSync` and deliberately *not* on `SkrepkaCore`, so it stays
+        // buildable on Linux and becomes the Phase 6 smoke-test binary for
+        // free — and so it can never accidentally reach a pasteboard, which is
+        // the whole point of it.
+        //
+        // A library plus a thin executable rather than one executable target:
+        // `swift test` cannot import an executable, and `ProbeStore` is the
+        // second `HistoryStoring` conformance the shared contract suite runs
+        // against.
+        .target(
+            name: "SkrepkaProbe",
+            dependencies: [
+                "SkrepkaSync",
+                // The probe reproduces `ClipItem`'s content hash, which is
+                // SHA-256, so it needs the same implementation linked.
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
+            swiftSettings: sharedSwiftSettings
+        ),
+        .executableTarget(
+            name: "skrepka-sync-probe",
+            dependencies: ["SkrepkaProbe"],
+            swiftSettings: sharedSwiftSettings
+        ),
         .testTarget(
             name: "SkrepkaSyncTests",
-            dependencies: ["SkrepkaSync"],
+            dependencies: ["SkrepkaSync", "SkrepkaProbe"],
             swiftSettings: sharedSwiftSettings
         ),
     ]

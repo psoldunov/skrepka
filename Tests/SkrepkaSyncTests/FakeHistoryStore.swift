@@ -23,15 +23,19 @@ actor FakeHistoryStore: HistoryStoring {
         self.payloads = payloads
     }
 
+    /// Strictly after the cursor, which is what `HistoryStoring` states and
+    /// what all three real engines do. This fake was inclusive until
+    /// ``HistoryStoringContractTests`` ran the same assertion against it and the
+    /// probe store — which is exactly what a shared suite is for.
     func syncIndex(since cursor: Date?) -> [SyncClipMeta] {
         items.values
-            .filter { item in !item.isConcealed && (cursor.map { $0 <= item.createdAt } ?? true) }
+            .filter { item in !item.isConcealed && (cursor.map { item.createdAt > $0 } ?? true) }
             .sorted { $0.contentHash < $1.contentHash }
     }
 
     func tombstones(since cursor: Date?) -> [Tombstone] {
         deletions.values
-            .filter { tombstone in cursor.map { $0 <= tombstone.deletedAt } ?? true }
+            .filter { tombstone in cursor.map { tombstone.deletedAt > $0 } ?? true }
             .sorted { $0.contentHash < $1.contentHash }
     }
 
@@ -52,9 +56,13 @@ actor FakeHistoryStore: HistoryStoring {
         return payloads[contentHash]?[key]
     }
 
+    /// Bytes already held are kept. A peer can name content this device
+    /// captured itself, so an offer that overwrote would let it substitute its
+    /// own bytes under a hash that still matches the original — see
+    /// ``HistoryStoring/capture(_:payloads:)``.
     func capture(_ meta: SyncClipMeta, payloads newPayloads: [RepresentationKey: Data]) {
         items[meta.contentHash] = items[meta.contentHash]?.combining(meta) ?? meta
-        payloads[meta.contentHash, default: [:]].merge(newPayloads) { _, new in new }
+        payloads[meta.contentHash, default: [:]].merge(newPayloads) { held, _ in held }
     }
 
     func applyRemote(_ actions: [MergeAction]) {

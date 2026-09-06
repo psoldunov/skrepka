@@ -33,6 +33,7 @@ public enum SkrepkaLog {
     public static let paste = make(category: "paste")
     public static let panel = make(category: "panel")
     public static let permissions = make(category: "permissions")
+    public static let sync = make(category: "sync")
 
     private static func make(category: String) -> Logger {
         #if canImport(os)

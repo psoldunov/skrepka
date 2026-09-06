@@ -47,6 +47,13 @@
         /// ``PairedDeviceRecord/highestProtocolSeen`` is untouched. Re-pairing must
         /// not reset the anti-downgrade mark, or forcing one re-pair would be
         /// enough to erase it.
+        ///
+        /// ``PairedDeviceRecord/livePushChoiceRaw`` is untouched too, for a
+        /// gentler reason: a peer re-running the pairing exchange — a reinstall,
+        /// a second confirmation — is the same machine the user already made a
+        /// decision about, and silently re-enabling live push on it is the one
+        /// direction of that mistake the user cannot see. Forgetting the peer is
+        /// what clears the choice.
         static func update(_ record: PairedDeviceRecord, from peer: PairedPeer) {
             record.deviceIDHex = peer.deviceID.hex
             record.deviceName = peer.deviceName

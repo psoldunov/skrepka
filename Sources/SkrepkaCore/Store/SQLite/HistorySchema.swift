@@ -23,14 +23,17 @@
         /// - 1: the original three tables.
         /// - 2: `clip.content_byte_count`, following `ClipRecord.byteCount` onto
         ///   this engine.
+        /// - 3: `paired_device.live_push_choice`, following
+        ///   `PairedDeviceRecord.livePushChoiceRaw`.
         ///
         /// The Linux store still has no installed base
-        /// ([D-8](../../../docs/linux-sync/open-questions.md)), so v2 is reached
-        /// almost only by a fresh `CREATE TABLE`. ``migrations`` exists anyway
+        /// ([D-8](../../../docs/linux-sync/open-questions.md)), so the current
+        /// version is reached almost only by a fresh `CREATE TABLE`.
+        /// ``migrations`` exists anyway
         /// because a developer's own store from last week is exactly the database
         /// `CREATE TABLE IF NOT EXISTS` would silently leave a column short, and
         /// every insert against it would then fail on a column name.
-        static let version = 2
+        static let version = 3
 
         /// Applied to the connection before anything else touches it.
         ///
@@ -142,7 +145,8 @@
                 platform_raw TEXT NOT NULL,
                 certificate_der BLOB NOT NULL,
                 paired_at REAL NOT NULL,
-                highest_protocol_seen INTEGER
+                highest_protocol_seen INTEGER,
+                live_push_choice TEXT
             );
             """
 
@@ -159,7 +163,8 @@
         /// columns in different orders and nothing here cares, since every
         /// statement names the columns it wants through `SQLiteClipRow.columns`.
         static let migrations: [Int: String] = [
-            2: "ALTER TABLE clip ADD COLUMN content_byte_count INTEGER"
+            2: "ALTER TABLE clip ADD COLUMN content_byte_count INTEGER",
+            3: "ALTER TABLE paired_device ADD COLUMN live_push_choice TEXT",
         ]
 
         /// Opens the schema on a fresh or existing connection.

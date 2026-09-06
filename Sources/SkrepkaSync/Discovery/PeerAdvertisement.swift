@@ -35,9 +35,21 @@ public struct PeerAdvertisement: Sendable, Hashable {
     /// ``speaksAKnownProtocolVersion`` before deciding what to send it.
     public let protocolVersion: ProtocolVersion
 
+    /// The port to dial to pair with this peer, or `nil` where it advertised
+    /// none.
+    ///
+    /// Absent means the peer is not accepting new pairings — see
+    /// ``ServiceDescriptor/pairingPort``. That is a thing to tell the user
+    /// rather than a reason to hide the peer, so it is optional here and never
+    /// throws for being missing.
+    public let pairingPort: UInt16?
+
     /// Keys the peer advertised that this build has no meaning for, lowercased
     /// and sorted. Worth logging; not worth refusing over.
     public let unrecognisedKeys: [String]
+
+    /// Whether this peer says it will accept a pairing dial right now.
+    public var isAcceptingPairing: Bool { pairingPort != nil }
 
     /// Whether this build has heard of the peer's protocol version.
     public var speaksAKnownProtocolVersion: Bool { protocolVersion <= .current }
@@ -50,12 +62,14 @@ public struct PeerAdvertisement: Sendable, Hashable {
         displayName: String?,
         platform: PeerPlatform,
         protocolVersion: ProtocolVersion,
+        pairingPort: UInt16? = nil,
         unrecognisedKeys: [String] = []
     ) {
         self.deviceID = deviceID
         self.displayName = displayName
         self.platform = platform
         self.protocolVersion = protocolVersion
+        self.pairingPort = pairingPort
         self.unrecognisedKeys = unrecognisedKeys
     }
 }
@@ -104,8 +118,30 @@ extension PeerAdvertisement {
             displayName: displayName,
             platform: platform.map(PeerPlatform.init(wireValue:)) ?? .unknown,
             protocolVersion: ProtocolVersion(rawValue: number),
+            pairingPort: try PeerAdvertisement.pairingPort(in: record),
             unrecognisedKeys: record.keys(outside: ServiceDescriptor.Key.all)
         )
+    }
+
+    /// The `pair=` port, or nil when the peer advertised none.
+    ///
+    /// Absent is ordinary — the peer is not pairing right now. Present and
+    /// unparseable is not: a key that is there but does not name a port is a
+    /// record this build cannot act on, and reading it as "not pairing" would
+    /// hide a broken peer behind an ordinary-looking state. Zero is refused with
+    /// the rest, since no listener binds it.
+    private static func pairingPort(in record: TXTRecord) throws -> UInt16? {
+        guard
+            let raw = try PeerAdvertisement.string(
+                in: record, for: ServiceDescriptor.Key.pairingPort, required: false)
+        else { return nil }
+        guard let port = UInt16(raw), port > 0 else {
+            throw AdvertisementError.malformedValue(
+                key: ServiceDescriptor.Key.pairingPort,
+                reason: "not a TCP port"
+            )
+        }
+        return port
     }
 
     /// Reads the record's raw bytes, for a caller holding the DNS-SD wire form

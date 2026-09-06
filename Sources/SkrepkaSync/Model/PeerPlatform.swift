@@ -34,8 +34,11 @@ public enum PeerPlatform: String, Sendable, Hashable, Codable, CaseIterable {
     /// Linux one, and the failure mode of guessing wrong in that direction is a
     /// feature the user has to switch on rather than a pasteboard collision the
     /// user cannot diagnose.
+    ///
+    /// Answers from ``LivePushDefault/between(local:remote:)``, which carries
+    /// the same rule plus the reason a settings row has to state. Two spellings
+    /// of one rule is one rule and one bug.
     public static func livePushDefaultsOn(local: PeerPlatform, remote: PeerPlatform) -> Bool {
-        guard local != .unknown, remote != .unknown else { return false }
-        return !(local == .macos && remote == .macos)
+        LivePushDefault.between(local: local, remote: remote).isOn
     }
 }
