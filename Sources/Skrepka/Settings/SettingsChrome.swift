@@ -1,29 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Shared furniture for the settings window.
-///
-/// The window is transparent and vibrant, with glass cards floating on it —
-/// so the chrome here is what carries the material, not a `Form`.
-enum SettingsMetrics {
-    static let cornerRadius: CGFloat = 14
-    static let cardSpacing: CGFloat = 18
-    static let horizontalPadding: CGFloat = 22
-    static let rowHorizontalPadding: CGFloat = 14
-    static let rowVerticalPadding: CGFloat = 10
-    /// The longest label any permission row's trailing control shows.
-    ///
-    /// ``PermissionControl`` renders this invisibly behind every one of them to
-    /// size the slot, so the width is measured rather than guessed. Add a
-    /// longer label anywhere and this is the one line to update.
-    static let widestPermissionLabel = "Open Settings"
-
-    /// The type every small control in a card is set in — buttons, the shortcut
-    /// readout, Done. Shared so ``PermissionControl``'s invisible sizer measures
-    /// exactly what the visible button renders.
-    static let controlFont = Font.system(size: 12, weight: .medium)
-}
-
 /// Puts a view on a glass surface.
 ///
 /// Applied to the content itself, never via `.background`: a glass background

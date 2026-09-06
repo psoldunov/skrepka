@@ -216,8 +216,8 @@ final class AppCoordinator {
 
     /// The app a paste should go to, or nil when there is nobody sensible.
     ///
-    /// Skrepka itself has to be rejected: Settings, the clear-history alert and
-    /// the paste-failed notice all call `NSApp.activate()`, so the hotkey can
+    /// Skrepka itself has to be rejected: the clear-history alert and the
+    /// paste-failed notice both call `NSApp.activate()`, so the hotkey can
     /// easily be pressed while Skrepka is frontmost. Pasting into Skrepka would
     /// activate it, send ⌘V nowhere, and report success — the user loses their
     /// original app *and* the paste. Nil instead makes `PasteService` say so.

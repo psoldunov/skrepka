@@ -15,7 +15,12 @@ struct SettingsView: View {
     /// The height is General's — the tallest pane — plus its bottom padding and
     /// nothing else. Panes that grow past it (the exclusion list, or General
     /// once a permission notice appears) scroll.
-    static let windowSize = CGSize(width: 560, height: 460)
+    ///
+    /// It moves with ``SettingsMetrics/tabBarTopPadding``: dropping the tab bar
+    /// clear of the traffic lights pushes every pane down by the same amount,
+    /// and a window left at its old height would have started scrolling
+    /// General to pay for it.
+    static let windowSize = CGSize(width: 560, height: 471)
 
     let coordinator: AppCoordinator
     /// Owned by the window controller so `show(tab:)` can jump straight to a
@@ -26,11 +31,11 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsTabBar(selection: $selection)
-                // Sits in the title bar band, level with the traffic lights,
-                // the way a toolbar would — anything lower leaves an empty
-                // strip across the top of the window.
-                .padding(.top, 9)
-                .padding(.bottom, 16)
+                // Below the title bar band rather than level with it: the bar
+                // is centred and five tabs wide, so it now reaches back across
+                // the traffic lights.
+                .padding(.top, SettingsMetrics.tabBarTopPadding)
+                .padding(.bottom, SettingsMetrics.tabBarBottomPadding)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
@@ -39,6 +44,10 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, SettingsMetrics.horizontalPadding)
                 .padding(.bottom, 24)
+                // Inside the content, so it reaches this scroll view rather
+                // than one further out. Keeps every pane the same width whether
+                // or not it is tall enough to show a scroller.
+                .scrollerGutter()
             }
             // Only bounces when a pane is genuinely taller than the window —
             // the exclusion list is the one that grows.
