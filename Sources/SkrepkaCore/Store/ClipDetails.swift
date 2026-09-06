@@ -19,6 +19,9 @@ struct ClipDetails: Sendable, Hashable {
     /// The scaled picture and the original's pixel dimensions, or nil when the
     /// entry is not something Skrepka can draw.
     let preview: ThumbnailMaker.Preview?
+    /// One picture per file for the row's stack, front first, or nil when the
+    /// entry holds too few files to stack — see ``FileIconStack``.
+    let stackIcons: [Data]?
     /// Size of the copied content — see ``ContentSize`` for which kinds have
     /// one and when it cannot be measured.
     let byteCount: Int?

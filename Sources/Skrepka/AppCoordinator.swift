@@ -187,7 +187,7 @@ final class AppCoordinator {
     private func choose(_ item: ClipSummary, style: PasteStyle) {
         panelController.dismiss()
 
-        guard let payload = store.payload(for: item.id) else {
+        guard let contents = store.contents(for: item.id) else {
             presentNotice("That entry could not be loaded.")
             return
         }
@@ -202,7 +202,7 @@ final class AppCoordinator {
             await poller.pause()
             let outcome = await pasteService.deliver(
                 PasteService.Request(
-                    payload: payload,
+                    contents: contents,
                     plainText: item.text,
                     style: style,
                     sourceBundleID: item.sourceBundleID,

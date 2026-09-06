@@ -25,7 +25,8 @@ public struct PasteboardReader: Sendable {
     /// instead of silent.
     public func read(sourceBundleID: String?) -> PasteboardRead {
         let pasteboard = NSPasteboard.general
-        guard let item = pasteboard.pasteboardItems?.first else { return .unreadable }
+        let items = pasteboard.pasteboardItems ?? []
+        guard let item = items.first else { return .unreadable }
 
         let declaredTypes = item.types.map(\.rawValue)
         // Check the markers before reading a single byte of content.
@@ -49,9 +50,31 @@ public struct PasteboardReader: Sendable {
             PasteboardSnapshot(
                 representations: representations,
                 declaredTypes: declaredTypes,
+                fileURLs: Self.fileURLs(in: items),
                 sourceBundleID: sourceBundleID
             )
         )
+    }
+
+    /// The file URL every item on the pasteboard points at.
+    ///
+    /// Reading past the first item is what makes a copy of several files one
+    /// entry that knows it holds several — the first item is the only one the
+    /// payload keeps. One string per item and no bytes off disk, so the poller's
+    /// tick pays a cheap IPC round trip per file rather than a read.
+    ///
+    /// Items carrying no file URL are skipped rather than counted, so a copy
+    /// that mixes a file with something else does not claim a file it has not
+    /// got. A URL string that will not parse as a file URL is skipped for the
+    /// same reason — any app may put anything under that type.
+    static func fileURLs(in items: [NSPasteboardItem]) -> [URL] {
+        let fileURLType = NSPasteboard.PasteboardType(PasteboardType.fileURL)
+        return items.compactMap { item in
+            guard let string = item.string(forType: fileURLType),
+                let url = URL(string: string), url.isFileURL
+            else { return nil }
+            return url
+        }
     }
 
     /// The system's current policy for programmatic reads of the general

@@ -86,7 +86,22 @@ public final class HistoryStore {
                 // measurement is kept when this one came back empty, so a moved
                 // file does not lose the size it was copied at.
                 existing.byteCount = details.byteCount ?? existing.byteCount
+                // A file entry stored before Skrepka kept the files it holds has
+                // none listed, and it was named from the pasteboard's own text
+                // rather than from its files — a Finder copy of three wrote
+                // three display names there while only the first was ever kept.
+                // Landing here proves this copy holds the same files the row
+                // does: the hash covers every one of them, see
+                // ``ClipItem/hash(kind:text:payload:fileURLs:)``. So both are
+                // written, and together. Writing the list alone left the row
+                // naming three files under a label that said one, and pasting
+                // the one.
+                if item.kind.isFileSystemEntry, !item.fileURLs.isEmpty {
+                    existing.fileURLStrings = item.fileURLs.map(\.absoluteString)
+                    existing.text = item.text
+                }
                 backfillPreview(details.preview, into: existing)
+                backfillStack(details.stackIcons, into: existing)
                 try context.save()
                 reload()
                 return true
@@ -121,13 +136,31 @@ public final class HistoryStore {
         record.imageHeight = preview.pixelSize?.height
     }
 
+    /// Gives a row the stack of file icons it was stored without.
+    ///
+    /// Every entry captured before stacks existed has none, and so does one
+    /// whose files were unreadable at the time. Same rule as the preview beside
+    /// it — a repeat copy is the only thing that revisits a row — with one
+    /// difference: a stack that is already there is replaced rather than kept,
+    /// because the row's file list is replaced in the same breath, and a stack
+    /// left over from the previous copy would picture files this row no longer
+    /// holds.
+    private func backfillStack(_ icons: [Data]?, into record: ClipRecord) {
+        guard let icons else { return }
+        record.stackIcons = icons
+    }
+
     // MARK: - Reading
 
-    /// Loads an entry's full payload. Only called when something is pasted.
-    public func payload(for id: UUID) -> ClipPayload? {
+    /// Loads everything an entry needs to be pasted. Only called when something
+    /// is pasted.
+    public func contents(for id: UUID) -> ClipContents? {
         do {
             guard let record = try record(withID: id) else { return nil }
-            return try ClipRecordMapping.decodePayload(record.payloadData)
+            return ClipContents(
+                payload: try ClipRecordMapping.decodePayload(record.payloadData),
+                fileURLs: ClipRecordMapping.fileURLs(from: record)
+            )
         } catch {
             SkrepkaLog.store.error("Failed to load payload: \(error.localizedDescription)")
             return nil

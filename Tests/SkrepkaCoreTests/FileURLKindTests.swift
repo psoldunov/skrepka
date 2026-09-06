@@ -31,10 +31,58 @@ struct FileURLKindTests {
 
     @Test("A regular file is a file")
     func regularFileIsFile() throws {
-        let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+        let url = try Fixtures.writeTextFile(named: "notes.txt")
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
         #expect(FileURLKind.kind(ofFileAt: url) == .file)
+    }
+
+    @Test("A picture on disk is an image, not a file")
+    func imageFileIsImage() throws {
+        // The bug: a screenshot copied out of Finder arrives as a
+        // `public.file-url`, so the row read "File" beside its own preview.
+        let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        #expect(FileURLKind.kind(ofFileAt: url) == .imageFile)
+    }
+
+    @Test("A selection of pictures is images; a mixed one is files")
+    func selectionTakesTheSharedKind() throws {
+        let first = try Fixtures.writePNG(width: 2, height: 2, named: "one.png")
+        let second = try Fixtures.writePNG(width: 3, height: 3, named: "two.png")
+        let text = try Fixtures.writeTextFile(named: "notes.txt")
+        defer {
+            for url in [first, second, text] {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
+
+        #expect(FileURLKind.kind(ofFilesAt: [first, second]) == .imageFile)
+        #expect(FileURLKind.kind(ofFilesAt: [first, text]) == .file)
+        #expect(FileURLKind.kind(ofFilesAt: []) == nil)
+    }
+
+    @Test("A selection that runs out of budget answers nothing at all")
+    func selectionOutOfBudgetIsNil() throws {
+        // Not `.file`: nil is what "I could not look" has to mean, because
+        // ``HistoryStore`` writes a refined kind onto an existing row only when
+        // one came back. Answering `.file` here downgraded a row already reading
+        // "300 Images" the first time that copy was made off a slow volume.
+        let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        #expect(FileURLKind.kind(ofFilesAt: [url], deadline: .zero) == nil)
+        #expect(FileURLKind.kind(ofFilesAt: [url]) == .imageFile)
+    }
+
+    @Test("A selection nothing in it can be described answers nothing at all")
+    func unanswerableSelectionIsNil() throws {
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = directory.appending(path: "gone", directoryHint: .notDirectory)
+
+        #expect(FileURLKind.kind(ofFilesAt: [missing, missing]) == nil)
     }
 
     @Test("A path the disk will not describe answers nothing at all")

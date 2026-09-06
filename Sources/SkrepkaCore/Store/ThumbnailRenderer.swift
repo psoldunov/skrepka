@@ -26,19 +26,54 @@ public actor ThumbnailRenderer {
     /// ``ClipKind/canPreview`` and ``ContentSize``.
     func details(for item: ClipItem) -> ClipDetails {
         let kind = refinedKind(for: item)
+        // The refined kind, so a directory that turned out to be a plain
+        // folder is never opened looking for a picture it cannot hold.
+        let preview = (kind ?? item.kind).canPreview ? maker.makePreview(from: item.payload) : nil
         return ClipDetails(
-            kind: kind,
-            // The refined kind, so a directory that turned out to be a plain
-            // folder is never opened looking for a picture it cannot hold.
-            preview: (kind ?? item.kind).canPreview ? maker.makePreview(from: item.payload) : nil,
+            kind: Self.kind(kind, provenPictureBy: preview, fileCount: item.fileURLs.count),
+            preview: preview,
+            stackIcons: stackIcons(for: item),
             byteCount: ContentSize.byteCount(of: item)
         )
     }
 
-    /// What the entry's file URL actually points at, for the one kind the
-    /// capture rules cannot settle on their own.
+    /// The pictures a row holding several files draws as a stack, or nil when
+    /// the entry holds one file or none.
+    ///
+    /// Nil rather than an empty array, for the reason every part of
+    /// ``ClipDetails`` is optional: a row already carrying a stack must not lose
+    /// it to a later copy that could produce none.
+    private func stackIcons(for item: ClipItem) -> [Data]? {
+        guard item.fileURLs.count > 1 else { return nil }
+        let icons = FileIconStack.icons(forFilesAt: item.fileURLs)
+        return icons.isEmpty ? nil : icons
+    }
+
+    /// What the entry's files actually turn out to be, for the kinds the capture
+    /// rules cannot settle on their own.
     private func refinedKind(for item: ClipItem) -> ClipKind? {
-        guard item.kind.isFileSystemEntry, let url = item.payload.fileURL else { return nil }
-        return FileURLKind.kind(ofFileAt: url)
+        guard item.kind.isFileSystemEntry, !item.fileURLs.isEmpty else { return nil }
+        return FileURLKind.kind(ofFilesAt: item.fileURLs)
+    }
+
+    /// Upgrades a plain file to ``ClipKind/imageFile`` once a picture has
+    /// actually been drawn out of it.
+    ///
+    /// ``FileURLKind`` answers from the file's declared type, which a file with
+    /// no extension does not have — it reports the generic `public.data`, and a
+    /// screenshot saved without one would read "File" under its own preview. A
+    /// rendered thumbnail is the stronger evidence, and by here it exists.
+    ///
+    /// Only a lone file is upgraded: the preview of a selection is a picture of
+    /// its first file, which says nothing about the ones behind it, and a row
+    /// reading "4 Images" for one screenshot and three spreadsheets is a worse
+    /// lie than the "4 Files" it would replace.
+    static func kind(
+        _ kind: ClipKind?,
+        provenPictureBy preview: ThumbnailMaker.Preview?,
+        fileCount: Int
+    ) -> ClipKind? {
+        guard kind == .file, fileCount == 1, preview != nil else { return kind }
+        return .imageFile
     }
 }

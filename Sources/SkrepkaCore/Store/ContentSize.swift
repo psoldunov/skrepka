@@ -15,14 +15,36 @@ enum ContentSize {
     /// ``DirectorySize/deadline``.
     static func byteCount(of item: ClipItem) -> Int? {
         switch item.kind {
-        case .file, .folder:
-            guard let url = item.payload.fileURL else { return nil }
-            return byteCount(ofFileAt: url)
+        case .file, .folder, .imageFile:
+            return byteCount(ofFilesAt: item.fileURLs)
         case .image:
             return imageByteCount(in: item.payload)
         case .text, .richText, .link:
             return nil
         }
+    }
+
+    /// What a whole copied selection weighs, or nil when any part of it cannot
+    /// be measured.
+    ///
+    /// All or nothing on purpose, and for the reason ``DirectorySize`` gives:
+    /// the sum of two files out of three is a wrong number that looks like a
+    /// right one, and a row reading "1.2 MB" for a copy of 4 GB is worse than a
+    /// row that says nothing about size. A selection too long to finish inside
+    /// ``FileSelection/deadline`` stops for the same reason.
+    static func byteCount(ofFilesAt urls: [URL], deadline: Duration = FileSelection.deadline) -> Int? {
+        guard !urls.isEmpty else { return nil }
+
+        let clock = ContinuousClock()
+        let start = clock.now
+        var total = 0
+
+        for url in urls {
+            if clock.now - start > deadline { return nil }
+            guard let size = byteCount(ofFileAt: url) else { return nil }
+            total += size
+        }
+        return total
     }
 
     /// The file's own size, or the sum of a directory's contents.

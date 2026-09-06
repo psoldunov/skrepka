@@ -21,8 +21,13 @@ enum PickerMetrics {
         searchFieldHeight + footerHeight + separatorHeight * 2
     }
 
+    /// A row is tall when it draws something worth looking at: a picture, or the
+    /// stack of icons a copy of several files gets. Both need the height; a kind
+    /// symbol does not, and text rows stay compact because most rows are text.
     static func rowHeight(for item: ClipSummary) -> CGFloat {
-        item.thumbnail != nil && !item.isConcealed ? imageRowHeight : standardRowHeight
+        guard !item.isConcealed else { return standardRowHeight }
+        return item.thumbnail != nil || !item.stackIcons.isEmpty
+            ? imageRowHeight : standardRowHeight
     }
 
     /// Height the panel wants for these results, before the screen clamps it.

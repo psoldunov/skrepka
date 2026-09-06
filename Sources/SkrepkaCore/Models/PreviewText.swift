@@ -11,13 +11,17 @@ enum PreviewText {
     /// Shown in place of anything a password manager marked concealed.
     static let concealedMask = "••••••••"
 
-    /// Newlines collapsed to single spaces and blank lines dropped, or nil when
-    /// nothing survives — the caller decides what to show instead.
-    static func collapsed(_ text: String) -> String? {
+    /// Newlines collapsed and blank lines dropped, or nil when nothing survives
+    /// — the caller decides what to show instead.
+    ///
+    /// - Parameter separator: what the surviving lines are joined with. A space
+    ///   for prose, which is one thing wrapped; a comma for a list of file
+    ///   names, which is several things.
+    static func collapsed(_ text: String, separator: String = " ") -> String? {
         let joined = text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-            .joined(separator: " ")
+            .joined(separator: separator)
         return joined.isEmpty ? nil : joined
     }
 }

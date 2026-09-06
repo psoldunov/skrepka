@@ -57,15 +57,15 @@ struct ClipRowView: View {
     }
 
     private var subtitle: Text {
-        var parts: [String] = [item.kind.displayName]
-        if let imageSize = item.imageSize {
-            parts.append(imageSize.description)
+        var parts: [String] = [item.typeLabel]
+        if let imageSizeText = item.imageSizeText {
+            parts.append(imageSizeText)
         }
         if let sizeText = item.sizeText() {
             parts.append(sizeText)
         }
-        if item.lineCount > 1 {
-            parts.append("\(item.lineCount) lines")
+        if let lineCountText = item.lineCountText {
+            parts.append(lineCountText)
         }
         if let name = item.sourceBundleID.flatMap(AppNameCache.shared.displayName(forBundleID:)) {
             parts.append(name)
