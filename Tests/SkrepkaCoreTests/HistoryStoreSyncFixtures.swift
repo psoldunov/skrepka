@@ -44,7 +44,12 @@
         /// the text and ignores the payload — which is what lets a peer name this
         /// content without holding the same bytes.
         static func contentHash(_ text: String) -> String {
-            ClipItem.hash(kind: .text, text: text, payload: ClipPayload(representations: [:]))
+            ClipItem.hash(
+                kind: .text,
+                text: text,
+                payload: ClipPayload(representations: [:]),
+                fileURLs: []
+            )
         }
 
         /// One item as a peer would describe it.

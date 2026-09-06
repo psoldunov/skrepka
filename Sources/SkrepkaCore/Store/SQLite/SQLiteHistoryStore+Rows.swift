@@ -50,20 +50,6 @@
             try clipRows(.contentHash(contentHash), trailing: "LIMIT 1").first
         }
 
-        /// Whether a row exists, without reading it.
-        ///
-        /// Separate from ``clipRow(id:)`` because ``SQLiteHistoryStore/payload(for:)``
-        /// has to tell "no such entry" from "an entry holding no bytes", and
-        /// reading fourteen columns to answer a yes-or-no question is work nobody
-        /// asked for.
-        func clipExists(id: UUID) throws -> Bool {
-            var found = false
-            try database.query("SELECT 1 FROM clip WHERE id = ? LIMIT 1", [.value(id)]) { _ in
-                found = true
-            }
-            return found
-        }
-
         /// Inserts a clip and its representations. Caller owns the transaction.
         func insert(_ row: SQLiteClipRow, representations: [SQLiteRepresentationRow]) throws {
             try database.run(SQLiteClipRow.insert, row.bindings)

@@ -25,6 +25,9 @@
         ///   this engine.
         /// - 3: `paired_device.live_push_choice`, following
         ///   `PairedDeviceRecord.livePushChoiceRaw`.
+        /// - 4: `clip.file_urls` and `clip.stack_icons`, following
+        ///   `ClipRecord.fileURLStrings` and `ClipRecord.stackIcons` onto this
+        ///   engine.
         ///
         /// The Linux store still has no installed base
         /// ([D-8](../../../docs/linux-sync/open-questions.md)), so the current
@@ -33,7 +36,7 @@
         /// because a developer's own store from last week is exactly the database
         /// `CREATE TABLE IF NOT EXISTS` would silently leave a column short, and
         /// every insert against it would then fail on a column name.
-        static let version = 3
+        static let version = 4
 
         /// Applied to the connection before anything else touches it.
         ///
@@ -67,6 +70,13 @@
         /// the two measure different things: this one is the size of the copied
         /// file, folder or picture, that one is the size of one representation of
         /// it. A query joining both would otherwise name the same column twice.
+        ///
+        /// `file_urls` and `stack_icons` are `ClipRecord.fileURLStrings` and
+        /// `ClipRecord.stackIcons`, both binary property lists — see
+        /// ``SelectionCoding``. `stack_icons` is here even though nothing on this
+        /// platform can draw one yet, exactly as `thumbnail` is: the column set
+        /// is what the two engines are held to be identical on, and Phase 7's
+        /// GdkPixbuf renderer then needs no migration to start filling it.
         static let clipTable = """
             CREATE TABLE IF NOT EXISTS clip (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -81,6 +91,8 @@
                 image_height INTEGER,
                 content_byte_count INTEGER,
                 thumbnail BLOB,
+                stack_icons BLOB,
+                file_urls BLOB,
                 pinned_at REAL,
                 pinned_by TEXT,
                 origin_device_id TEXT
@@ -165,6 +177,13 @@
         static let migrations: [Int: String] = [
             2: "ALTER TABLE clip ADD COLUMN content_byte_count INTEGER",
             3: "ALTER TABLE paired_device ADD COLUMN live_push_choice TEXT",
+            // Two statements in one migration: they arrive together on the other
+            // engine, and splitting them across versions would let a store stop
+            // between the file list and the icons drawn from it.
+            4: """
+            ALTER TABLE clip ADD COLUMN stack_icons BLOB;
+            ALTER TABLE clip ADD COLUMN file_urls BLOB;
+            """,
         ]
 
         /// Opens the schema on a fresh or existing connection.

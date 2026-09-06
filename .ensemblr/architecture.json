@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-06T10:37:08.526Z",
+	"generatedAt": "2026-09-06T16:42:39.138Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -191,7 +191,7 @@
 						"path": "Sources/Skrepka/Platform/PasteService.swift"
 					}
 				],
-				"sublabel": "the one owner of the pasteboard",
+				"sublabel": "the one owner of the pasteboard — one item per file",
 				"type": "backend"
 			},
 			{
@@ -278,7 +278,7 @@
 						"path": "Sources/SkrepkaCore/Clipboard/PasteboardReader.swift"
 					}
 				],
-				"sublabel": "watcher actor over ClipboardSource — poll or push",
+				"sublabel": "watcher actor over ClipboardSource — every item's file URL",
 				"type": "backend"
 			},
 			{
@@ -309,7 +309,7 @@
 						"path": "Sources/SkrepkaCore/Store/HistoryStore+Projection.swift"
 					}
 				],
-				"sublabel": "SwiftData; items incremental; kind, size & preview off-actor",
+				"sublabel": "SwiftData; retention; file icons, kind, size \u0026 preview off-actor",
 				"type": "database"
 			},
 			{
@@ -337,7 +337,7 @@
 						"path": "Sources/SkrepkaCore/Store/SQLite"
 					}
 				],
-				"sublabel": "Linux only — second HistoryStoring engine; store created 0600",
+				"sublabel": "Linux only — second HistoryStoring engine, schema v4; store created 0600",
 				"type": "database"
 			},
 			{
@@ -348,7 +348,7 @@
 						"path": "Sources/SkrepkaCore/Models"
 					}
 				],
-				"sublabel": "item, summary, payload, kind",
+				"sublabel": "item, summary, payload, kind, file list",
 				"type": "backend"
 			},
 			{
@@ -635,7 +635,7 @@
 			{
 				"from": "store",
 				"id": "e-store-filesystem",
-				"label": "kind, size, preview",
+				"label": "kind, size, preview, file icons",
 				"to": "filesystem"
 			},
 			{

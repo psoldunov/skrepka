@@ -86,6 +86,13 @@ final class PickerModel {
         thumbnails.image(for: item)
     }
 
+    /// The icons of the files a row holds, front first, asked for and cached on
+    /// the same terms as ``thumbnail(for:)``. Empty for every row that holds
+    /// fewer than two files.
+    func stackImages(for item: ClipSummary) -> [NSImage] {
+        thumbnails.stackImages(for: item)
+    }
+
     var selection: ClipSummary? {
         let results = results
         guard !results.isEmpty else { return nil }

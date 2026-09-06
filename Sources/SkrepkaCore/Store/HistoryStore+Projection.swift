@@ -112,6 +112,22 @@
             }
         }
 
+        /// The stack of file icons a row draws when it holds several files, read
+        /// by id for the same reason ``thumbnail(for:)`` is: pictures do not
+        /// travel on ``ClipSummary``.
+        ///
+        /// Empty for a row that has none, which the summary already said with
+        /// ``ClipSummary/hasStackIcons`` — so the picker asks only for the rows
+        /// that have one.
+        public func stackIcons(for id: UUID) -> [Data] {
+            do {
+                return try record(withID: id)?.stackIcons ?? []
+            } catch {
+                SkrepkaLog.store.error("Failed to load file icons: \(error.localizedDescription)")
+                return []
+            }
+        }
+
         // MARK: - The invariant
 
         /// Re-derives the projection from the store and records any disagreement.

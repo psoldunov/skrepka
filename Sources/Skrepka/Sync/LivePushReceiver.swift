@@ -73,7 +73,13 @@ struct LivePushReceiver {
         await watcher.pause()
         _ = await pasteService.deliver(
             PasteService.Request(
-                payload: ClipPayload(representations: representations),
+                // No files: what arrives from a peer is bytes, and the paths the
+                // other machine copied from are not paths this one has. A push
+                // therefore writes one pasteboard item, which is what it held.
+                contents: ClipContents(
+                    payload: ClipPayload(representations: representations),
+                    fileURLs: []
+                ),
                 plainText: meta.preview,
                 style: .rich,
                 // The peer's, so another clipboard manager on this Mac

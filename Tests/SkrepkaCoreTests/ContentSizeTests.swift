@@ -9,12 +9,19 @@ struct ContentSizeTests {
         ClipItem(kind: kind, text: "entry", payload: payload)
     }
 
-    /// The size the detail pass would land on, taking the one file-system lookup
+    /// The size the detail pass would land on, taking the one file-system walk
     /// `ThumbnailRenderer` takes rather than a second one of its own — see
-    /// `CopiedFile`. Nil for a path the file system will not describe, which is
-    /// what the caller passes on.
-    private func measure(_ item: ClipItem) -> Int? {
-        ContentSize.byteCount(of: item, file: item.payload.fileURL.flatMap(CopiedFile.init(at:)))
+    /// `CopiedSelection`. Nil for a path the file system will not describe,
+    /// which is what the caller passes on.
+    ///
+    /// `deadline` bounds the *measuring* only. The stat walk keeps its own full
+    /// budget, so a test squeezing this one is squeezing the pass it names.
+    private func measure(_ item: ClipItem, deadline: Duration = FileSelection.deadline) -> Int? {
+        ContentSize.byteCount(
+            of: item,
+            selection: CopiedSelection.look(at: item.fileURLs),
+            deadline: deadline
+        )
     }
 
     private func write(_ byteCount: Int, to url: URL) throws {
@@ -34,6 +41,43 @@ struct ContentSizeTests {
         // The logical size, not the size on disk: a 5,000-byte file occupies
         // two 4 KB blocks, and Finder's Get Info leads with 5,000 too.
         #expect(measured == 5000)
+    }
+
+    @Test("A copy of several files reports what all of them weigh")
+    func measuresWholeSelection() throws {
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = directory.appending(path: "a.bin", directoryHint: .notDirectory)
+        let second = directory.appending(path: "b.bin", directoryHint: .notDirectory)
+        try write(1000, to: first)
+        try write(500, to: second)
+
+        let selection = ClipItem(
+            kind: .file,
+            text: "a.bin\nb.bin",
+            payload: Fixtures.fileURLPayload(first),
+            fileURLs: [first, second]
+        )
+        #expect(measure(selection) == 1500)
+    }
+
+    @Test("A selection with an unmeasurable file in it reports no size")
+    func partialSelectionHasNoSize() throws {
+        // The rule `DirectorySize` states, applied one level up: two files out
+        // of three is a wrong number that looks like a right one.
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let present = directory.appending(path: "a.bin", directoryHint: .notDirectory)
+        try write(1000, to: present)
+        let missing = directory.appending(path: "gone.bin", directoryHint: .notDirectory)
+
+        let selection = ClipItem(
+            kind: .file,
+            text: "a.bin\ngone.bin",
+            payload: Fixtures.fileURLPayload(present),
+            fileURLs: [present, missing]
+        )
+        #expect(measure(selection) == nil)
     }
 
     @Test("A copied folder reports the sum of everything under it")
@@ -112,6 +156,34 @@ struct ContentSizeTests {
 
         #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == nil)
         #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == 42)
+    }
+
+    @Test("A selection is measured on one budget, not one budget per folder")
+    func abandonsOversizedSelection() throws {
+        // The regression this pins: the sizing loop had no clock at all, so
+        // every folder in a selection started a fresh `DirectorySize.deadline`
+        // and the cost of a copy was the number of folders in it — twenty of
+        // them five seconds, on the serial actor `HistoryStore.capture` awaits.
+        let root = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "folder", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try write(200, to: folder.appending(path: "inside.bin", directoryHint: .notDirectory))
+        let file = root.appending(path: "a.bin", directoryHint: .notDirectory)
+        try write(50, to: file)
+
+        let selection = ClipItem(
+            kind: .file,
+            text: "a.bin\nfolder",
+            payload: Fixtures.fileURLPayload(file),
+            fileURLs: [file, folder]
+        )
+        // Spent budget means no answer, not the prefix it managed — the rule
+        // `DirectorySize` states, one level up.
+        #expect(measure(selection, deadline: .zero) == nil)
+        // The same selection measures fine when there is time for it, folder
+        // walked through and all.
+        #expect(measure(selection) == 250)
     }
 
     @Test("An empty folder measures zero rather than giving up")

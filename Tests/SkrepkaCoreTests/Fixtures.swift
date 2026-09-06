@@ -29,6 +29,17 @@ enum Fixtures {
         return url
     }
 
+    /// A file whose type is definitely not a picture, for the cases that turn on
+    /// telling one from the other.
+    ///
+    /// Here rather than in `Fixtures+Images.swift`: it needs no imaging
+    /// framework, so it is available on every platform the core tests run on.
+    static func writeTextFile(_ contents: String = "hello", named name: String) throws -> URL {
+        let url = try makeDirectory().appending(path: name, directoryHint: .notDirectory)
+        try Data(contents.utf8).write(to: url)
+        return url
+    }
+
     static func fileURLPayload(_ url: URL) -> ClipPayload {
         ClipPayload(representations: [PasteboardType.fileURL: Data(url.absoluteString.utf8)])
     }

@@ -28,7 +28,7 @@ protocol HistoryStoreConforming: Sendable {
     func setLocalDeviceID(_ deviceID: SyncDeviceID?) async
 
     @discardableResult func capture(_ item: ClipItem) async -> Bool
-    func payload(for id: UUID) async -> ClipPayload?
+    func contents(for id: UUID) async -> ClipContents?
     func togglePin(_ id: UUID) async
     func delete(_ id: UUID) async
     func clear(keepingPinned: Bool) async
@@ -153,7 +153,12 @@ enum EngineFixtures {
     /// text and ignores the payload — which is what lets a peer name this content
     /// without holding the same bytes.
     static func contentHash(_ text: String) -> String {
-        ClipItem.hash(kind: .text, text: text, payload: ClipPayload(representations: [:]))
+        ClipItem.hash(
+            kind: .text,
+            text: text,
+            payload: ClipPayload(representations: [:]),
+            fileURLs: []
+        )
     }
 
     /// One item as a peer would describe it.

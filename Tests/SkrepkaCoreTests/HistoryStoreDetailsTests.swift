@@ -168,6 +168,63 @@
             #expect(store.items.first?.kind == .folder)
         }
 
+        @Test("A copied picture is stored as an image, so the row says Image")
+        func refinesImageFileKind() async throws {
+            let store = try makeStore()
+            let url = try Fixtures.writePNG(width: 40, height: 30, named: "shot.png")
+            defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+            await store.capture(fileItem(url))
+            let summary = try #require(store.items.first)
+            #expect(summary.kind == .imageFile)
+            #expect(summary.typeLabel == "Image")
+        }
+
+        @Test("A picture saved without an extension is still an image")
+        func upgradesUntypedFileThatDecodes() async throws {
+            // The file system reports the generic `public.data` for a file with
+            // no extension, so its type cannot say. Having drawn a picture out of
+            // it can, and by then the preview exists.
+            let store = try makeStore()
+            let directory = try Fixtures.makeDirectory()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appending(path: "screenshot", directoryHint: .notDirectory)
+            try Fixtures.png(width: 20, height: 10).write(to: url)
+
+            await store.capture(fileItem(url))
+            let summary = try #require(store.items.first)
+            #expect(summary.kind == .imageFile)
+            #expect(summary.hasThumbnail)
+        }
+
+        @Test("Re-copying corrects a row still naming files it never kept")
+        func healsStaleFileNamesOnRepeatCopy() async throws {
+            // A row stored before Skrepka kept the files a copy holds was named
+            // from the pasteboard's own text, where Finder writes the display
+            // names of the whole selection — three names for a copy whose one
+            // file was all that was ever kept. The repeat copy is the only chance
+            // to fix it, and it must fix the names in the same breath as the file
+            // list, or the row ends up naming three files while saying it holds
+            // one.
+            let store = try makeStore()
+            let url = try Fixtures.writeTextFile(named: "a.txt")
+            defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+            let payload = Fixtures.fileURLPayload(url)
+
+            await store.capture(
+                ClipItem(kind: .file, text: "a.txt\nb.txt\nc.txt", payload: payload)
+            )
+            #expect(store.items.first?.previewText == "a.txt, b.txt, c.txt")
+
+            await store.capture(ClipItem(kind: .file, text: "a.txt", payload: payload))
+
+            #expect(store.items.count == 1)
+            let summary = try #require(store.items.first)
+            #expect(summary.previewText == "a.txt")
+            #expect(summary.fileCount == 1)
+            #expect(summary.typeLabel == "File")
+        }
+
         @Test("Re-copying a folder corrects a row still labelled File")
         func healsStaleFileKindOnRepeatCopy() async throws {
             let store = try makeStore()

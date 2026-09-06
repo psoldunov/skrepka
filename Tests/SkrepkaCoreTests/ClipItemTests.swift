@@ -17,6 +17,10 @@ struct ClipItemTests {
         ClipPayload(representations: [PasteboardType.string: Data(text.utf8)])
     }
 
+    private func files(_ strings: String...) -> [URL] {
+        strings.compactMap(URL.init(string:))
+    }
+
     @Test("Identical text hashes identically regardless of when it was copied")
     func hashIsContentOnly() {
         let first = ClipItem(kind: .text, text: "same", payload: payload("same"))
@@ -105,6 +109,15 @@ struct ClipItemTests {
             ClipItem(kind: .file, text: "Nextcloud", payload: payload).contentHash
                 == ClipItem(kind: .folder, text: "Nextcloud", payload: payload).contentHash
         )
+    }
+
+    @Test("A file entry knows the file its payload names, even listed as none")
+    func fileURLsFallBackToThePayload() {
+        let payload = ClipPayload(representations: [
+            PasteboardType.fileURL: Data("file:///Users/me/shot.png".utf8)
+        ])
+        let item = ClipItem(kind: .file, text: "shot.png", payload: payload)
+        #expect(item.fileURLs == files("file:///Users/me/shot.png"))
     }
 
     @Test("Multi-line text previews as one line")

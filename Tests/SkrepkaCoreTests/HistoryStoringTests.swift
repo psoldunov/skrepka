@@ -21,8 +21,9 @@ import Testing
 ///   boundaries. ``orderingIsTheSameOnEveryRead`` and
 ///   ``anEntryWithNoOptionalColumnsSetReadsBackAsNil`` are the guards.
 ///
-/// The sync surface is in `HistoryStoringSyncTests.swift` and paired peers in
-/// `HistoryStoringPairingTests.swift`, both extensions of this suite.
+/// The sync surface is in `HistoryStoringSyncTests.swift`, paired peers in
+/// `HistoryStoringPairingTests.swift` and the files a multi-file copy holds in
+/// `HistoryStoringSelectionTests.swift` — all extensions of this suite.
 @Suite("History storing, against every engine")
 struct HistoryStoringTests {
     static func makeStore(
@@ -103,13 +104,13 @@ struct HistoryStoringTests {
         #expect(await store.capture(EngineFixtures.item("bytes", at: EngineFixtures.at(1))))
 
         let id = try #require(try await store.summaries().first?.id)
-        let payload = try #require(await store.payload(for: id))
+        let payload = try #require(await store.contents(for: id)).payload
         #expect(payload.data(forType: PasteboardType.string) == Data("bytes".utf8))
 
         // nil means "no such entry" — distinct from an entry that holds no bytes,
         // which is an empty payload. The two answers are what a peer's fetch
         // distinguishes.
-        #expect(await store.payload(for: UUID()) == nil)
+        #expect(await store.contents(for: UUID()) == nil)
     }
 
     // MARK: - Schema parity

@@ -51,6 +51,11 @@
                 imageHeight: imageSize?.height,
                 byteCount: details.byteCount,
                 thumbnailData: details.preview?.thumbnail,
+                stackIcons: details.stackIcons,
+                // Nil rather than an empty array for an entry that holds no files,
+                // so "this copy had none" and "this row predates the column" read
+                // the same way: as nothing to paste back beyond the payload.
+                fileURLStrings: item.fileURLs.isEmpty ? nil : item.fileURLs.map(\.absoluteString),
                 payloadData: try encode(item.payload),
                 // Written here, in the one place a row is created from a capture,
                 // so it cannot be forgotten: it describes the payload beside it and
@@ -79,8 +84,20 @@
                 isConcealed: record.isConcealed,
                 imageSize: imageSize,
                 byteCount: record.byteCount,
-                hasThumbnail: record.thumbnailData != nil
+                // The count, not the URLs: the picker holds hundreds of these and
+                // needs only to say "3 Files". The list itself stays in the store
+                // until something is pasted, like the payload beside it.
+                fileCount: record.fileURLStrings?.count ?? 0,
+                hasThumbnail: record.thumbnailData != nil,
+                // Whether, not which: the pictures are read by id when the row
+                // draws, for the reason the thumbnail beside them is.
+                hasStackIcons: !(record.stackIcons ?? []).isEmpty
             )
+        }
+
+        /// The files an entry holds, for the paste that restores them.
+        static func fileURLs(from record: ClipRecord) -> [URL] {
+            (record.fileURLStrings ?? []).compactMap(URL.init(string:))
         }
     }
 

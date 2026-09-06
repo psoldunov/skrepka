@@ -35,8 +35,40 @@
         /// describes a path only the machine that copied it has — see
         /// ``SkrepkaSync/SyncClipMeta``.
         var byteCount: Int?
-        /// Small PNG preview. Inline: it is read for every visible row.
+        /// Small PNG preview. Read by id when a row draws, never carried on the
+        /// summary beside it.
+        ///
+        /// A picture *decoded from the copied content*, and nothing else — the
+        /// row height, ``ClipSummary/isPicture`` and the Settings Images tile all
+        /// read it as one. A copied spreadsheet's icon does not belong here
+        /// however well it would draw; that is what ``stackIcons`` is for.
+        ///
+        /// Local to this machine and deliberately not synced, for the reason
+        /// ``byteCount`` gives: a row learned from a peer has the picture's
+        /// dimensions and none of its bytes.
         var thumbnailData: Data?
+        /// One small PNG per file for the row's stack, front first, when the
+        /// entry holds several files.
+        ///
+        /// Optional with no default, so a store written before stacks existed
+        /// migrates by leaving it nil — those rows keep the single preview and
+        /// the count badge they were stored with until the copy is made again.
+        ///
+        /// Pictures of files on this machine, so not synced either, and never
+        /// produced at all on Linux — see ``FileIconStack``.
+        var stackIcons: [Data]?
+        /// Absolute URL of every file the entry holds, when it holds files.
+        ///
+        /// The payload carries the first one and no more — see ``ClipItem/fileURLs``
+        /// — so this is what lets a copy of several files paste back as several
+        /// files. Optional with no default, so a store written before multi-file
+        /// copies were kept migrates by leaving it nil rather than claiming every
+        /// old entry holds no files at all.
+        ///
+        /// Not synced: a path describes a machine, which is the same reason
+        /// ``byteCount`` stays here. What *is* synced is the content hash these
+        /// files feed — see ``ClipItem/hash(kind:text:payload:fileURLs:)``.
+        var fileURLStrings: [String]?
         /// Every pasteboard representation, property-list encoded.
         ///
         /// `.externalStorage` keeps the blob out of the SQLite row, so a 20 MB
@@ -82,6 +114,8 @@
             imageHeight: Int?,
             byteCount: Int?,
             thumbnailData: Data?,
+            stackIcons: [Data]? = nil,
+            fileURLStrings: [String]? = nil,
             payloadData: Data,
             pinnedAt: Date? = nil,
             pinnedBy: String? = nil,
@@ -100,6 +134,8 @@
             self.imageHeight = imageHeight
             self.byteCount = byteCount
             self.thumbnailData = thumbnailData
+            self.stackIcons = stackIcons
+            self.fileURLStrings = fileURLStrings
             self.payloadData = payloadData
             self.pinnedAt = pinnedAt
             self.pinnedBy = pinnedBy

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Tells a copied folder from a copied file.
+/// Tells a copied folder from a copied file, and a copied picture from both.
 ///
 /// Finder puts the same thing on the pasteboard either way — one
 /// `public.file-url` and nothing that says what is at the end of it — so every
@@ -15,8 +15,16 @@ import Foundation
 /// ``CopiedFile`` rather than a `URL` for the same reason — one lookup answers
 /// this and the size both.
 enum FileURLKind {
-    /// ``ClipKind/folder`` for a plain directory, ``ClipKind/file`` for
-    /// everything else, and nil when the file system would not say which.
+    /// ``ClipKind/folder`` for a plain directory, ``ClipKind/imageFile`` for a
+    /// file that declares itself a picture, and ``ClipKind/file`` for everything
+    /// else.
+    ///
+    /// A picture earns its own kind so the row says "Image" rather than "File".
+    /// The evidence is ``CopiedFile/isImage`` — the file's declared type, read
+    /// in the same lookup as its shape. A file whose type is too vague to say —
+    /// no extension, so `public.data` — stays a `.file` here and is upgraded by
+    /// ``ThumbnailRenderer`` if it turns out to decode as a picture, which is
+    /// the only evidence stronger than the type.
     ///
     /// A package is deliberately a file. `ChatGPT.app` and an `.rtfd` are
     /// directories on disk, but Finder presents each as one item and so does
@@ -40,8 +48,44 @@ enum FileURLKind {
     static func kind(of file: CopiedFile) -> ClipKind? {
         switch file.shape {
         case .folder: .folder
-        case .package, .file: .file
+        case .package: .file
+        case .file: file.isImage ? .imageFile : .file
         case .unknown: nil
         }
+    }
+
+    /// One kind for a whole selection: the kind they all share, or
+    /// ``ClipKind/file`` when they disagree.
+    ///
+    /// A mixed selection has no honest single label — three pictures and a
+    /// folder are four files — and `.file` is the one kind every entry here
+    /// genuinely is.
+    ///
+    /// Nil when the walk did not finish, and nil when it finished having
+    /// described nothing. Both are "I could not look", and neither may become
+    /// `.file`: ``HistoryStore`` writes a refined kind onto a row it already has
+    /// only when one came back, precisely so a re-copy that could not see the
+    /// disk cannot overwrite a good label — and `.file` is an answer, so
+    /// returning it would downgrade a row reading "300 Images" the first time
+    /// that selection was re-copied off a cold or networked volume. A new row
+    /// loses nothing: ``ClipRecordMapping/makeRecord(from:details:)`` falls back
+    /// to the capture rules' own `.file`, which is what it would have shown.
+    ///
+    /// A selection where *some* file went missing is likewise unanswered, for
+    /// the reason ``ContentSize`` gives about a partial sum: the two files left
+    /// of three agreeing on `.imageFile` says nothing about the third.
+    static func kind(of selection: CopiedSelection) -> ClipKind? {
+        guard selection.isComplete else { return nil }
+
+        var shared: ClipKind?
+        for file in selection.files {
+            guard let kind = kind(of: file) else { return nil }
+            guard let current = shared else {
+                shared = kind
+                continue
+            }
+            if current != kind { return .file }
+        }
+        return shared
     }
 }

@@ -29,6 +29,16 @@
             CopiedFile(at: url).flatMap(FileURLKind.kind(of:))
         }
 
+        /// The same, for a whole copied selection: one walk, then the kind read
+        /// off it — what `ThumbnailRenderer.details(for:)` does for a copy of
+        /// several files.
+        private func kind(
+            at urls: [URL],
+            deadline: Duration = FileSelection.deadline
+        ) -> ClipKind? {
+            FileURLKind.kind(of: CopiedSelection.look(at: urls, deadline: deadline))
+        }
+
         @Test("A plain directory is a folder")
         func directoryIsFolder() throws {
             // The bug: Finder writes one `public.file-url` whether the user copied
@@ -53,10 +63,69 @@
 
         @Test("A regular file is a file")
         func regularFileIsFile() throws {
-            let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+            // A text file, not a picture: a PNG is an `.imageFile` now, so the
+            // fixture that used to stand for "an ordinary file" no longer does.
+            let url = try Fixtures.writeTextFile(named: "notes.txt")
             defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
             #expect(kind(at: url) == .file)
+        }
+
+        @Test("A picture on disk is an image, not a file")
+        func imageFileIsImage() throws {
+            // The bug: a screenshot copied out of Finder arrives as a
+            // `public.file-url`, so the row read "File" beside its own preview.
+            let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+            defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+            #expect(kind(at: url) == .imageFile)
+        }
+
+        @Test("A selection of pictures is images; a mixed one is files")
+        func selectionTakesTheSharedKind() throws {
+            let directory = try Fixtures.makeDirectory()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let first = try Fixtures.writePNG(width: 2, height: 2, named: "one.png")
+            let second = try Fixtures.writePNG(width: 3, height: 3, named: "two.png")
+            let text = try Fixtures.writeTextFile(named: "notes.txt")
+            defer {
+                for url in [first, second, text] {
+                    try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+                }
+            }
+
+            #expect(kind(at: [first, second]) == .imageFile)
+            // Three pictures and a spreadsheet are four files: `.file` is the one
+            // kind every entry in a mixed selection genuinely is.
+            #expect(kind(at: [first, text]) == .file)
+            #expect(kind(at: []) == nil)
+        }
+
+        @Test("A selection that runs out of budget answers nothing at all")
+        func selectionOutOfBudgetIsNil() throws {
+            // Not `.file`: nil is what "I could not look" has to mean, because
+            // `HistoryStore` writes a refined kind onto an existing row only when
+            // one came back. Answering `.file` here downgraded a row already
+            // reading "300 Images" the first time that copy was made off a slow
+            // volume.
+            let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+            defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+            #expect(kind(at: [url], deadline: .zero) == nil)
+            #expect(kind(at: [url]) == .imageFile)
+        }
+
+        @Test("A selection with a file the disk will not describe answers nothing")
+        func partlyUnanswerableSelectionIsNil() throws {
+            // The two files left of three agreeing says nothing about the third,
+            // which is the same reason `ContentSize` refuses a partial sum.
+            let url = try Fixtures.writePNG(width: 2, height: 2, named: "shot.png")
+            let directory = url.deletingLastPathComponent()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let missing = directory.appending(path: "gone", directoryHint: .notDirectory)
+
+            #expect(kind(at: [url, missing]) == nil)
+            #expect(kind(at: [missing, missing]) == nil)
         }
 
         @Test("A path the disk will not describe answers nothing at all")

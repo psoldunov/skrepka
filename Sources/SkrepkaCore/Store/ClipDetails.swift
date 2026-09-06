@@ -6,7 +6,7 @@
 
     /// What a row needs that only reading the copied content can answer.
     ///
-    /// Grouped into one value because the three parts share a reason for existing:
+    /// Grouped into one value because the parts share a reason for existing:
     /// none of them can be worked out from the pasteboard snapshot alone, each may
     /// have to open a file, and they are therefore produced together, once, off the
     /// main actor, by ``ThumbnailRenderer``.
@@ -23,6 +23,9 @@
         /// The scaled picture and the original's pixel dimensions, or nil when the
         /// entry is not something Skrepka can draw.
         let preview: ThumbnailMaker.Preview?
+        /// One picture per file for the row's stack, front first, or nil when the
+        /// entry holds too few files to stack — see ``FileIconStack``.
+        let stackIcons: [Data]?
         /// Size of the copied content — see ``ContentSize`` for which kinds have
         /// one and when it cannot be measured.
         let byteCount: Int?

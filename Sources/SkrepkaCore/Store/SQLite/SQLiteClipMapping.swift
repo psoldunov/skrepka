@@ -33,8 +33,19 @@
                 isConcealed: row.isConcealed,
                 imageSize: imageSize,
                 byteCount: row.contentByteCount,
-                hasThumbnail: row.thumbnail != nil
+                fileCount: row.fileURLStrings?.count ?? 0,
+                hasThumbnail: row.thumbnail != nil,
+                hasStackIcons: !(row.stackIcons ?? []).isEmpty
             )
+        }
+
+        /// The files an entry holds, for the paste that restores them.
+        ///
+        /// The counterpart of `ClipRecordMapping.fileURLs(from:)`, and the same
+        /// contract: a string the row holds that will not parse as a URL is
+        /// dropped rather than faulting the whole list.
+        static func fileURLs(from row: SQLiteClipRow) -> [URL] {
+            (row.fileURLStrings ?? []).compactMap(URL.init(string:))
         }
 
         /// Describes a row to a peer.

@@ -8,13 +8,21 @@ struct CaptureRulesTests {
     private func snapshot(
         _ representations: [String: Data],
         declaring extraTypes: [String] = [],
+        files: [URL] = [],
         source: String? = nil
     ) -> PasteboardSnapshot {
         PasteboardSnapshot(
             representations: representations,
             declaredTypes: Array(representations.keys) + extraTypes,
+            fileURLs: files,
             sourceBundleID: source
         )
+    }
+
+    /// `count` file URLs that need not exist — nothing the capture rules do
+    /// touches the disk.
+    private func selectionOf(_ count: Int) -> [URL] {
+        (0..<count).compactMap { URL(string: "file:///Users/me/file-\($0).txt") }
     }
 
     private func text(_ string: String) -> [String: Data] {
@@ -117,6 +125,79 @@ struct CaptureRulesTests {
         #expect(item.kind == .file)
         // The trailing slash a directory URL carries is not part of the label.
         #expect(item.text == folder.lastPathComponent)
+    }
+
+    @Test("A copy of several files keeps every one of them")
+    func capturesEveryFileInASelection() throws {
+        // The bug: only the first pasteboard item was read, so a copy of three
+        // files stored one file URL and a row that named all three — it counted
+        // files it could not paste.
+        let files = [
+            URL(string: "file:///Users/me/Pictures/one.png"),
+            URL(string: "file:///Users/me/Pictures/two.png"),
+            URL(string: "file:///Users/me/Pictures/three.png"),
+        ].compactMap(\.self)
+        let representations = [PasteboardType.fileURL: Data(files[0].absoluteString.utf8)]
+
+        let item = try #require(CaptureRules().decide(snapshot(representations, files: files)).item)
+        #expect(item.kind == .file)
+        #expect(item.fileURLs == files)
+        #expect(item.text == "one.png\ntwo.png\nthree.png")
+    }
+
+    @Test("A file name comes from the file, not from the pasteboard's own text")
+    func namesFilesFromTheirURLs() throws {
+        // Finder writes the display names of the whole selection under
+        // `public.utf8-plain-text` — extensions hidden when the user hides them,
+        // and every name of a copy relayed through Universal Clipboard, which
+        // hands over one file. Naming a row from that is what let one file
+        // arrive wearing three names.
+        let url = try #require(URL(string: "file:///Users/me/Pictures/one%20two.png"))
+        let representations = [
+            PasteboardType.fileURL: Data(url.absoluteString.utf8),
+            PasteboardType.string: Data("one two\nthree\nfour".utf8),
+        ]
+
+        let item = try #require(CaptureRules().decide(snapshot(representations, files: [url])).item)
+        #expect(item.text == "one two.png")
+        #expect(item.fileURLs == [url])
+    }
+
+    @Test("A selection right at the ceiling is named in full")
+    func namesEverySelectionUpToTheCeiling() throws {
+        let files = selectionOf(FileSelection.maximumNamedFiles)
+        let representations = [PasteboardType.fileURL: Data(files[0].absoluteString.utf8)]
+
+        let item = try #require(CaptureRules().decide(snapshot(representations, files: files)).item)
+        #expect(item.text.split(whereSeparator: \.isNewline).count == FileSelection.maximumNamedFiles)
+    }
+
+    @Test("A selection past the ceiling stops naming but keeps every file")
+    func capsNamesWithoutCappingFiles() throws {
+        // The text is stored, searched and re-joined on every draw, so it is
+        // bounded — see ``FileSelection/maximumNamedFiles``. The files are not:
+        // a row that pastes fewer files than it holds is the defect being fixed.
+        let files = selectionOf(FileSelection.maximumNamedFiles + 20)
+        let representations = [PasteboardType.fileURL: Data(files[0].absoluteString.utf8)]
+
+        let item = try #require(CaptureRules().decide(snapshot(representations, files: files)).item)
+        #expect(item.text.split(whereSeparator: \.isNewline).count == FileSelection.maximumNamedFiles)
+        #expect(item.text.hasPrefix("file-0.txt\n"))
+        #expect(item.fileURLs == files)
+    }
+
+    @Test("The payload's own file leads the list, whatever order the items came in")
+    func payloadFileLeadsTheSelection() throws {
+        let first = try #require(URL(string: "file:///Users/me/b.png"))
+        let second = try #require(URL(string: "file:///Users/me/a.png"))
+        let representations = [PasteboardType.fileURL: Data(first.absoluteString.utf8)]
+
+        let item = try #require(
+            CaptureRules().decide(snapshot(representations, files: [second, first])).item
+        )
+        // Paste writes the payload as item zero, so the list has to agree with
+        // it about which file that is.
+        #expect(item.fileURLs == [first, second])
     }
 
     @Test("A bare URL is captured as .link")

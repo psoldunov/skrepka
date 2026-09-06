@@ -78,10 +78,14 @@
                 } else {
                     ModelConfiguration(isStoredInMemoryOnly: true)
                 }
-            // Three entities since sync landed. Adding the two new ones and four
-            // optional properties to `ClipRecord` is a lightweight migration on
-            // macOS 26 — measured against a populated throwaway store, recorded as
-            // OQ-9 — so there is deliberately no `SchemaMigrationPlan` here.
+            // Three entities since sync landed. Adding the two new ones and the
+            // optional properties on `ClipRecord` — four for sync, then
+            // `stackIcons` and `fileURLStrings` for multi-file copies — is a
+            // lightweight migration on macOS 26, measured against a populated
+            // throwaway store and recorded as OQ-9, so there is deliberately no
+            // `SchemaMigrationPlan` here. Every one of them is optional with no
+            // default, which is what keeps it lightweight; a new property with a
+            // non-optional type would not be.
             container = try ModelContainer(
                 for: ClipRecord.self,
                 TombstoneRecord.self,
@@ -106,11 +110,19 @@
 
         // MARK: - Reading
 
-        /// Loads an entry's full payload. Only called when something is pasted.
-        public func payload(for id: UUID) -> ClipPayload? {
+        /// Loads everything an entry needs to be pasted. Only called when
+        /// something is pasted.
+        ///
+        /// The payload and the file list together, because a copy of several
+        /// files pastes as several items and the payload carries only the first
+        /// — see ``ClipContents``.
+        public func contents(for id: UUID) -> ClipContents? {
             do {
                 guard let record = try record(withID: id) else { return nil }
-                return try ClipRecordMapping.decodePayload(record.payloadData)
+                return ClipContents(
+                    payload: try ClipRecordMapping.decodePayload(record.payloadData),
+                    fileURLs: ClipRecordMapping.fileURLs(from: record)
+                )
             } catch {
                 SkrepkaLog.store.error("Failed to load payload: \(error.localizedDescription)")
                 return nil

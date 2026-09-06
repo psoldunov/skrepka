@@ -8,8 +8,11 @@ struct ClipSummaryTests {
     private func summary(
         kind: ClipKind,
         text: String = "",
+        imageSize: ClipItem.ImageSize? = nil,
         byteCount: Int? = nil,
-        hasThumbnail: Bool = false
+        fileCount: Int = 0,
+        hasThumbnail: Bool = false,
+        hasStackIcons: Bool = false
     ) -> ClipSummary {
         ClipSummary(
             id: UUID(),
@@ -19,9 +22,11 @@ struct ClipSummaryTests {
             createdAt: Date(),
             isPinned: false,
             isConcealed: false,
-            imageSize: nil,
+            imageSize: imageSize,
             byteCount: byteCount,
-            hasThumbnail: hasThumbnail
+            fileCount: fileCount,
+            hasThumbnail: hasThumbnail,
+            hasStackIcons: hasStackIcons
         )
     }
 
@@ -42,6 +47,54 @@ struct ClipSummaryTests {
     @Test("A copied document is not a picture")
     func documentIsNotPicture() {
         #expect(!summary(kind: .file, text: "notes.txt").isPicture)
+    }
+
+    @Test("A picture on disk is a picture even before anything decoded it")
+    func imageFileKindIsPicture() {
+        #expect(summary(kind: .imageFile, text: "shot.png").isPicture)
+    }
+
+    // MARK: - What the row calls it
+
+    @Test("One picture on disk is labelled Image, not File")
+    func singleImageFileIsLabelledImage() {
+        // What the user asked for: a copied screenshot arrives as a file URL,
+        // and the row said "File" while showing the picture.
+        #expect(summary(kind: .imageFile, text: "shot.png", fileCount: 1).typeLabel == "Image")
+    }
+
+    @Test("A selection is labelled by how many files it holds")
+    func selectionIsLabelledByCount() {
+        let pictures = summary(kind: .imageFile, text: "a.png\nb.png\nc.png", fileCount: 3)
+        #expect(pictures.typeLabel == "3 Images")
+        #expect(summary(kind: .file, text: "a\nb", fileCount: 2).typeLabel == "2 Files")
+        #expect(summary(kind: .folder, text: "a\nb", fileCount: 2).typeLabel == "2 Folders")
+    }
+
+    @Test("A file entry counts files, never lines")
+    func fileEntriesNeverCountLines() {
+        // The bug in the screenshot: a copy of three files read "3 lines",
+        // counting the names its own label was made of.
+        let files = summary(kind: .imageFile, text: "a.png\nb.png\nc.png", fileCount: 3)
+        #expect(files.lineCountText == nil)
+        #expect(summary(kind: .text, text: "one\ntwo\nthree").lineCountText == "3 lines")
+        #expect(summary(kind: .text, text: "one line").lineCountText == nil)
+    }
+
+    @Test("Several file names read as a list, not as one run-on name")
+    func selectionPreviewsAsAList() {
+        let files = summary(kind: .imageFile, text: "a.png\nb.png\nc.png", fileCount: 3)
+        #expect(files.previewText == "a.png, b.png, c.png")
+        #expect(summary(kind: .text, text: "one\ntwo").previewText == "one two")
+    }
+
+    @Test("Dimensions describe one picture only")
+    func dimensionsAreHiddenForSelections() {
+        // A selection is previewed by its first file, so labelling the row
+        // 1402 × 578 describes the other two as well, and wrongly.
+        let size = ClipItem.ImageSize(width: 1402, height: 578)
+        #expect(summary(kind: .imageFile, imageSize: size, fileCount: 1).imageSizeText == "1402 × 578")
+        #expect(summary(kind: .imageFile, imageSize: size, fileCount: 3).imageSizeText == nil)
     }
 
     @Test("Text is never a picture")

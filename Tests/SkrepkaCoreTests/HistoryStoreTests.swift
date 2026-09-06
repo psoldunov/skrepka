@@ -62,8 +62,8 @@
             await store.capture(captured)
 
             let id = try #require(store.items.first?.id)
-            let loaded = try #require(store.payload(for: id))
-            #expect(loaded == payload)
+            let loaded = try #require(store.contents(for: id))
+            #expect(loaded.payload == payload)
         }
 
         @Test("Pinning hoists an entry to the top and survives newer captures")
@@ -130,10 +130,10 @@
             #expect(store.items.map(\.text) == ["entry 3"])
         }
 
-        @Test("An unknown id yields no payload rather than crashing")
+        @Test("An unknown id yields no contents rather than crashing")
         func unknownPayloadIsNil() throws {
             let store = try makeStore()
-            #expect(store.payload(for: UUID()) == nil)
+            #expect(store.contents(for: UUID()) == nil)
         }
 
         @Test("Source app is recorded with the entry")

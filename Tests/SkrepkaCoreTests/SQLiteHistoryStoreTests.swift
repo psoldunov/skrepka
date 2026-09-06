@@ -76,7 +76,7 @@
             #expect(await store.capture(item))
 
             let id = try #require(try await store.summaries().first?.id)
-            let payload = try #require(await store.payload(for: id))
+            let payload = try #require(await store.contents(for: id)).payload
             #expect(payload.data(forType: PasteboardType.png)?.count == bytes.count)
             // The index reports the size without the query ever naming `bytes` —
             // which is the whole reason the payload is a second table.

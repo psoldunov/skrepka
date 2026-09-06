@@ -28,6 +28,14 @@
         /// which is AppKit and arrives here with the preview in Phase 7.
         let contentByteCount: Int?
         let thumbnail: Data?
+        /// `ClipRecord.stackIcons`. Always nil today, for the reason
+        /// ``thumbnail`` is: drawing a file's icon needs `FileIconStack`, which
+        /// is AppKit. The column exists so Phase 7 needs no migration.
+        let stackIcons: [Data]?
+        /// `ClipRecord.fileURLStrings` — every file the entry holds, so a copy
+        /// of several pastes back as several. Filled from ``ClipItem/fileURLs``,
+        /// which any capture on any platform can produce.
+        let fileURLStrings: [String]?
         let pinnedAt: Date?
         let pinnedBy: String?
         let originDeviceID: String?
@@ -37,33 +45,40 @@
         /// for.
         static let columns = """
             id, kind_raw, "text", source_bundle_id, created_at, is_pinned, is_concealed, \
-            content_hash, image_width, image_height, content_byte_count, thumbnail, pinned_at, \
-            pinned_by, origin_device_id
+            content_hash, image_width, image_height, content_byte_count, thumbnail, \
+            stack_icons, file_urls, pinned_at, pinned_by, origin_device_id
             """
 
         static let insert = """
-            INSERT INTO clip (\(columns)) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO clip (\(columns)) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
 
         /// Parameters for ``insert``, in its column order.
+        ///
+        /// Throwing because two of them are property lists encoded on the way
+        /// out — see ``SelectionCoding``. The one caller already throws.
         var bindings: [SQLiteValue] {
-            [
-                .value(id),
-                .value(kindRaw),
-                .value(text),
-                .value(sourceBundleID),
-                .value(createdAt),
-                .value(isPinned),
-                .value(isConcealed),
-                .value(contentHash),
-                .value(imageWidth),
-                .value(imageHeight),
-                .value(contentByteCount),
-                .value(thumbnail),
-                .value(pinnedAt),
-                .value(pinnedBy),
-                .value(originDeviceID),
-            ]
+            get throws {
+                [
+                    .value(id),
+                    .value(kindRaw),
+                    .value(text),
+                    .value(sourceBundleID),
+                    .value(createdAt),
+                    .value(isPinned),
+                    .value(isConcealed),
+                    .value(contentHash),
+                    .value(imageWidth),
+                    .value(imageHeight),
+                    .value(contentByteCount),
+                    .value(thumbnail),
+                    .value(try SelectionCoding.encode(stackIcons: stackIcons)),
+                    .value(try SelectionCoding.encode(fileURLStrings: fileURLStrings)),
+                    .value(pinnedAt),
+                    .value(pinnedBy),
+                    .value(originDeviceID),
+                ]
+            }
         }
 
         /// Reads the row the statement is currently on.
@@ -94,9 +109,15 @@
             imageHeight = statement.integer(9)
             contentByteCount = statement.integer(10)
             thumbnail = statement.blob(11)
-            pinnedAt = statement.date(12)
-            pinnedBy = statement.text(13)
-            originDeviceID = statement.text(14)
+            // `try?` rather than a failed read: a blob that will not decode costs
+            // the row its file list or its icons, where refusing the row would
+            // cost the user the clip itself. Both readers already treat nil as
+            // "this row predates the column", which is the same thing to them.
+            stackIcons = try? SelectionCoding.decodeStackIcons(statement.blob(12))
+            fileURLStrings = try? SelectionCoding.decodeFileURLStrings(statement.blob(13))
+            pinnedAt = statement.date(14)
+            pinnedBy = statement.text(15)
+            originDeviceID = statement.text(16)
         }
 
         private init(
@@ -112,6 +133,8 @@
             imageHeight: Int?,
             contentByteCount: Int?,
             thumbnail: Data?,
+            stackIcons: [Data]?,
+            fileURLStrings: [String]?,
             pinnedAt: Date?,
             pinnedBy: String?,
             originDeviceID: String?
@@ -128,6 +151,8 @@
             self.imageHeight = imageHeight
             self.contentByteCount = contentByteCount
             self.thumbnail = thumbnail
+            self.stackIcons = stackIcons
+            self.fileURLStrings = fileURLStrings
             self.pinnedAt = pinnedAt
             self.pinnedBy = pinnedBy
             self.originDeviceID = originDeviceID
@@ -153,6 +178,11 @@
                 imageHeight: item.imageSize?.height,
                 contentByteCount: nil,
                 thumbnail: nil,
+                stackIcons: nil,
+                // Nil rather than an empty array for an entry that holds no
+                // files, matching `ClipRecordMapping.makeRecord`: "this copy had
+                // none" and "this row predates the column" read the same way.
+                fileURLStrings: item.fileURLs.isEmpty ? nil : item.fileURLs.map(\.absoluteString),
                 pinnedAt: nil,
                 pinnedBy: nil,
                 originDeviceID: originDeviceID
@@ -178,6 +208,10 @@
                 imageHeight: meta.imageHeight,
                 contentByteCount: nil,
                 thumbnail: nil,
+                stackIcons: nil,
+                // A peer's paths are not this machine's, so nothing is learned —
+                // the same reason `SyncClipMeta` carries no size and no preview.
+                fileURLStrings: nil,
                 pinnedAt: meta.isPinned.timestamp,
                 pinnedBy: meta.isPinned.deviceID.hex,
                 originDeviceID: meta.originDeviceID.hex

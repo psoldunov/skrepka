@@ -24,7 +24,7 @@ struct PasteService {
     /// - `target` is the app that was frontmost when the picker opened.
     /// - `shouldPaste` is false when the user prefers to paste themselves.
     struct Request {
-        let payload: ClipPayload
+        let contents: ClipContents
         let plainText: String
         let style: PasteStyle
         let sourceBundleID: String?
@@ -55,10 +55,11 @@ struct PasteService {
     // MARK: - Pasteboard
 
     private func write(_ request: Request) {
+        let isPlainText = request.style == .plainText
         let effective =
-            request.style == .plainText
-            ? request.payload.plainTextOnly(request.plainText)
-            : request.payload
+            isPlainText
+            ? request.contents.payload.plainTextOnly(request.plainText)
+            : request.contents.payload
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -72,7 +73,27 @@ struct PasteService {
             request.sourceBundleID ?? "",
             forType: NSPasteboard.PasteboardType(PasteboardType.source)
         )
-        pasteboard.writeObjects([item])
+
+        // Pasting as plain text is a request for the names, not the files.
+        let others = isPlainText ? [] : request.contents.additionalFileURLs
+        pasteboard.writeObjects([item] + others.map(Self.pasteboardItem(forFileAt:)))
+    }
+
+    /// One pasteboard item per file the payload is not already carrying, which
+    /// is the shape a copy of several files arrives in and the only one that
+    /// pastes back as several.
+    ///
+    /// `NSPasteboard.h` says so directly: the replacement it names for the
+    /// deprecated `NSFilenamesPboardType` is "create multiple pasteboard items
+    /// with NSPasteboardTypeFileURL".
+    ///
+    /// Which files those are is ``ClipContents/additionalFileURLs``, in
+    /// `SkrepkaCore` where the payload and the list sit together and a test can
+    /// reach it. All that is left here is the AppKit object.
+    private static func pasteboardItem(forFileAt url: URL) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setString(url.absoluteString, forType: NSPasteboard.PasteboardType(PasteboardType.fileURL))
+        return item
     }
 
     // MARK: - Synthetic keystroke

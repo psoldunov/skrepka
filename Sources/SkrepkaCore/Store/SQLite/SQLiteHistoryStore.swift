@@ -136,55 +136,28 @@
             return ClipProjection(ordered: rows.map(SQLiteClipMapping.summary(from:))).items
         }
 
-        /// Loads an entry's full payload. Only called when something is pasted.
+        /// Loads everything an entry needs to be pasted. Only called when
+        /// something is pasted.
         ///
         /// `nil` means no such entry. An entry that exists but holds no bytes —
         /// learned from a peer, never fetched — is an empty ``ClipPayload``, which
         /// is a different answer and the same one macOS gives.
-        public func payload(for id: UUID) -> ClipPayload? {
+        ///
+        /// The payload and the file list together, matching `HistoryStore`: a
+        /// copy of several files pastes as several items and the payload carries
+        /// only the first — see ``ClipContents``.
+        public func contents(for id: UUID) -> ClipContents? {
             do {
-                guard try clipExists(id: id) else { return nil }
-                return SQLiteRepresentationMapping.payload(from: try representationRows(clipID: id))
+                guard let row = try clipRow(id: id) else { return nil }
+                return ClipContents(
+                    payload: SQLiteRepresentationMapping.payload(
+                        from: try representationRows(clipID: id)
+                    ),
+                    fileURLs: SQLiteClipMapping.fileURLs(from: row)
+                )
             } catch {
                 SkrepkaLog.store.error("Failed to load payload: \(error.localizedDescription)")
                 return nil
-            }
-        }
-
-        // MARK: - Capture
-
-        /// Stores a newly captured item, collapsing a repeat copy onto the entry it
-        /// duplicates rather than adding a second row.
-        ///
-        /// No thumbnail is rendered. That needs `ThumbnailMaker`, which is AppKit,
-        /// and D-9 defers `ThumbnailProducing` to Phase 7 rather than giving macOS
-        /// a protocol with a nil-returning stub behind it — so a Linux row carries
-        /// the dimensions the capture already knew and no picture.
-        @discardableResult
-        public func capture(_ item: ClipItem) -> Bool {
-            do {
-                try database.transaction {
-                    if let existing = try clipRow(contentHash: item.contentHash) {
-                        try database.run(
-                            """
-                            UPDATE clip SET created_at = ?, source_bundle_id = ? WHERE id = ?
-                            """,
-                            [
-                                .value(item.createdAt),
-                                .value(item.sourceBundleID ?? existing.sourceBundleID),
-                                .value(existing.id),
-                            ]
-                        )
-                        return
-                    }
-                    let row = SQLiteClipRow.make(from: item, originDeviceID: localDeviceID?.hex)
-                    try insert(row, representations: SQLiteRepresentationMapping.rows(from: item.payload))
-                }
-                try applyRetention()
-                return true
-            } catch {
-                SkrepkaLog.store.error("Failed to store clipboard entry: \(error.localizedDescription)")
-                return false
             }
         }
 
