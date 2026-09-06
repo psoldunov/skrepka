@@ -9,6 +9,21 @@ struct ContentSizeTests {
         ClipItem(kind: kind, text: "entry", payload: payload)
     }
 
+    /// The size the detail pass would land on, taking the one file-system walk
+    /// `ThumbnailRenderer` takes rather than a second one of its own — see
+    /// `CopiedSelection`. Nil for a path the file system will not describe,
+    /// which is what the caller passes on.
+    ///
+    /// `deadline` bounds the *measuring* only. The stat walk keeps its own full
+    /// budget, so a test squeezing this one is squeezing the pass it names.
+    private func measure(_ item: ClipItem, deadline: Duration = FileSelection.deadline) -> Int? {
+        ContentSize.byteCount(
+            of: item,
+            selection: CopiedSelection.look(at: item.fileURLs),
+            deadline: deadline
+        )
+    }
+
     private func write(_ byteCount: Int, to url: URL) throws {
         try Data(repeating: 0x41, count: byteCount).write(to: url)
     }
@@ -22,7 +37,7 @@ struct ContentSizeTests {
         let file = directory.appending(path: "notes.txt", directoryHint: .notDirectory)
         try write(5000, to: file)
 
-        let measured = ContentSize.byteCount(of: item(kind: .file, payload: Fixtures.fileURLPayload(file)))
+        let measured = measure(item(kind: .file, payload: Fixtures.fileURLPayload(file)))
         // The logical size, not the size on disk: a 5,000-byte file occupies
         // two 4 KB blocks, and Finder's Get Info leads with 5,000 too.
         #expect(measured == 5000)
@@ -43,7 +58,7 @@ struct ContentSizeTests {
             payload: Fixtures.fileURLPayload(first),
             fileURLs: [first, second]
         )
-        #expect(ContentSize.byteCount(of: selection) == 1500)
+        #expect(measure(selection) == 1500)
     }
 
     @Test("A selection with an unmeasurable file in it reports no size")
@@ -62,7 +77,7 @@ struct ContentSizeTests {
             payload: Fixtures.fileURLPayload(present),
             fileURLs: [present, missing]
         )
-        #expect(ContentSize.byteCount(of: selection) == nil)
+        #expect(measure(selection) == nil)
     }
 
     @Test("A copied folder reports the sum of everything under it")
@@ -74,9 +89,7 @@ struct ContentSizeTests {
         try write(1000, to: directory.appending(path: "a.bin", directoryHint: .notDirectory))
         try write(234, to: nested.appending(path: "b.bin", directoryHint: .notDirectory))
 
-        let measured = ContentSize.byteCount(
-            of: item(kind: .folder, payload: Fixtures.fileURLPayload(directory))
-        )
+        let measured = measure(item(kind: .folder, payload: Fixtures.fileURLPayload(directory)))
         #expect(measured == 1234)
     }
 
@@ -91,9 +104,7 @@ struct ContentSizeTests {
             withDestinationURL: file
         )
 
-        let measured = ContentSize.byteCount(
-            of: item(kind: .folder, payload: Fixtures.fileURLPayload(directory))
-        )
+        let measured = measure(item(kind: .folder, payload: Fixtures.fileURLPayload(directory)))
         #expect(measured == 1000)
     }
 
@@ -105,7 +116,7 @@ struct ContentSizeTests {
 
         // `.app` classifies as `.file` — see `FileURLKind` — but its size is
         // still everything inside it, which is what Finder reports too.
-        let measured = ContentSize.byteCount(of: item(kind: .file, payload: Fixtures.fileURLPayload(bundle)))
+        let measured = measure(item(kind: .file, payload: Fixtures.fileURLPayload(bundle)))
         #expect(measured == 700)
     }
 
@@ -115,7 +126,7 @@ struct ContentSizeTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let gone = directory.appending(path: "gone.bin", directoryHint: .notDirectory)
 
-        #expect(ContentSize.byteCount(of: item(kind: .file, payload: Fixtures.fileURLPayload(gone))) == nil)
+        #expect(measure(item(kind: .file, payload: Fixtures.fileURLPayload(gone))) == nil)
     }
 
     // MARK: - The deadline
@@ -147,6 +158,34 @@ struct ContentSizeTests {
         #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == 42)
     }
 
+    @Test("A selection is measured on one budget, not one budget per folder")
+    func abandonsOversizedSelection() throws {
+        // The regression this pins: the sizing loop had no clock at all, so
+        // every folder in a selection started a fresh `DirectorySize.deadline`
+        // and the cost of a copy was the number of folders in it — twenty of
+        // them five seconds, on the serial actor `HistoryStore.capture` awaits.
+        let root = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "folder", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try write(200, to: folder.appending(path: "inside.bin", directoryHint: .notDirectory))
+        let file = root.appending(path: "a.bin", directoryHint: .notDirectory)
+        try write(50, to: file)
+
+        let selection = ClipItem(
+            kind: .file,
+            text: "a.bin\nfolder",
+            payload: Fixtures.fileURLPayload(file),
+            fileURLs: [file, folder]
+        )
+        // Spent budget means no answer, not the prefix it managed — the rule
+        // `DirectorySize` states, one level up.
+        #expect(measure(selection, deadline: .zero) == nil)
+        // The same selection measures fine when there is time for it, folder
+        // walked through and all.
+        #expect(measure(selection) == 250)
+    }
+
     @Test("An empty folder measures zero rather than giving up")
     func emptyFolderIsZero() throws {
         // Nothing to walk means nothing to run out of time on, so even an
@@ -167,14 +206,14 @@ struct ContentSizeTests {
         ])
         // One picture, offered twice. Adding both would report a 300-byte
         // screenshot as 1.2 kB.
-        #expect(ContentSize.byteCount(of: item(kind: .image, payload: payload)) == 300)
+        #expect(measure(item(kind: .image, payload: payload)) == 300)
     }
 
     @Test("Text-shaped kinds have no size worth showing")
     func textHasNoSize() {
         let payload = ClipPayload(representations: [PasteboardType.string: Data("hello".utf8)])
-        #expect(ContentSize.byteCount(of: item(kind: .text, payload: payload)) == nil)
-        #expect(ContentSize.byteCount(of: item(kind: .richText, payload: payload)) == nil)
-        #expect(ContentSize.byteCount(of: item(kind: .link, payload: payload)) == nil)
+        #expect(measure(item(kind: .text, payload: payload)) == nil)
+        #expect(measure(item(kind: .richText, payload: payload)) == nil)
+        #expect(measure(item(kind: .link, payload: payload)) == nil)
     }
 }

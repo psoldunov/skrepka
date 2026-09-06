@@ -1,10 +1,14 @@
 import Foundation
 
-/// A history row without its payload.
+/// A history row without its payload, and without its picture.
 ///
-/// The picker holds hundreds of these; the full ``ClipPayload`` of an image
-/// entry can be tens of megabytes, so payloads stay in the store until an entry
-/// is actually pasted. The thumbnail is small enough to carry inline.
+/// The store holds one of these per entry the retention cap allows and the
+/// picker draws about twenty, so a summary carries only what a row needs to be
+/// listed, ranked and measured. The full ``ClipPayload`` of an image entry can
+/// be tens of megabytes and stays in the store until the entry is pasted; the
+/// thumbnail is smaller but there is one per picture, so it stays there too and
+/// is read by id when a row draws. ``hasThumbnail`` is the part the list needs —
+/// it decides the row's height and whether to ask for the bytes at all.
 public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let id: UUID
     public let kind: ClipKind
@@ -15,6 +19,10 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let isConcealed: Bool
     public let imageSize: ClipItem.ImageSize?
     /// Size of the copied content, when one could be measured.
+    ///
+    /// Measured on the machine that made the copy and never sent to a peer — a
+    /// file's size describes a path only that machine has. A row learned from a
+    /// peer therefore has none, exactly as it has no thumbnail.
     public let byteCount: Int?
     /// How many files the entry holds — 3 for a copy of three files, 1 for a
     /// copy of one, and 0 for anything that is not a file.
@@ -24,15 +32,25 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     /// "is this a file": ``ClipKind/isFileSystemEntry`` answers that, and an old
     /// row still holds its one file whatever this says.
     public let fileCount: Int
-    /// Small PNG rendering for image entries.
-    public let thumbnail: Data?
-    /// One picture per file, front first, for the stack a row holding several
-    /// files draws in place of a single preview.
+    /// Whether the store holds a rendered preview for this entry.
     ///
-    /// Empty for everything else, and for a row stored before stacks existed.
-    /// Bounded by ``FileSelection/maximumStackedIcons``, so this stays small
-    /// enough for the picker to hold hundreds of summaries.
-    public let stackIcons: [Data]
+    /// Not the same question as "is this an image": an entry learned from a peer
+    /// carries the picture's dimensions and none of its bytes, so it has an
+    /// ``imageSize`` and no thumbnail.
+    public let hasThumbnail: Bool
+    /// Whether the store holds a stack of file icons for this entry — one
+    /// picture per file, for a row that holds several and draws them piled
+    /// instead of previewing the first alone.
+    ///
+    /// A flag rather than the pictures, for the reason this whole type carries
+    /// none: three icons on every file row is three pictures per row resident
+    /// for as long as the summary is, and file rows are the ones a "select all,
+    /// copy" habit makes numerous. The bytes are read by id when a row draws —
+    /// see `ThumbnailCache`.
+    ///
+    /// False for a row stored before stacks existed, and false on Linux, where
+    /// nothing can render one yet.
+    public let hasStackIcons: Bool
 
     public init(
         id: UUID,
@@ -45,8 +63,8 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         imageSize: ClipItem.ImageSize?,
         byteCount: Int?,
         fileCount: Int = 0,
-        thumbnail: Data?,
-        stackIcons: [Data] = []
+        hasThumbnail: Bool,
+        hasStackIcons: Bool = false
     ) {
         self.id = id
         self.kind = kind
@@ -58,8 +76,8 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         self.imageSize = imageSize
         self.byteCount = byteCount
         self.fileCount = fileCount
-        self.thumbnail = thumbnail
-        self.stackIcons = stackIcons
+        self.hasThumbnail = hasThumbnail
+        self.hasStackIcons = hasStackIcons
     }
 
     /// The content's size as the row subtitle shows it, or nil when there is
@@ -143,6 +161,6 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     /// is the honest signal for the rest: one exists only where something
     /// decoded to a picture.
     public var isPicture: Bool {
-        kind == .image || kind == .imageFile || thumbnail != nil
+        kind == .image || kind == .imageFile || hasThumbnail
     }
 }

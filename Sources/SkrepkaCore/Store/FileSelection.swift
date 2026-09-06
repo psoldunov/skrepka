@@ -3,21 +3,38 @@ import Foundation
 /// Shared limits for what a copied *selection* is allowed to cost.
 ///
 /// One copied file costs one `resourceValues` call; a hundred cost a hundred,
-/// and "select all, copy" is a thing people do. Both questions the detail pass
-/// asks about a selection — what these files are, and how much they weigh — walk
-/// the same list, so both are bounded by the same budget rather than each
-/// inventing one.
+/// and "select all, copy" is a thing people do. The detail pass makes two walks
+/// of that list — ``CopiedSelection/look(at:deadline:)`` asking what these files
+/// are, then ``ContentSize/byteCount(of:deadline:)`` asking what they weigh —
+/// and ``deadline`` bounds each of them whole, so neither pass grows with the
+/// number of files copied. Bounded work, not bounded wall clock: a single
+/// syscall against a hung mount blocks until the mount gives up, which is the
+/// caveat ``DirectorySize`` states and the reason both passes run on
+/// ``ThumbnailRenderer``.
+///
+/// Not one budget across both. Two, because the stat walk has to finish before
+/// there is anything to measure, and a sizing pass handed whatever the first
+/// walk left over would report a size for a small copy and nothing for a large
+/// one depending on how busy the volume was that second. What matters is that
+/// neither walk scales with the file count, and neither does.
 ///
 /// The files themselves are never capped. A row that pasted fewer files than it
 /// says it holds is the defect all of this exists to fix, so what gets bounded
 /// is the work, never the list.
 enum FileSelection {
-    /// How long the whole selection may be interrogated for.
+    /// How long one whole pass over the selection may take.
     ///
     /// Matched to ``DirectorySize/deadline``, which bounds the comparable walk
     /// inside a single copied folder: what either buys is that an enormous copy
-    /// stops quickly. It runs on ``ThumbnailRenderer``, so what the budget
-    /// protects is how soon the new row appears, not the interface.
+    /// stops quickly. A selection of folders is both at once — every entry is a
+    /// directory walk — so ``ContentSize`` spends this budget *down* across them
+    /// rather than granting each a fresh ``DirectorySize/deadline``, which is
+    /// what made a copy of twenty folders cost five seconds.
+    ///
+    /// It runs on ``ThumbnailRenderer``, so what the budget protects is how soon
+    /// the new row appears, not the interface — and, because
+    /// ``HistoryStore/capture(_:)`` awaits that actor, how soon the *next* copy
+    /// can be stored.
     static let deadline: Duration = .milliseconds(250)
 
     /// How many of a selection's file names a row's text lists.

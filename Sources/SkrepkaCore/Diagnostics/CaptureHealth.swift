@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// What the capture loop has actually been doing.
 ///

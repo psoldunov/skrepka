@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The three settings panes.
+/// The settings panes, in the order the tab bar shows them.
 enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case general
     case history
     case privacy
+    case sync
     case diagnostics
 
     var id: String { rawValue }
@@ -14,6 +15,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .general: "General"
         case .history: "History"
         case .privacy: "Privacy"
+        case .sync: "Sync"
         case .diagnostics: "Status"
         }
     }
@@ -23,6 +25,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .general: "gearshape"
         case .history: "clock.arrow.circlepath"
         case .privacy: "hand.raised"
+        // Two machines exchanging, which is what this pane is about. Not
+        // `icloud`: nothing here goes near a server.
+        case .sync: "arrow.trianglehead.2.clockwise.rotate.90"
         case .diagnostics: "stethoscope"
         }
     }
@@ -30,7 +35,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
 
 /// A segmented control on a glass track.
 ///
-/// All three segments live inside one track so the bar reads as a single
+/// Every segment lives inside one track so the bar reads as a single
 /// control; the selected one is a brighter piece of glass that morphs between
 /// positions via `glassEffectID`. A saturated accent fill was tried first and
 /// looked like a blob with two loose icons beside it.

@@ -7,21 +7,35 @@ import Foundation
 /// than by hope.
 ///
 /// Purity is load-bearing rather than tidy. This runs inside
-/// ``PasteboardPoller``'s tick, and that tick advances the change count before
-/// it reads, so anything that blocks here costs history: copies made during the
-/// stall are never seen, and when the poller wakes it captures only whatever is
-/// on the pasteboard by then. A `public.file-url` under an unresponsive mount
-/// is exactly such a stall, which is why telling a copied folder from a copied
-/// file — see ``FileURLKind`` — happens later, on ``ThumbnailRenderer``,
-/// alongside the other work that has to open the copied thing.
+/// ``ClipboardWatcher/checkForChange()``, which writes the change count down
+/// before it reads, so anything that blocks here costs history: copies made
+/// during the stall are never seen, and when the watcher wakes it captures only
+/// whatever is on the clipboard by then. A `public.file-url` under an
+/// unresponsive mount is exactly such a stall, which is why telling a copied
+/// folder from a copied file — see ``FileURLKind`` — happens later, on
+/// ``ThumbnailRenderer``, alongside the other work that has to open the copied
+/// thing.
 public struct CaptureRules: Sendable {
+    /// The default per-item ceiling, named rather than spelled inline so the
+    /// sync target can be checked against it.
+    ///
+    /// `SkrepkaSync` restates this number as `SyncLimits.maximumPayloadBytes` —
+    /// it cannot import `SkrepkaCore`, which does not build on Linux — and
+    /// `SyncLimitsTests` fails if the two ever drift. An item too large to
+    /// capture is too large to receive, and two limits that can disagree is one
+    /// limit and one bug.
+    public static let defaultMaximumItemBytes = 32 * 1024 * 1024
+
     /// Per-item ceiling. Above this the entry is dropped rather than stored;
     /// a 200 MB screenshot is not history, it is a memory leak.
     public let maximumItemBytes: Int
     /// Bundle identifiers the user never wants recorded.
     public let excludedBundleIDs: Set<String>
 
-    public init(maximumItemBytes: Int = 32 * 1024 * 1024, excludedBundleIDs: Set<String> = []) {
+    public init(
+        maximumItemBytes: Int = CaptureRules.defaultMaximumItemBytes,
+        excludedBundleIDs: Set<String> = []
+    ) {
         self.maximumItemBytes = maximumItemBytes
         self.excludedBundleIDs = excludedBundleIDs
     }
@@ -100,7 +114,7 @@ public struct CaptureRules: Sendable {
     ///
     /// A `public.file-url` reads as ``ClipKind/file`` whatever is at the end of
     /// it. Only the file system can say whether that is a folder, and asking it
-    /// from here would put a blocking disk call in the poller's tick;
+    /// from here would put a blocking disk call in the watcher's look;
     /// ``ThumbnailRenderer`` refines the kind instead.
     static func kind(for payload: ClipPayload) -> ClipKind? {
         for type in PasteboardType.readOrder where payload.data(forType: type) != nil {

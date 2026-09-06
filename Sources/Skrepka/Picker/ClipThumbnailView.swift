@@ -10,6 +10,18 @@ import SwiftUI
 /// gets a square kind symbol, so text rows stay compact.
 struct ClipThumbnailView: View {
     let item: ClipSummary
+    /// Already resolved by the list, from `ThumbnailCache`. Nil means a kind
+    /// symbol — the entry has no picture, is concealed, or would not decode.
+    ///
+    /// Handed in rather than looked up here so the resolution happens once per
+    /// row that is actually built, and synchronously: a row that fetched its own
+    /// preview asynchronously would draw a symbol first and swap it for the
+    /// picture a frame later, which reads as the list flickering as it scrolls.
+    let image: NSImage?
+    /// The icons of the files this entry holds, front first, or empty when it
+    /// holds too few to stack. Resolved by the list for the same reason
+    /// ``image`` is.
+    let stackImages: [NSImage]
 
     /// Square side for non-image rows.
     static let symbolSide: CGFloat = 30
@@ -20,28 +32,11 @@ struct ClipThumbnailView: View {
     /// footprint, and a tile that only fitted the front icon would crop them.
     static let stackSize = CGSize(width: 52, height: 48)
 
-    /// The decoded thumbnail, or nil when the row should show a kind symbol.
-    ///
-    /// Cached: this is read on every body evaluation, and decoding a 256-point
-    /// PNG per visible row per keystroke is real work on the main actor.
-    private var previewImage: NSImage? {
-        guard !item.isConcealed else { return nil }
-        return ThumbnailCache.shared.image(for: item)
-    }
-
-    /// The icons of the files this entry holds, front first, or empty when it
-    /// holds too few to stack — and for a concealed entry, which gives up
-    /// nothing about its content, its file names included.
-    private var stackImages: [NSImage] {
-        guard !item.isConcealed else { return [] }
-        return ThumbnailCache.shared.stackImages(for: item)
-    }
-
     var body: some View {
         Group {
             if let stack = FileIconStackView(images: stackImages) {
                 stack
-            } else if let image = previewImage {
+            } else if let image {
                 preview(image)
             } else {
                 symbol

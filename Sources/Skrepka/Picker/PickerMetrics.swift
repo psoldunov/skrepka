@@ -26,8 +26,7 @@ enum PickerMetrics {
     /// symbol does not, and text rows stay compact because most rows are text.
     static func rowHeight(for item: ClipSummary) -> CGFloat {
         guard !item.isConcealed else { return standardRowHeight }
-        return item.thumbnail != nil || !item.stackIcons.isEmpty
-            ? imageRowHeight : standardRowHeight
+        return item.hasThumbnail || item.hasStackIcons ? imageRowHeight : standardRowHeight
     }
 
     /// Height the panel wants for these results, before the screen clamps it.

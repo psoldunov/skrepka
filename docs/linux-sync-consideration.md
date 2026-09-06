@@ -73,7 +73,7 @@ copy. De-duplication by `contentHash` collapses the row, so it costs nothing
 visible — just wasted work.
 
 **3.4 — Cross-system loops.** A copies → Universal Clipboard delivers to B →
-B's poller captures → B pushes back to A. Echo suppression catches this only
+B's watcher captures → B pushes back to A. Echo suppression catches this only
 while its window is warm; Continuity latency can be seconds. Bounded by
 de-duplication, but it is churn with no upside.
 
@@ -477,7 +477,7 @@ it off *with the reason stated in the row* — "Universal Clipboard already does
 this" — rather than as an unexplained disabled switch.
 
 **Echo suppression uses a primitive that already exists.**
-`PasteboardPoller.pause()` / `resume()` is used today so that pasting an entry
+`ClipboardWatcher.pause()` / `resume()` is used today so that pasting an entry
 is not re-recorded, and `resume()` re-reads `changeCount` to discard whatever
 happened while paused. Receiving a live push does the same dance: pause → write
 to the pasteboard → resume. On top of that, keep a short-lived set of recently
@@ -586,7 +586,7 @@ index → payload fetch over loopback, as an integration test.
 
 **App side:** `SyncCoordinator`, a Sync settings tab, pairing sheet with the
 SAS, per-peer rows carrying the live-push toggle. Live push plumbed through the
-existing `PasteboardPoller.pause()` / `resume()` seam plus the recently-received
+existing `ClipboardWatcher.pause()` / `resume()` seam plus the recently-received
 hash set.
 
 **`skrepka-sync-probe`:** an executable second peer with a file-backed store,

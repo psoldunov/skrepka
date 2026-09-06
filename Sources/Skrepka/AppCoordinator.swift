@@ -27,7 +27,11 @@ final class AppCoordinator {
     // Internal rather than private: `AppCoordinator+Diagnostics.swift` is the
     // other half of this type, and Swift scopes `private` to the file.
     let gatherer = DiagnosticsGatherer()
-    let poller: PasteboardPoller
+    let watcher: ClipboardWatcher
+    /// Everything sync owns: identity, the two listeners, discovery, one link
+    /// per paired peer. Built here so there stays exactly one place to look for
+    /// what owns what; it does nothing until the user switches sync on.
+    let sync: SyncCoordinator
     var statusItem: StatusItemController?
     var welcomeWindow: WelcomeWindowController?
 
@@ -52,41 +56,70 @@ final class AppCoordinator {
         let preferences = Preferences()
         self.preferences = preferences
 
-        let bundleID = Bundle.main.bundleIdentifier ?? "dev.soldunov.skrepka"
-        var startupError: String?
-        var storage: DiagnosticsSnapshot.Storage
-        let store: HistoryStore
-        do {
-            let url = try HistoryStore.defaultStoreURL(bundleID: bundleID)
-            store = try HistoryStore(location: url, retention: preferences.retentionPolicy)
-            storage = .onDisk(path: url.path(percentEncoded: false))
-        } catch {
-            SkrepkaLog.store.error("Falling back to in-memory history: \(error.localizedDescription)")
-            startupError =
-                "Skrepka could not open its history database, so this session will not be saved. \(error.localizedDescription)"
-            // An in-memory store keeps the app usable rather than dead on launch.
-            // If even that fails SwiftData itself is unusable, and failing loudly
-            // beats limping on with a broken object graph.
-            guard let fallback = try? HistoryStore(location: nil) else {
-                fatalError("SwiftData could not create an in-memory store; Skrepka cannot run.")
-            }
-            store = fallback
-            storage = .inMemory(reason: error.localizedDescription)
-        }
-        self.store = store
-        self.startupError = startupError
-        self.storage = storage
+        let opened = Self.openStore(retention: preferences.retentionPolicy)
+        store = opened.store
+        startupError = opened.startupError
+        storage = opened.storage
 
-        poller = PasteboardPoller(
+        watcher = ClipboardWatcher(
+            source: PasteboardReader(),
             rules: preferences.captureRules,
             sourceProvider: {
                 // NSWorkspace carries no main-actor annotation in the macOS 26
-                // SDK, so reading it from the poller actor is sanctioned.
+                // SDK, so reading it from the watcher actor is sanctioned.
                 NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             }
         )
         pickerModel = PickerModel(store: store, captureHealth: captureHealth)
-        panelController = PickerPanelController(model: pickerModel)
+        let panelController = PickerPanelController(model: pickerModel)
+        self.panelController = panelController
+        sync = SyncCoordinator(
+            preferences: preferences,
+            store: store,
+            livePushReceiver: LivePushReceiver(
+                watcher: watcher,
+                // Read through a closure rather than handed the controller: the
+                // receiver's one rule about the picker is "not while it is
+                // open", and that needs a boolean rather than a panel.
+                isPickerVisible: { panelController.isVisible }
+            )
+        )
+    }
+
+    /// Opens the on-disk history, or says why it could not.
+    ///
+    /// Lifted out of `init` because it is the one part of construction with a
+    /// decision in it, and because a failure here is a thing the user is told
+    /// about rather than a crash.
+    ///
+    /// An in-memory store keeps the app usable rather than dead on launch. If
+    /// even that fails, SwiftData itself is unusable and failing loudly beats
+    /// limping on with a broken object graph.
+    private static func openStore(
+        retention: RetentionPolicy
+    ) -> (store: HistoryStore, storage: DiagnosticsSnapshot.Storage, startupError: String?) {
+        let bundleID = Bundle.main.bundleIdentifier ?? "dev.soldunov.skrepka"
+        do {
+            let url = try HistoryStore.defaultStoreURL(bundleID: bundleID)
+            return (
+                try HistoryStore(location: url, retention: retention),
+                .onDisk(path: url.path(percentEncoded: false)),
+                nil
+            )
+        } catch {
+            SkrepkaLog.store.error("Falling back to in-memory history: \(error.localizedDescription)")
+            guard let fallback = try? HistoryStore(location: nil) else {
+                fatalError("SwiftData could not create an in-memory store; Skrepka cannot run.")
+            }
+            return (
+                fallback,
+                .inMemory(reason: error.localizedDescription),
+                """
+                Skrepka could not open its history database, so this session will not be saved. \
+                \(error.localizedDescription)
+                """
+            )
+        }
     }
 
     // MARK: - Lifecycle
@@ -117,27 +150,31 @@ final class AppCoordinator {
         startCaptureLoop()
         refreshHealth()
         showWelcomeIfNeeded()
+        Task { [sync] in await sync.start() }
     }
 
     func stop() {
         captureTask?.cancel()
         captureTask = nil
-        Task { await poller.stop() }
+        Task { [sync, watcher] in
+            await watcher.stop()
+            await sync.stop()
+        }
     }
 
     /// Re-reads preferences after the user changes them in Settings.
     func preferencesChanged() {
         store.retention = preferences.retentionPolicy
         let rules = preferences.captureRules
-        Task { await poller.updateRules(rules) }
+        Task { await watcher.updateRules(rules) }
         statusItem?.refreshShortcut()
     }
 
     // MARK: - Capture
 
     private func startCaptureLoop() {
-        captureTask = Task { [weak self, poller, store] in
-            let stream = await poller.start()
+        captureTask = Task { [weak self, watcher, store] in
+            let stream = await watcher.start()
             for await decision in stream {
                 self?.captureHealth.record(decision)
                 self?.refreshHealth()
@@ -146,6 +183,11 @@ final class AppCoordinator {
                     continue
                 }
                 await store.capture(item)
+                // The same stream, not a second watcher: one `changeCount`, one
+                // source of truth about what was copied. Live push is offered
+                // after the store has it, so a peer never learns about a
+                // clipping this machine failed to keep.
+                self?.sync.offerLivePush(item)
             }
         }
     }
@@ -174,8 +216,8 @@ final class AppCoordinator {
 
     /// The app a paste should go to, or nil when there is nobody sensible.
     ///
-    /// Skrepka itself has to be rejected: Settings, the clear-history alert and
-    /// the paste-failed notice all call `NSApp.activate()`, so the hotkey can
+    /// Skrepka itself has to be rejected: the clear-history alert and the
+    /// paste-failed notice both call `NSApp.activate()`, so the hotkey can
     /// easily be pressed while Skrepka is frontmost. Pasting into Skrepka would
     /// activate it, send ⌘V nowhere, and report success — the user loses their
     /// original app *and* the paste. Nil instead makes `PasteService` say so.
@@ -197,9 +239,9 @@ final class AppCoordinator {
         // The system prompt already offers to open Settings, so Skrepka's own
         // notice would just stack a second dialog on top of it.
         let didPrompt = shouldPaste && requestAccessibilityIfNeeded()
-        Task { [pasteService, poller] in
+        Task { [pasteService, watcher] in
             // Skrepka is about to own the pasteboard; do not re-record our own write.
-            await poller.pause()
+            await watcher.pause()
             let outcome = await pasteService.deliver(
                 PasteService.Request(
                     contents: contents,
@@ -210,7 +252,7 @@ final class AppCoordinator {
                     shouldPaste: shouldPaste
                 )
             )
-            await poller.resume()
+            await watcher.resume()
 
             if case .copiedOnly(let reason) = outcome, let reason, !didPrompt {
                 presentNotice(reason)

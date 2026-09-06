@@ -45,8 +45,28 @@ optional() {
 	check "${name}" "$@"
 }
 
+# optional_note <name> <binary> <note> <command...> — as optional, but says
+# something more useful than "brew install it" when the tool is absent.
+optional_note() {
+	local name="$1" binary="$2" note="$3"
+	shift 3
+	if ! command -v "${binary}" > /dev/null 2>&1; then
+		SKIPPED+=("${name} — ${note}")
+		return 0
+	fi
+	check "${name}" "$@"
+}
+
 check "format" xcrun swift-format lint --strict --recursive --parallel Sources Tests
-optional "lint" swiftlint swiftlint lint --strict --quiet
+
+# SwiftLint is not in the toolchain and is easy not to have installed, which
+# used to mean a Mac developer got a green gate for code the Linux gate refuses.
+# scripts/doctor-linux.sh runs SwiftLint 0.65.1 out of skrepka-linux:6.3
+# unconditionally, so the check is covered — but only if this says so, because a
+# skip that reads like an optional extra is how the coverage gets forgotten.
+optional_note "lint" swiftlint \
+	"swiftlint not installed. scripts/doctor-linux.sh runs it in the container; run that too, or brew install swiftlint" \
+	swiftlint lint --strict --quiet
 check "build" swift build
 
 if ((!FAST)); then
@@ -65,6 +85,21 @@ if ((${#FAILED[@]})); then
 	red "✗ doctor failed: ${FAILED[*]}"
 	echo "fix formatting with: xcrun swift-format format --in-place --recursive --parallel Sources Tests"
 	exit 1
+fi
+
+# "clean" has to distinguish five gates passing from three passing and two never
+# running, or a lint regression lands under a green tick — which is exactly what
+# happened: swiftlint has been absent on this machine for the whole branch and
+# every run still said "doctor clean". The count is not decoration.
+if ((${#SKIPPED[@]})); then
+	green "✓ doctor clean (${#SKIPPED[@]} skipped)"
+	# SKREPKA_STRICT is for CI, where a missing tool is a broken image rather
+	# than a laptop without a Homebrew package.
+	if [[ -n "${SKREPKA_STRICT:-}" ]]; then
+		red "✗ SKREPKA_STRICT is set and ${#SKIPPED[@]} check(s) did not run"
+		exit 1
+	fi
+	exit 0
 fi
 
 green "✓ doctor clean"

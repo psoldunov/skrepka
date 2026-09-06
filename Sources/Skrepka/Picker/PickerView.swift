@@ -131,7 +131,9 @@ struct PickerView: View {
                         ClipRowView(
                             item: item,
                             index: index,
-                            isSelected: selectedID == item.id
+                            isSelected: selectedID == item.id,
+                            thumbnail: model.thumbnail(for: item),
+                            stackImages: model.stackImages(for: item)
                         )
                         .id(item.id)
                         .onTapGesture { model.onChoose?(item, .rich) }

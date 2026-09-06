@@ -1,9 +1,19 @@
-import CryptoKit
 import Foundation
+
+// swift-crypto is source-identical to CryptoKit — on Apple platforms it
+// compiles its API surface away and re-exports CryptoKit, so `SHA256` here is
+// the same algorithm producing the same bytes either way. `ClipItemTests`
+// pins that with a known-answer vector rather than trusting the claim, because
+// `contentHash` is the sync model's identity and a divergence would be silent.
+#if canImport(CryptoKit)
+    import CryptoKit
+#else
+    import Crypto
+#endif
 
 /// One entry in the clipboard history, as the rest of the app sees it.
 ///
-/// A value type on purpose: it crosses from the poller actor to the main actor
+/// A value type on purpose: it crosses from the watcher actor to the main actor
 /// on every capture, and `Sendable` for free is worth more than in-place edits.
 public struct ClipItem: Identifiable, Sendable, Hashable {
     public let id: UUID
