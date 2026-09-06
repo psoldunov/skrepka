@@ -16,6 +16,14 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let imageSize: ClipItem.ImageSize?
     /// Size of the copied content, when one could be measured.
     public let byteCount: Int?
+    /// How many files the entry holds — 3 for a copy of three files, 1 for a
+    /// copy of one, and 0 for anything that is not a file.
+    ///
+    /// Zero also for a file entry stored before Skrepka kept more than the first
+    /// file, which is why the row asks ``fileCount`` for a *count* and never for
+    /// "is this a file": ``ClipKind/isFileSystemEntry`` answers that, and an old
+    /// row still holds its one file whatever this says.
+    public let fileCount: Int
     /// Small PNG rendering for image entries.
     public let thumbnail: Data?
 
@@ -29,6 +37,7 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         isConcealed: Bool,
         imageSize: ClipItem.ImageSize?,
         byteCount: Int?,
+        fileCount: Int = 0,
         thumbnail: Data?
     ) {
         self.id = id
@@ -40,6 +49,7 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         self.isConcealed = isConcealed
         self.imageSize = imageSize
         self.byteCount = byteCount
+        self.fileCount = fileCount
         self.thumbnail = thumbnail
     }
 
@@ -66,29 +76,64 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     /// Single-line preview, masked when the entry came from a password manager.
     ///
     /// An image has no text to collapse, so it is labelled by its dimensions.
+    ///
+    /// A copy of several files is a list of names, and a list wants commas: the
+    /// plain collapse joins lines with spaces, which ran three file names into
+    /// one long string that read like a single absurd file name.
     public var previewText: String {
         guard !isConcealed else { return PreviewText.concealedMask }
-        if let collapsed = PreviewText.collapsed(text) { return collapsed }
+        let separator = kind.isFileSystemEntry ? ", " : " "
+        if let collapsed = PreviewText.collapsed(text, separator: separator) { return collapsed }
         if kind == .image, let imageSize { return imageSize.description }
         return kind.displayName
     }
 
-    /// Line count of the original text, shown as "+3 lines" on multi-line rows.
+    /// What the row calls this entry: "Image", or "3 Images" when it holds
+    /// several files.
+    ///
+    /// Counted from ``fileCount`` rather than from the lines of ``text``, so a
+    /// row only ever claims files it can actually paste back.
+    public var typeLabel: String {
+        guard kind.isFileSystemEntry, fileCount > 1 else { return kind.displayName }
+        return "\(fileCount) \(kind.pluralDisplayName)"
+    }
+
+    /// Line count of the original text, shown as "3 lines" on multi-line rows.
     public var lineCount: Int {
         guard !isConcealed else { return 1 }
         return max(1, text.split(whereSeparator: \.isNewline).count)
     }
 
+    /// The "3 lines" a row shows, or nil when there is nothing worth saying.
+    ///
+    /// A file entry never has one. Its text is a list of file names, so counting
+    /// lines counts files — and it counted them from names the pasteboard
+    /// supplied rather than from files Skrepka kept, which is how a copy of
+    /// three pictures came to read "1402 × 578 · 3 lines" while holding one.
+    /// ``typeLabel`` says it properly.
+    public var lineCountText: String? {
+        guard !kind.isFileSystemEntry, lineCount > 1 else { return nil }
+        return "\(lineCount) lines"
+    }
+
+    /// The `1402 × 578` a row shows, or nil when no single picture is being
+    /// described — a selection of several files is previewed by its first, and
+    /// labelling the row with that one's dimensions describes the other two.
+    public var imageSizeText: String? {
+        guard !isConcealed, fileCount <= 1, let imageSize else { return nil }
+        return imageSize.description
+    }
+
     /// Whether this entry is a picture, for counting and for anything that
     /// treats pictures as a group.
     ///
-    /// Not `kind == .image`: `public.file-url` outranks `public.png` in
-    /// ``PasteboardType/readOrder``, so a screenshot copied out of Finder is
-    /// `.file`, and counting by kind alone reported zero Images for a history
-    /// full of them. Not ``ClipKind/canPreview`` either — that admits every
-    /// `.file`, so a copied text document would count. A thumbnail is the
-    /// honest signal: one exists only where something decoded to a picture.
+    /// Not the image kinds alone: a picture whose file the disk would not
+    /// describe stays a `.file`, and counting by kind alone reported zero Images
+    /// for a history full of them. Not ``ClipKind/canPreview`` either — that
+    /// admits every `.file`, so a copied text document would count. A thumbnail
+    /// is the honest signal for the rest: one exists only where something
+    /// decoded to a picture.
     public var isPicture: Bool {
-        kind == .image || thumbnail != nil
+        kind == .image || kind == .imageFile || thumbnail != nil
     }
 }

@@ -86,6 +86,20 @@ public final class HistoryStore {
                 // measurement is kept when this one came back empty, so a moved
                 // file does not lose the size it was copied at.
                 existing.byteCount = details.byteCount ?? existing.byteCount
+                // A file entry stored before Skrepka kept the files it holds has
+                // none listed, and it was named from the pasteboard's own text
+                // rather than from its files — a Finder copy of three wrote
+                // three display names there while only the first was ever kept.
+                // Landing here proves this copy holds the same files the row
+                // does: the hash covers every one of them, see
+                // ``ClipItem/hash(kind:text:payload:fileURLs:)``. So both are
+                // written, and together. Writing the list alone left the row
+                // naming three files under a label that said one, and pasting
+                // the one.
+                if item.kind.isFileSystemEntry, !item.fileURLs.isEmpty {
+                    existing.fileURLStrings = item.fileURLs.map(\.absoluteString)
+                    existing.text = item.text
+                }
                 backfillPreview(details.preview, into: existing)
                 try context.save()
                 reload()
@@ -123,11 +137,15 @@ public final class HistoryStore {
 
     // MARK: - Reading
 
-    /// Loads an entry's full payload. Only called when something is pasted.
-    public func payload(for id: UUID) -> ClipPayload? {
+    /// Loads everything an entry needs to be pasted. Only called when something
+    /// is pasted.
+    public func contents(for id: UUID) -> ClipContents? {
         do {
             guard let record = try record(withID: id) else { return nil }
-            return try ClipRecordMapping.decodePayload(record.payloadData)
+            return ClipContents(
+                payload: try ClipRecordMapping.decodePayload(record.payloadData),
+                fileURLs: ClipRecordMapping.fileURLs(from: record)
+            )
         } catch {
             SkrepkaLog.store.error("Failed to load payload: \(error.localizedDescription)")
             return nil

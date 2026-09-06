@@ -24,6 +24,14 @@ final class ClipRecord {
     var byteCount: Int?
     /// Small PNG preview. Inline: it is read for every visible row.
     var thumbnailData: Data?
+    /// Absolute URL of every file the entry holds, when it holds files.
+    ///
+    /// The payload carries the first one and no more — see ``ClipItem/fileURLs``
+    /// — so this is what lets a copy of several files paste back as several
+    /// files. Optional with no default, so a store written before multi-file
+    /// copies were kept migrates by leaving it nil rather than claiming every
+    /// old entry holds no files at all.
+    var fileURLStrings: [String]?
     /// Every pasteboard representation, property-list encoded.
     ///
     /// `.externalStorage` keeps the blob out of the SQLite row, so a 20 MB
@@ -43,6 +51,7 @@ final class ClipRecord {
         imageHeight: Int?,
         byteCount: Int?,
         thumbnailData: Data?,
+        fileURLStrings: [String]?,
         payloadData: Data
     ) {
         self.id = id
@@ -57,6 +66,7 @@ final class ClipRecord {
         self.imageHeight = imageHeight
         self.byteCount = byteCount
         self.thumbnailData = thumbnailData
+        self.fileURLStrings = fileURLStrings
         self.payloadData = payloadData
     }
 }

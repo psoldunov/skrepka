@@ -22,6 +22,26 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
     public let contentHash: String
     /// Pixel dimensions, when the entry is an image.
     public let imageSize: ImageSize?
+    /// Every file the copy holds, in the order the pasteboard listed them.
+    ///
+    /// Copying three files in Finder puts three items on the pasteboard, one
+    /// file URL each, and ``ClipPayload`` only ever holds the first — see
+    /// ``PasteboardSnapshot``. Without this the other two are lost: the row
+    /// counts them, but pasting restores one file.
+    ///
+    /// Empty for everything that is not a file. A file entry built from a
+    /// payload alone — which is what the store's tests do, and what a capture
+    /// off a single-item pasteboard amounts to — resolves to the one file its
+    /// payload names, so every reader can take this list as the whole answer
+    /// instead of falling back to the payload itself.
+    ///
+    /// Each file appears once. A copy cannot hold the same file twice, and a
+    /// list that said it did would be wrong in four places at once: it would
+    /// paste that file twice, weigh it twice, count it twice on the row, and
+    /// hash as a selection distinct from the one it actually is. The capture
+    /// rules already drop duplicates; holding the invariant here means every
+    /// other way of building an entry gets it too.
+    public let fileURLs: [URL]
 
     public init(
         id: UUID = UUID(),
@@ -33,6 +53,7 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
         isPinned: Bool = false,
         isConcealed: Bool = false,
         imageSize: ImageSize? = nil,
+        fileURLs: [URL] = [],
         contentHash: String? = nil
     ) {
         self.id = id
@@ -44,7 +65,12 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
         self.isPinned = isPinned
         self.isConcealed = isConcealed
         self.imageSize = imageSize
-        self.contentHash = contentHash ?? Self.hash(kind: kind, text: text, payload: payload)
+        let listed = fileURLs.isEmpty ? [payload.fileURL].compactMap(\.self) : fileURLs
+        var seen: Set<URL> = []
+        let files = listed.filter { seen.insert($0).inserted }
+        self.fileURLs = files
+        self.contentHash =
+            contentHash ?? Self.hash(kind: kind, text: text, payload: payload, fileURLs: files)
     }
 
     /// Pixel dimensions of an image entry.
@@ -77,6 +103,7 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
             isPinned: pinned,
             isConcealed: isConcealed,
             imageSize: imageSize,
+            fileURLs: fileURLs,
             contentHash: contentHash
         )
     }
@@ -88,15 +115,39 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
     /// — see ``ClipKind/identityTypes``. Hashing their ``text`` would be a hash
     /// of a display string, and a collision there does not merge two entries,
     /// it discards the newer one.
-    static func hash(kind: ClipKind, text: String, payload: ClipPayload) -> String {
+    ///
+    /// A copy of several files is identified by the whole set instead. The
+    /// payload holds the first file and no more, so identifying a selection by
+    /// it makes `[report.pdf, jan.csv]` and `[report.pdf, feb.csv]` one entry —
+    /// the second copy is discarded onto the first, and the files it held are
+    /// gone.
+    static func hash(kind: ClipKind, text: String, payload: ClipPayload, fileURLs: [URL]) -> String {
         var hasher = SHA256()
         hasher.update(data: Data(kind.hashDomain.utf8))
-        if let identityTypes = kind.identityTypes {
+        if kind.isFileSystemEntry && fileURLs.count > 1 {
+            hash(selection: fileURLs, into: &hasher)
+        } else if let identityTypes = kind.identityTypes {
             hash(payload, preferring: identityTypes, into: &hasher)
         } else {
             hasher.update(data: Data(text.utf8))
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Feeds a whole copied selection into `hasher`, and nothing else.
+    ///
+    /// Sorted, because the pasteboard's order is the order the files happened to
+    /// be clicked in: the same three files copied twice are the same copy, and
+    /// ordering the hash by selection would file the second as a new entry.
+    ///
+    /// The payload deliberately takes no part. It carries whichever file came
+    /// first, which is exactly what the order is not allowed to decide — and a
+    /// lone file never reaches here, so its hash stays what it has always been
+    /// and re-copying it still lands on its own row instead of duplicating it.
+    private static func hash(selection urls: [URL], into hasher: inout SHA256) {
+        for url in urls.map(\.absoluteString).sorted() {
+            hasher.update(data: Data(url.utf8))
+        }
     }
 
     /// Feeds the richest ranked representation into `hasher`, or every

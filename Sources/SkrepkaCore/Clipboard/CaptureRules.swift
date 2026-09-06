@@ -42,7 +42,8 @@ public struct CaptureRules: Sendable {
             return .rejectedTooLarge(byteCount: payload.byteCount)
         }
 
-        let text = Self.text(for: kind, payload: payload)
+        let fileURLs = kind.isFileSystemEntry ? Self.fileURLs(in: snapshot, payload: payload) : []
+        let text = Self.text(for: kind, payload: payload, fileURLs: fileURLs)
         guard kind == .image || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .rejectedEmpty
         }
@@ -54,9 +55,27 @@ public struct CaptureRules: Sendable {
                 payload: payload,
                 sourceBundleID: snapshot.sourceBundleID,
                 createdAt: snapshot.capturedAt,
-                isConcealed: PrivacyMarkers.isConcealed(types: snapshot.declaredTypes)
+                isConcealed: PrivacyMarkers.isConcealed(types: snapshot.declaredTypes),
+                fileURLs: fileURLs
             )
         )
+    }
+
+    /// The files the copy holds, with the payload's own file leading.
+    ///
+    /// The snapshot lists them in pasteboard order and the payload holds the
+    /// first item's, so the two normally agree. Normally is not always: an app
+    /// may put a file URL under a type the reader took no other item from, and
+    /// an entry whose first file disagreed with its payload would paste one file
+    /// and measure another. Leading with the payload's own settles that, and
+    /// duplicates are dropped so the leader is not counted twice.
+    static func fileURLs(in snapshot: PasteboardSnapshot, payload: ClipPayload) -> [URL] {
+        var ordered = snapshot.fileURLs
+        if let first = payload.fileURL {
+            ordered = [first] + ordered.filter { $0 != first }
+        }
+        var seen: Set<URL> = []
+        return ordered.filter { seen.insert($0).inserted }
     }
 
     /// Tells "the clipboard holds nothing we want" apart from "we were not
@@ -101,7 +120,24 @@ public struct CaptureRules: Sendable {
     ///
     /// Images legitimately have none; the picker labels those from their kind
     /// and dimensions instead.
-    static func text(for kind: ClipKind, payload: ClipPayload) -> String {
+    ///
+    /// A file entry is named by the files it actually holds, one per line, so
+    /// the row lists what the row can paste. The pasteboard's own text flavour
+    /// is not that list: Finder writes the *display* names of the whole
+    /// selection there, which hides extensions when the user has asked it to and
+    /// keeps naming files that arrived without their URL — a copy relayed
+    /// through Universal Clipboard names three pictures and hands over one.
+    ///
+    /// Only the first ``FileSelection/maximumNamedFiles`` of them, because this
+    /// string is stored, searched and re-joined on every draw — see the constant
+    /// for what that costs and what it gives up. The files are not capped with
+    /// the names: the row still holds and pastes every one of them.
+    static func text(for kind: ClipKind, payload: ClipPayload, fileURLs: [URL]) -> String {
+        if kind.isFileSystemEntry, !fileURLs.isEmpty {
+            return fileURLs.prefix(FileSelection.maximumNamedFiles)
+                .map(Self.displayName(ofFileAt:))
+                .joined(separator: "\n")
+        }
         let textTypes = [PasteboardType.string, PasteboardType.url, PasteboardType.fileURL]
         for type in textTypes {
             guard let data = payload.data(forType: type),
@@ -112,9 +148,17 @@ public struct CaptureRules: Sendable {
         return ""
     }
 
-    /// `file:///Users/me/Pictures/shot.png` reads better as `shot.png`.
+    /// `file:///Users/me/Pictures/shot.png` reads as `shot.png`. Percent
+    /// escapes are already decoded by `lastPathComponent`, so a name with a
+    /// space in it arrives spelled the way Finder spells it.
+    static func displayName(ofFileAt url: URL) -> String {
+        url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+    }
+
+    /// The same, for a file named by a string rather than by a URL — which is
+    /// what is left when the pasteboard carried no file URL to read.
     static func displayPath(forFileURL string: String) -> String {
         guard let url = URL(string: string), url.isFileURL else { return string }
-        return url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+        return displayName(ofFileAt: url)
     }
 }

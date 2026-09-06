@@ -41,6 +41,14 @@ enum Fixtures {
         return url
     }
 
+    /// A file whose type is definitely not a picture, for the cases that turn on
+    /// telling one from the other.
+    static func writeTextFile(_ contents: String = "hello", named name: String) throws -> URL {
+        let url = try makeDirectory().appending(path: name, directoryHint: .notDirectory)
+        try Data(contents.utf8).write(to: url)
+        return url
+    }
+
     /// A JPEG carrying an EXIF orientation, for the rotated-photo cases.
     ///
     /// JPEG rather than PNG because EXIF orientation is what a camera writes and

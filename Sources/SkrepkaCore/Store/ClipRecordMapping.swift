@@ -38,6 +38,10 @@ enum ClipRecordMapping {
             imageHeight: imageSize?.height,
             byteCount: details.byteCount,
             thumbnailData: details.preview?.thumbnail,
+            // Nil rather than an empty array for an entry that holds no files,
+            // so "this copy had none" and "this row predates the column" read
+            // the same way: as nothing to paste back beyond the payload.
+            fileURLStrings: item.fileURLs.isEmpty ? nil : item.fileURLs.map(\.absoluteString),
             payloadData: try encode(item.payload)
         )
     }
@@ -59,7 +63,16 @@ enum ClipRecordMapping {
             isConcealed: record.isConcealed,
             imageSize: imageSize,
             byteCount: record.byteCount,
+            // The count, not the URLs: the picker holds hundreds of these and
+            // needs only to say "3 Files". The list itself stays in the store
+            // until something is pasted, like the payload beside it.
+            fileCount: record.fileURLStrings?.count ?? 0,
             thumbnail: record.thumbnailData
         )
+    }
+
+    /// The files an entry holds, for the paste that restores them.
+    static func fileURLs(from record: ClipRecord) -> [URL] {
+        (record.fileURLStrings ?? []).compactMap(URL.init(string:))
     }
 }

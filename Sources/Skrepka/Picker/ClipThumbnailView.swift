@@ -47,6 +47,29 @@ struct ClipThumbnailView: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
         }
-        .accessibilityLabel(item.kind.displayName)
+        .overlay(alignment: .bottomTrailing) { fileCount }
+        .accessibilityLabel(item.typeLabel)
+    }
+
+    /// How many files the row holds, on the picture of the first one.
+    ///
+    /// A copy of several files is previewed by whichever came first, so without
+    /// this the row shows one screenshot and the other two are only mentioned in
+    /// the subtitle — the thumbnail says "a picture" where the entry is "three
+    /// pictures".
+    @ViewBuilder private var fileCount: some View {
+        if item.fileCount > 1, !item.isConcealed {
+            Text("\(item.fileCount)")
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(.thickMaterial, in: .rect(cornerRadius: 4))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                }
+                .padding(3)
+        }
     }
 }

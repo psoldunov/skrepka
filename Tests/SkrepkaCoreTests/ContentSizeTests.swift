@@ -28,6 +28,43 @@ struct ContentSizeTests {
         #expect(measured == 5000)
     }
 
+    @Test("A copy of several files reports what all of them weigh")
+    func measuresWholeSelection() throws {
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = directory.appending(path: "a.bin", directoryHint: .notDirectory)
+        let second = directory.appending(path: "b.bin", directoryHint: .notDirectory)
+        try write(1000, to: first)
+        try write(500, to: second)
+
+        let selection = ClipItem(
+            kind: .file,
+            text: "a.bin\nb.bin",
+            payload: Fixtures.fileURLPayload(first),
+            fileURLs: [first, second]
+        )
+        #expect(ContentSize.byteCount(of: selection) == 1500)
+    }
+
+    @Test("A selection with an unmeasurable file in it reports no size")
+    func partialSelectionHasNoSize() throws {
+        // The rule `DirectorySize` states, applied one level up: two files out
+        // of three is a wrong number that looks like a right one.
+        let directory = try Fixtures.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let present = directory.appending(path: "a.bin", directoryHint: .notDirectory)
+        try write(1000, to: present)
+        let missing = directory.appending(path: "gone.bin", directoryHint: .notDirectory)
+
+        let selection = ClipItem(
+            kind: .file,
+            text: "a.bin\ngone.bin",
+            payload: Fixtures.fileURLPayload(present),
+            fileURLs: [present, missing]
+        )
+        #expect(ContentSize.byteCount(of: selection) == nil)
+    }
+
     @Test("A copied folder reports the sum of everything under it")
     func measuresFolderRecursively() throws {
         let directory = try Fixtures.makeDirectory()
