@@ -21,10 +21,7 @@
             )
             guard status == BonjourDiscovery.Status.noError, let reference else {
                 DNSServiceReplySink<ResolutionReply>.release(context: context)
-                throw DiscoveryError.resolutionFailed(
-                    peer: peer.instanceName,
-                    reason: BonjourDiscovery.message(for: status)
-                )
+                throw BonjourDiscovery.resolutionError(status, peer: peer)
             }
             // dns_sd.h:3090-3094. Unchecked, a query whose dispatch source was
             // never created burns the caller's whole timeout and then reports
@@ -47,6 +44,26 @@
             return try resolved(peer, from: await sink.first(timeout: timeout))
         }
 
+        /// The right error for a responder status, which for one status is not
+        /// about the peer at all.
+        ///
+        /// Resolving is a Bonjour operation, so TN3179 gates it on local network
+        /// access like the other two. Reported as
+        /// ``DiscoveryError/localNetworkDenied`` rather than as this peer having
+        /// failed to answer, because every peer would fail identically and none
+        /// of them is the reason.
+        static func resolutionError(
+            _ status: DNSServiceErrorType,
+            peer: DiscoveredPeer
+        ) -> DiscoveryError {
+            status == BonjourDiscovery.Status.policyDenied
+                ? .localNetworkDenied
+                : .resolutionFailed(
+                    peer: peer.instanceName,
+                    reason: BonjourDiscovery.message(for: status)
+                )
+        }
+
         private func resolved(
             _ peer: DiscoveredPeer,
             from outcome: DNSServiceReplySink<ResolutionReply>.Outcome
@@ -65,10 +82,7 @@
                         peer: peer.instanceName, error: error)
                 }
             case .reply(let reply):
-                throw DiscoveryError.resolutionFailed(
-                    peer: peer.instanceName,
-                    reason: BonjourDiscovery.message(for: reply.errorCode)
-                )
+                throw BonjourDiscovery.resolutionError(reply.errorCode, peer: peer)
             case .ended:
                 throw DiscoveryError.resolutionFailed(
                     peer: peer.instanceName, reason: "the query was torn down")

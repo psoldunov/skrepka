@@ -42,11 +42,17 @@ extension ProbePeer {
         #endif
     }
 
+    /// Brings the published record in line with what this peer now is.
+    ///
+    /// Amended rather than withdrawn and republished, for the reason
+    /// ``AdvertisementChange`` gives: the probe opens and closes its pairing
+    /// window exactly as the app does, and a probe that vanishes from the Mac's
+    /// device list every time it does is a runbook step that fails for a reason
+    /// which is not the one being tested.
     func republishAdvertisement() async throws {
         #if canImport(Network) && canImport(dnssd)
             guard let discovery else { return }
-            await discovery.stopAdvertising()
-            try await discovery.startAdvertising(descriptor())
+            try await discovery.updateAdvertisement(descriptor())
         #endif
     }
 

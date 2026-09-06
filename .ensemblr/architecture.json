@@ -208,7 +208,7 @@
 						"path": "Sources/Skrepka/Platform/SystemSettingsLink.swift"
 					}
 				],
-				"sublabel": "Accessibility trust, login item",
+				"sublabel": "Accessibility trust, login item, and the Local Network pane sync sends you to",
 				"type": "security"
 			},
 			{
@@ -247,7 +247,7 @@
 						"path": "Sources/Skrepka/Sync/SyncCoordinator+Serving.swift"
 					}
 				],
-				"sublabel": "two listeners — pinned always, pairing only while asked; one serial queue orders every change to them",
+				"sublabel": "comes up in two steps — listeners need no permission, publishing and dialling wait for the browse; one serial queue orders every change",
 				"type": "security"
 			},
 			{
@@ -475,7 +475,7 @@
 						"path": "Sources/SkrepkaSync/Discovery"
 					}
 				],
-				"sublabel": "_skrepka._tcp; pair= names the second port, and only while open",
+				"sublabel": "_skrepka._tcp; the browse is the Local Network gate, and pair= is amended in place rather than republished",
 				"type": "backend"
 			},
 			{
@@ -564,7 +564,7 @@
 			{
 				"id": "bonjour",
 				"label": "mDNSResponder",
-				"sublabel": "DNSServiceRegister — NWListener owns no port here",
+				"sublabel": "DNSServiceRegister owns no port; DNSServiceUpdateRecord amends the TXT in place",
 				"type": "external"
 			},
 			{
@@ -845,6 +845,13 @@
 				"variant": "security"
 			},
 			{
+				"from": "sync-ui",
+				"id": "e-syncui-permissions",
+				"label": "Open Settings, but only when the local network was refused",
+				"to": "permissions",
+				"variant": "dashed"
+			},
+			{
 				"from": "live-push",
 				"id": "e-livepush-paste",
 				"label": "writes through the one owner",
@@ -944,6 +951,13 @@
 				"id": "e-syncdiscovery-bonjour",
 				"label": "registers & browses",
 				"to": "bonjour"
+			},
+			{
+				"from": "sync-discovery",
+				"id": "e-syncdiscovery-synccoord",
+				"label": "the browse reaching ready is the Local Network gate — publish and dial only after it",
+				"to": "sync-coordinator",
+				"variant": "security"
 			},
 			{
 				"from": "sync-discovery",

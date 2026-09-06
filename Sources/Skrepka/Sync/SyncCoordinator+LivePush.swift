@@ -138,7 +138,7 @@ extension SyncCoordinator {
                 livePushChoices[deviceID] = choice
                 refreshRows()
             } catch {
-                errorMessage = "Skrepka could not save that setting."
+                showMessage("Skrepka could not save that setting.", from: .elsewhere)
                 SkrepkaLog.sync.error(
                     "Saving a live-push choice failed: \(String(describing: error), privacy: .public)"
                 )

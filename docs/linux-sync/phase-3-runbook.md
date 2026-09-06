@@ -95,10 +95,26 @@ Launch with `scripts/run.sh`, not by executing the binary: TCC attributes
 permissions to the responsible process, so a shell-launched binary inherits the
 terminal's grants instead of exercising the real permission path.
 
-1. **Local Network permission.** The first browse should raise the system
-   prompt. `Info.plist` now carries `NSBonjourServices` and
-   `NSLocalNetworkUsageDescription`, which `NSNetServices.h` documents as
-   required — untested against a live prompt.
+1. **Local Network permission.** Switching sync on should raise the system
+   prompt **exactly once**, and answering "Allow" should finish the bring-up with
+   nothing further to press: the switch stays on, the device list fills, and no
+   second prompt appears at any point during pairing.
+
+   That is the shape `bringUp()` was rebuilt for. Publishing this device,
+   resolving a peer and dialling one all need the Local Network privilege, and
+   [TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+   says macOS denies each such operation *immediately* while its alert is
+   unanswered — so all three now wait for the browse to report `.ready`, and the
+   browse is the only one that runs first. `Info.plist` carries
+   `NSBonjourServices` and `NSLocalNetworkUsageDescription`, which
+   `NSNetServices.h` documents as required.
+
+   **Untested against a live prompt.** There is no way to reset the privilege to
+   undetermined on macOS (TN3179 names the bug, FB14944392); testing it needs a
+   fresh user account or a VM snapshot. Denying it should show the
+   "Allow it in System Settings" notice with an Open Settings button, and
+   granting it later should recover on its own without touching the switch —
+   both also unverified.
 2. **Steps 4, 5 and 9 end to end**, against a real pasteboard and a real password
    manager.
 3. **Step 10's resume**, by killing a transfer part-way.

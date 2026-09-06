@@ -83,11 +83,16 @@ extension SyncCoordinator {
 
     func performStart() async {
         guard runtime == nil else { return }
+        // The origin with the message. Leaving a stale one behind would have the
+        // first `.ready` of this run decline to clear its own message, because
+        // the slot would still be marked as somebody else's.
         errorMessage = nil
+        messageOrigin = .elsewhere
+        isLocalNetworkDenied = false
         do {
             try await bringUp()
         } catch {
-            errorMessage = SyncFailureText.describe(error)
+            showMessage(SyncFailureText.describe(error), from: .elsewhere)
             SkrepkaLog.sync.error(
                 "Sync could not start: \(String(describing: error), privacy: .public)"
             )
@@ -108,6 +113,11 @@ extension SyncCoordinator {
         answerPairing(false)
         pendingPairing = nil
         isPairingInFlight = false
+
+        // The publish retry with the rest: one still sleeping would wake into a
+        // coordinator that has switched sync off and try to advertise it.
+        cancelPublishRetry()
+        publishAttempts = 0
 
         acceptTask?.cancel()
         pairingAcceptTask?.cancel()
@@ -142,9 +152,35 @@ extension SyncCoordinator {
         sighted.removeAll()
         progress.removeAll()
         isAcceptingPairing = false
+        isPublished = false
+        isLocalNetworkDenied = false
+        // Discovery's message goes with the discovery that wrote it. A failure
+        // from anywhere else is the user's to read after the switch went off.
+        clearMessage(from: .discovery)
         refreshRows()
     }
 
+    /// Brings sync up as far as it can go without asking macOS for anything.
+    ///
+    /// **It deliberately stops short of publishing this device or dialling any
+    /// peer.** Both of those need the Local Network privilege, and so does
+    /// resolving a peer's address; browsing needs it too. While that privilege
+    /// is undetermined macOS denies each such operation *and* raises its own
+    /// alert about it — Apple's TN3179, *Understanding local network privacy*,
+    /// says the denial comes first and does not wait for the user's answer. Four
+    /// of them fired one after another is therefore four chances at an alert and
+    /// a bring-up that has already failed by the time the user reads the first,
+    /// which is what made switching sync on turn itself back off again.
+    ///
+    /// So exactly one operation goes first, and it is the browse: it is the only
+    /// one of the four that *waits* rather than failing, and `NWBrowser` returns
+    /// to `.ready` by itself the moment access is granted. ``performPublish()``
+    /// hangs off that, so answering the alert finishes the job with nothing else
+    /// to press.
+    ///
+    /// Listening is not on the list. TN3179's table of local network operations
+    /// puts "listening for and accepting incoming TCP connections" at *no*, so
+    /// both listeners bind before any of this and neither one can prompt.
     func bringUp() async throws {
         let certificate = try await trust.localIdentity()
         localDeviceID = certificate.deviceID
@@ -173,8 +209,7 @@ extension SyncCoordinator {
 
         try await reloadPairedPeers()
         try await startSyncListener(runtime: runtime)
-        try await startDiscovery(runtime: runtime)
-        reconcileLinks()
+        try await startBrowsing()
     }
 
     /// Re-reads the paired set and the live-push choices that go with it.

@@ -8,36 +8,17 @@ import os
 extension SyncCoordinator {
     // MARK: - Advertising and browsing
 
-    func startDiscovery(runtime: SyncRuntime) async throws {
+    /// Starts looking for peers — and nothing else.
+    ///
+    /// Named for what it does now. Publishing this device used to happen here
+    /// too and is now ``performPublish()``, which the browse itself triggers;
+    /// see ``SyncCoordinator/bringUp()`` for why the order matters. It takes no
+    /// `SyncRuntime` for the same reason: browsing asks nothing about this
+    /// device, and only publishing did.
+    func startBrowsing() async throws {
         let discovery = BonjourDiscovery()
         self.discovery = discovery
-        try await discovery.startAdvertising(descriptor(for: runtime))
         try await watchBrowse(discovery)
-    }
-
-    /// Re-publishes the record, which is how a new listening port or an opened
-    /// pairing window reaches the network.
-    ///
-    /// Stopped and started rather than amended: ``PeerDiscovery`` refuses to
-    /// replace a live advertisement, because one device publishing two records
-    /// appears twice.
-    func republishAdvertisement() async throws {
-        guard let discovery, let runtime, syncServer != nil else { return }
-        await discovery.stopAdvertising()
-        try await discovery.startAdvertising(descriptor(for: runtime))
-    }
-
-    private func descriptor(for runtime: SyncRuntime) -> ServiceDescriptor {
-        ServiceDescriptor(
-            displayName: displayName,
-            port: UInt16(syncServer?.port ?? 0),
-            deviceID: runtime.deviceID,
-            platform: runtime.platform,
-            // Advertised only while the window is open, so its absence tells a
-            // peer this device will refuse a pairing dial rather than leaving it
-            // to find out by being disconnected.
-            pairingPort: pairingServer.map { UInt16($0.port) }
-        )
     }
 
     /// Follows the browse for as long as sync is running.
@@ -62,11 +43,23 @@ extension SyncCoordinator {
         case .disappeared(let peer):
             forget(peer)
         case .ready:
-            errorMessage = nil
-        case .stalled(let error):
-            errorMessage = Self.browseMessage(error)
-        case .failed(let error):
-            errorMessage = Self.browseMessage(error)
+            // Discovery's message only. A pairing that just failed, a live-push
+            // setting that would not save and a listener that would not rebind
+            // all share this slot, and a browse recovering is not news about any
+            // of them.
+            clearMessage(from: .discovery)
+            // A fresh `.ready` is a fresh chance, so the attempt count starts
+            // over: whatever stopped the last publish is not what this one will
+            // hit. It also means granting access after the schedule ran out
+            // publishes rather than staying given-up.
+            publishAttempts = 0
+            // The rest of the bring-up, now that macOS is letting this app onto
+            // the network. Queued rather than awaited: this runs on the browse
+            // task, and publishing mutates the running stack.
+            enqueueLifecycle { [weak self] in await self?.performPublish() }
+        case .stalled(let error), .failed(let error):
+            isLocalNetworkDenied = error == .localNetworkDenied
+            showMessage(Self.browseMessage(error), from: .discovery)
         }
         reconcileLinks()
         refreshRows()
@@ -106,11 +99,20 @@ extension SyncCoordinator {
         sighted[advertisement.deviceID] = nil
     }
 
+    /// What the user is told about a browse that is not running.
+    ///
+    /// Two answers, because there are two reasons and only one of them is
+    /// anybody's fault. A browse also waits while the Mac has no network at all
+    /// — a closed lid, a Wi-Fi network being joined — and sending that user to
+    /// System Settings to grant a permission they have already granted is a
+    /// wasted trip. See ``DiscoveryError/localNetworkDenied``.
     private static func browseMessage(_ error: DiscoveryError) -> String {
-        """
-        Skrepka cannot see the local network. Allow it in System Settings ▸ \
-        Privacy & Security ▸ Local Network. (\(String(describing: error)))
-        """
+        switch error {
+        case .localNetworkDenied:
+            SyncFailureText.localNetworkDenied
+        default:
+            "Skrepka cannot see the local network yet. (\(String(describing: error)))"
+        }
     }
 
     // MARK: - Links
@@ -121,7 +123,17 @@ extension SyncCoordinator {
     /// Idempotent, and called from every path that changes either set —
     /// ``PeerLink/start()`` on a running link does nothing, so a browse event
     /// that re-announces a peer costs nothing.
-    /// Refuses to build anything while sync is going away.
+    /// Refuses to build anything while sync is going away, or before this
+    /// device has been published.
+    ///
+    /// The second guard is the permission gate. Dialling a peer is an outgoing
+    /// TCP connection to a local address, and resolving its address first is a
+    /// Bonjour query; TN3179 gates both on the Local Network privilege exactly
+    /// as it gates the browse. This is reached from every browse event including
+    /// the ones that report the browse *waiting* for that privilege, so without
+    /// the guard the app answers "you may not have the network yet" by dialling
+    /// every paired peer — which is the second and third system prompt landing
+    /// on top of the first.
     ///
     /// `runtime` is not the flag to read for that: ``SyncCoordinator/stop()``
     /// nils it at the *end* of a tear-down that takes several awaits, and this
@@ -132,7 +144,7 @@ extension SyncCoordinator {
     /// still in `paired`, which the tear-down had already walked past. Those
     /// links then dialled forever against a shut-down event-loop group.
     func reconcileLinks() {
-        guard !isTearingDown, let runtime else { return }
+        guard !isTearingDown, isPublished, let runtime else { return }
         for deviceID in links.keys where paired[deviceID] == nil {
             let link = links.removeValue(forKey: deviceID)
             progress[deviceID] = nil

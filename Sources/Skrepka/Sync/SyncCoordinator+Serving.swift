@@ -75,9 +75,9 @@ extension SyncCoordinator {
         syncServer = nil
         do {
             try await startSyncListener(runtime: runtime, port: port)
-            try await republishAdvertisement()
+            await republishAdvertisement()
         } catch {
-            errorMessage = SyncFailureText.describe(error)
+            showMessage(SyncFailureText.describe(error), from: .elsewhere)
             SkrepkaLog.sync.error(
                 "Could not restart the sync listener: \(String(describing: error), privacy: .public)"
             )
@@ -147,10 +147,10 @@ extension SyncCoordinator {
                 // cancellation cannot shut a later window.
                 self?.closePairingWindow(because: .expired, generation: generation)
             }
-            try await republishAdvertisement()
+            await republishAdvertisement()
         } catch {
             await performStopPairingListener()
-            errorMessage = SyncFailureText.describe(error)
+            showMessage(SyncFailureText.describe(error), from: .elsewhere)
         }
     }
 
@@ -173,7 +173,7 @@ extension SyncCoordinator {
         pairingServer = nil
         guard isAcceptingPairing else { return }
         isAcceptingPairing = false
-        try? await republishAdvertisement()
+        await republishAdvertisement()
     }
 
     /// Why the pairing window closed, for the line the user reads.

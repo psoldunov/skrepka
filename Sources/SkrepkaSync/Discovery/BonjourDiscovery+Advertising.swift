@@ -16,8 +16,7 @@
                 let reference = registered.reference
             else {
                 DNSServiceReplySink<RegistrationReply>.release(context: context)
-                throw DiscoveryError.advertisingFailed(
-                    reason: BonjourDiscovery.message(for: registered.status))
+                throw BonjourDiscovery.advertisingError(registered.status)
             }
 
             // dns_sd.h:3090-3094: this returns `kDNSServiceErr_NoMemory` when
@@ -31,15 +30,83 @@
             guard scheduled == BonjourDiscovery.Status.noError else {
                 queue.sync { DNSServiceRefDeallocate(reference) }
                 DNSServiceReplySink<RegistrationReply>.release(context: context)
-                throw DiscoveryError.advertisingFailed(
-                    reason: BonjourDiscovery.message(for: scheduled))
+                throw BonjourDiscovery.advertisingError(scheduled)
             }
             registrationRef = reference
             registrationSink = sink
             registrationContext = context
+            advertised = descriptor
 
             try await confirmRegistration(from: sink, port: descriptor.port)
             watchRegistration(sink, port: descriptor.port)
+        }
+
+        public func updateAdvertisement(_ descriptor: ServiceDescriptor) async throws {
+            guard let reference = registrationRef, let published = advertised else {
+                // Nothing is published, so the least this change needs is the
+                // whole registration.
+                try await startAdvertising(descriptor)
+                return
+            }
+            switch AdvertisementChange.between(published: published, wanted: descriptor) {
+            case .unchanged:
+                return
+            case .record:
+                try replaceTextRecord(with: descriptor, on: reference)
+            case .republish:
+                stopAdvertising()
+                try await startAdvertising(descriptor)
+            }
+        }
+
+        /// Swaps the registration's primary TXT record without deregistering it.
+        ///
+        /// `queue.sync` for the same reason ``stopAdvertising()`` uses it:
+        /// dns_sd.h says `DNSServiceAddRecord`/`UpdateRecord`/`RemoveRecord`
+        /// "are *NOT* thread-safe with respect to a single DNSServiceRef" and
+        /// leaves serialising them to the caller. This actor is one writer, and
+        /// ``queue`` is where the responder's own callbacks for that reference
+        /// run, so it is the serialisation the header asks for. Nothing on that
+        /// queue blocks on this actor, so there is nothing to deadlock against.
+        private func replaceTextRecord(
+            with descriptor: ServiceDescriptor,
+            on reference: DNSServiceRef
+        ) throws {
+            let txtRecord = try descriptor.txtRecord().dnsSDWireFormat
+            let status = txtRecord.withUnsafeBytes { buffer -> DNSServiceErrorType in
+                guard let length = UInt16(exactly: buffer.count) else {
+                    return BonjourDiscovery.Status.badParam
+                }
+                return queue.sync {
+                    DNSServiceUpdateRecord(
+                        reference,
+                        // dns_sd.h case 1: NULL names the primary TXT record of
+                        // a service registered with DNSServiceRegister.
+                        nil,
+                        0,  // Documented as ignored and reserved.
+                        length,
+                        buffer.baseAddress,
+                        0  // Let the responder pick the TTL.
+                    )
+                }
+            }
+            guard status == BonjourDiscovery.Status.noError else {
+                throw BonjourDiscovery.advertisingError(status)
+            }
+            advertised = descriptor
+        }
+
+        /// The right error for a responder status, which for one status is not
+        /// an advertising failure at all.
+        ///
+        /// `kDNSServiceErr_PolicyDenied` says macOS has not granted this app
+        /// local network access, and the answer to it is a switch in System
+        /// Settings rather than anything about the service being published. See
+        /// ``DiscoveryError/localNetworkDenied``.
+        static func advertisingError(_ status: DNSServiceErrorType) -> DiscoveryError {
+            status == BonjourDiscovery.Status.policyDenied
+                ? .localNetworkDenied
+                : .advertisingFailed(reason: BonjourDiscovery.message(for: status))
         }
 
         /// The `DNSServiceRegister` call itself, lifted out so
@@ -92,8 +159,7 @@
                 )
             case .reply(let reply):
                 stopAdvertising()
-                throw DiscoveryError.advertisingFailed(
-                    reason: BonjourDiscovery.message(for: reply.errorCode))
+                throw BonjourDiscovery.advertisingError(reply.errorCode)
             case .ended:
                 stopAdvertising()
                 throw DiscoveryError.advertisingLost(reason: "the registration was torn down")
@@ -174,6 +240,7 @@
 
         public func stopAdvertising() {
             registration = nil
+            advertised = nil
             registrationSink?.continuation.finish()
             registrationSink = nil
             if let reference = registrationRef {

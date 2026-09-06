@@ -34,6 +34,21 @@ public enum DiscoveryError: Error, Sendable, Hashable, CustomStringConvertible {
     /// responder is expected to come back without being restarted.
     case browsingStalled(reason: String)
 
+    /// The platform refused the operation because this program has not been
+    /// granted access to the local network.
+    ///
+    /// Its own case because it is the one discovery failure with a specific
+    /// answer — a switch in System Settings — and because nothing about the
+    /// network is wrong. macOS 15 and later spell it `kDNSServiceErr_PolicyDenied`
+    /// (-65570), which arrives from `DNSServiceRegister`, from
+    /// `DNSServiceResolve`, and inside the `.waiting` state of an `NWBrowser`.
+    ///
+    /// It does not only mean "the user said no". TN3179 (*Understanding local
+    /// network privacy*) says the system denies the operation immediately, before
+    /// the user has answered the alert it raised, so this is also what an
+    /// unanswered prompt looks like from here.
+    case localNetworkDenied
+
     /// A peer that answered a browse could not be turned into a host and port.
     case resolutionFailed(peer: String, reason: String)
 
@@ -62,6 +77,8 @@ public enum DiscoveryError: Error, Sendable, Hashable, CustomStringConvertible {
             "could not browse for peers: \(reason)"
         case .browsingStalled(let reason):
             "cannot browse for peers at the moment: \(reason)"
+        case .localNetworkDenied:
+            "local network access has not been granted to this app"
         case .resolutionFailed(let peer, let reason):
             "could not resolve \"\(peer)\": \(reason)"
         case .resolutionTimedOut(let peer):

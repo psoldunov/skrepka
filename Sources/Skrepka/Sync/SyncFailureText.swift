@@ -20,12 +20,42 @@ import SkrepkaSync
 /// `PeerLink` runs off the main actor and takes this as a plain `@Sendable`
 /// function, and nothing here touches state to need the hop.
 nonisolated enum SyncFailureText {
+    /// The one sync failure with a switch behind it, so it is worded as an
+    /// instruction and shown next to a button that opens the pane.
+    ///
+    /// Reached from two directions — a browse that macOS is refusing, and a
+    /// register or resolve it turned down outright — which is why it is a
+    /// constant rather than a sentence written at either site.
+    static let localNetworkDenied = """
+        Skrepka needs access to your local network to find the devices you pair \
+        with. Allow it in System Settings ▸ Privacy & Security ▸ Local Network.
+        """
+
+    /// What is said once the publish retries have run out.
+    ///
+    /// Deliberately not "sync is off", because it is not: the browse is still
+    /// running, peers still appear in the list, and a peer that dials this Mac
+    /// still reaches its listener. What has failed is this device being *found*,
+    /// and the honest instruction for a responder that would not take the
+    /// registration is to try again rather than to change a setting.
+    static let publishGaveUp = """
+        Skrepka could not publish this Mac on the local network, so other \
+        devices will not see it here. Turn sharing off and on again to retry.
+        """
+
     static func describe(_ error: any Error) -> String {
         switch error {
         case let error as SyncTLSError: describe(error)
         case let error as PairingError: describe(error)
-        case is DiscoveryError: "Could not find this device on the network."
+        case let error as DiscoveryError: describe(error)
         default: "Could not connect."
+        }
+    }
+
+    private static func describe(_ error: DiscoveryError) -> String {
+        switch error {
+        case .localNetworkDenied: localNetworkDenied
+        default: "Could not find this device on the network."
         }
     }
 

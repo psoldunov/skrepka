@@ -85,7 +85,10 @@ extension SyncCoordinator {
         guard pendingPairing == nil, !isPairingInFlight else { return }
         guard let runtime, let sighting = sighted[deviceID] else { return }
         guard let pairingPort = sighting.advertisement.pairingPort else {
-            errorMessage = "\(rowName(for: deviceID)) is not accepting new pairings right now."
+            showMessage(
+                "\(rowName(for: deviceID)) is not accepting new pairings right now.",
+                from: .elsewhere
+            )
             return
         }
         // Reserved before the first `await`, so a peer dialling in while this is
@@ -192,7 +195,7 @@ extension SyncCoordinator {
         pairingAnswer?.resume(returning: false)
         pairingAnswer = nil
         guard let pendingPairing else {
-            if case .ended(let reason) = stage { errorMessage = reason }
+            if case .ended(let reason) = stage { showMessage(reason, from: .elsewhere) }
             return
         }
         pendingPairing.stage = stage
@@ -207,7 +210,7 @@ extension SyncCoordinator {
         do {
             try await runtime.trust.forgetPairedPeer(deviceID)
         } catch {
-            errorMessage = "Skrepka could not forget that device."
+            showMessage("Skrepka could not forget that device.", from: .elsewhere)
             SkrepkaLog.sync.error(
                 "Unpairing failed: \(String(describing: error), privacy: .public)"
             )

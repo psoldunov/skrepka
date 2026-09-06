@@ -47,6 +47,19 @@ public protocol PeerDiscovery: Actor {
     /// caller that wanted a change should stop the first one.
     func startAdvertising(_ descriptor: ServiceDescriptor) async throws
 
+    /// Makes the published record describe `descriptor`, doing the least the
+    /// change actually needs — and publishing it outright when nothing is.
+    ///
+    /// The one entry point for *changing* an advertisement, because the cheap
+    /// implementation is wrong: withdrawing the record and publishing a new one
+    /// takes the device off every peer's browse list and puts it back, and the
+    /// changes that happen while a user is pairing are almost all TXT-only. See
+    /// ``AdvertisementChange``.
+    ///
+    /// Throws the same errors ``startAdvertising(_:)`` does, and for the same
+    /// reasons.
+    func updateAdvertisement(_ descriptor: ServiceDescriptor) async throws
+
     /// What the responder granted, or `nil` when nothing is published.
     ///
     /// Not the same as what was asked for. See ``ServiceRegistration``.

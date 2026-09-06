@@ -82,6 +82,26 @@ final class SyncCoordinator {
     /// left in a log line nobody reads.
     var errorMessage: String?
 
+    /// Whether macOS is currently refusing this app the local network.
+    ///
+    /// Held apart from ``errorMessage`` because it is the one sync failure with
+    /// a button behind it: the pane offers System Settings for this and for
+    /// nothing else. See ``SyncCoordinator/performPublish()`` for what it gates.
+    var isLocalNetworkDenied = false
+
+    /// Which part of sync wrote ``errorMessage``.
+    ///
+    /// One line on the pane is shared by everything that can fail, and only one
+    /// of them ever *clears* it: a browse reaching `.ready` used to wipe the slot
+    /// unconditionally. That slot also carries a pairing that failed, a
+    /// live-push setting that would not save and a listener that would not
+    /// rebind, and a browse recovering has nothing to say about any of those —
+    /// so the clear now asks whether the message was discovery's to take back.
+    ///
+    /// See ``SyncCoordinator/showMessage(_:from:)``.
+    enum MessageOrigin { case discovery, elsewhere }
+    var messageOrigin: MessageOrigin = .elsewhere
+
     // Internal rather than private, and the published state above is internal
     // rather than `private(set)`, for one reason: the five extension files are
     // the rest of this type, and Swift scopes both `private` and a
@@ -99,6 +119,28 @@ final class SyncCoordinator {
     var syncServer: SyncServer?
     var pairingServer: SyncServer?
     var discovery: BonjourDiscovery?
+
+    /// Whether this device is published and dialling its peers.
+    ///
+    /// Sync comes up in two steps, and this is the line between them. Everything
+    /// up to and including the pinned listener needs no permission from macOS;
+    /// publishing the record and dialling a peer both do, so they wait for the
+    /// browse to report that the permission is there. See
+    /// ``SyncCoordinator/bringUp()``.
+    var isPublished = false
+
+    /// How many times publishing has been retried for the failure it is on now,
+    /// reset by a publish that works. See `SkrepkaSync.PublishRetryPolicy`.
+    var publishAttempts = 0
+
+    /// The one outstanding retry of ``SyncCoordinator/performPublish()``.
+    ///
+    /// One, and replaced rather than stacked: a second failure cancels whatever
+    /// this holds before scheduling its own, so the schedule cannot be walked by
+    /// two timers at once. Cancelled and nilled by ``performStop()`` like every
+    /// other task here, because a retry that outlived a tear-down would publish
+    /// a device that has switched sync off.
+    var publishRetryTask: Task<Void, Never>?
 
     var acceptTask: Task<Void, Never>?
     var pairingAcceptTask: Task<Void, Never>?

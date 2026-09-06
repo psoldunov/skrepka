@@ -64,6 +64,11 @@
         var registrationSink: DNSServiceReplySink<RegistrationReply>?
         var registrationContext: UnsafeMutableRawPointer?
 
+        /// What was asked for, as opposed to ``registration``, which is what the
+        /// responder granted. ``updateAdvertisement(_:)`` compares against this
+        /// to decide how much of the registration has to change.
+        var advertised: ServiceDescriptor?
+
         /// Where ``advertisementFailures()`` subscribers are kept.
         var advertisementFanout = EventFanout<DiscoveryError>()
 

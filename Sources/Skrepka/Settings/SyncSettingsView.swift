@@ -11,7 +11,17 @@ struct SyncSettingsView: View {
         @Bindable var sync = coordinator.sync
 
         if let message = sync.errorMessage {
-            SettingsNotice(tone: .warning, message: message)
+            // The button appears for exactly one failure, because it is the only
+            // one System Settings can do anything about. Offering it for a Mac
+            // whose Wi-Fi is off sends the user to a switch that is already on.
+            SettingsNotice(
+                tone: .warning,
+                message: message,
+                actionTitle: sync.isLocalNetworkDenied ? "Open Settings" : nil,
+                action: sync.isLocalNetworkDenied
+                    ? { SystemSettingsLink.open(SystemSettingsLink.localNetwork) }
+                    : nil
+            )
         }
 
         SettingsCard(
