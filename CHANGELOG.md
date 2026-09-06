@@ -8,6 +8,50 @@ notes alongside the notarized `Skrepka.zip` for that version.
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path.
 
+## [0.1.3](https://github.com/psoldunov/skrepka/releases/tag/v0.1.3) — 2026-09-06
+
+A copy of several files is one row that knows it holds several files.
+
+### Added
+
+- **A copied picture is called an Image.** A screenshot copied in Finder
+  arrives as a `public.file-url` like any other file, so the row read "File"
+  beside the picture it was already showing. The kind is now read from the
+  file's content type in the same pass that already asks the file system about
+  it, and a picture saved without an extension — which reports the generic
+  `public.data` and cannot be named that way — is corrected once a thumbnail
+  has been drawn out of it. It stays a file-system entry throughout, so no
+  stored row loses its identity over the change.
+- **A copy of several files is drawn as a stack of their own icons.** The first
+  three files are layered front to back, each showing the file's own picture
+  where one can be decoded and its `NSWorkspace` icon otherwise — the app's
+  artwork, the folder, the PDF, rather than a repeated grey glyph. The row
+  keeps a count badge beside the stack, so three layers say "several" whether
+  the copy held three files or thirty. All three icons render or none do:
+  dropping one that failed would promote the second file to the front and
+  picture the wrong file as the leader, so the fallback is the single preview
+  the row had before.
+
+### Fixed
+
+- **A copy of several files is no longer stored as one of them.** Only the
+  first pasteboard item was ever read, so a three-file copy kept one file URL
+  and took its name from Finder's text flavour, which lists the display names
+  of the whole selection. The row ran all three names together, reported "3
+  lines" it did not have, showed the first file's dimensions, and pasted one
+  file. Capture now reads every item's file URL — the shape `NSPasteboard.h`
+  names as the replacement for the deprecated `NSFilenamesPboardType` — and the
+  entry keeps the whole list beside its payload. It is named from the files it
+  holds, identified by the whole set so two selections sharing a first file
+  stay two rows, measured across every file, and pasted back as one item per
+  file.
+- **Naming a large selection is bounded, pasting it is not.** Both file-system
+  passes share one time budget and the names stop at a hundred; a selection
+  past that ceiling is still counted and still pasted in full, only unnamed
+  past the hundredth. Reading the URLs themselves is uncapped — 20,000 of them
+  measure 172 ms, inside the poller's cadence — because a row that pastes fewer
+  files than it claims is the defect this release fixes.
+
 ## [0.1.2](https://github.com/psoldunov/skrepka/releases/tag/v0.1.2) — 2026-09-05
 
 Copied files say what they are and how big they are.
