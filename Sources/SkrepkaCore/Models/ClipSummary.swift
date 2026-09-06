@@ -26,6 +26,13 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
     public let fileCount: Int
     /// Small PNG rendering for image entries.
     public let thumbnail: Data?
+    /// One picture per file, front first, for the stack a row holding several
+    /// files draws in place of a single preview.
+    ///
+    /// Empty for everything else, and for a row stored before stacks existed.
+    /// Bounded by ``FileSelection/maximumStackedIcons``, so this stays small
+    /// enough for the picker to hold hundreds of summaries.
+    public let stackIcons: [Data]
 
     public init(
         id: UUID,
@@ -38,7 +45,8 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         imageSize: ClipItem.ImageSize?,
         byteCount: Int?,
         fileCount: Int = 0,
-        thumbnail: Data?
+        thumbnail: Data?,
+        stackIcons: [Data] = []
     ) {
         self.id = id
         self.kind = kind
@@ -51,6 +59,7 @@ public struct ClipSummary: Identifiable, Sendable, Hashable {
         self.byteCount = byteCount
         self.fileCount = fileCount
         self.thumbnail = thumbnail
+        self.stackIcons = stackIcons
     }
 
     /// The content's size as the row subtitle shows it, or nil when there is

@@ -38,6 +38,7 @@ enum ClipRecordMapping {
             imageHeight: imageSize?.height,
             byteCount: details.byteCount,
             thumbnailData: details.preview?.thumbnail,
+            stackIcons: details.stackIcons,
             // Nil rather than an empty array for an entry that holds no files,
             // so "this copy had none" and "this row predates the column" read
             // the same way: as nothing to paste back beyond the payload.
@@ -67,7 +68,8 @@ enum ClipRecordMapping {
             // needs only to say "3 Files". The list itself stays in the store
             // until something is pasted, like the payload beside it.
             fileCount: record.fileURLStrings?.count ?? 0,
-            thumbnail: record.thumbnailData
+            thumbnail: record.thumbnailData,
+            stackIcons: record.stackIcons ?? []
         )
     }
 

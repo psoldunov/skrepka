@@ -59,11 +59,34 @@ public struct ThumbnailMaker: Sendable {
     }
 
     private func scaledPNG(from image: NSImage) -> Data? {
+        Self.scaledPNG(from: image, maximumEdge: Self.maximumEdge)
+    }
+
+    /// Draws `image` into a bitmap no larger than `maximumEdge` and encodes it.
+    ///
+    /// Never enlarges: a photograph drawn above its own resolution is a blurry
+    /// copy of itself at several times the size.
+    static func scaledPNG(from image: NSImage, maximumEdge: CGFloat) -> Data? {
         let size = image.size
         guard size.width > 0, size.height > 0 else { return nil }
 
-        let scale = min(1, Self.maximumEdge / max(size.width, size.height))
-        let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
+        let scale = min(1, maximumEdge / max(size.width, size.height))
+        return png(
+            from: image,
+            targetSize: CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
+        )
+    }
+
+    /// Draws `image` at exactly `targetSize` and encodes it.
+    ///
+    /// Takes the size rather than a ceiling because ``FileIconStack`` must be
+    /// able to ask for one *larger* than `NSImage.size`, which the scaling
+    /// version refuses. A system icon measures 32 points and carries
+    /// representations up to 512 pixels; drawing it at 128 picks the
+    /// representation that fits, where capping it at its own point size would
+    /// hand back a 32-pixel picture to put on a 48-point row.
+    static func png(from image: NSImage, targetSize target: CGSize) -> Data? {
+        guard target.width >= 1, target.height >= 1 else { return nil }
 
         guard
             let rep = NSBitmapImageRep(

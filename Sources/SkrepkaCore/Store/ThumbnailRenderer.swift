@@ -32,8 +32,21 @@ public actor ThumbnailRenderer {
         return ClipDetails(
             kind: Self.kind(kind, provenPictureBy: preview, fileCount: item.fileURLs.count),
             preview: preview,
+            stackIcons: stackIcons(for: item),
             byteCount: ContentSize.byteCount(of: item)
         )
+    }
+
+    /// The pictures a row holding several files draws as a stack, or nil when
+    /// the entry holds one file or none.
+    ///
+    /// Nil rather than an empty array, for the reason every part of
+    /// ``ClipDetails`` is optional: a row already carrying a stack must not lose
+    /// it to a later copy that could produce none.
+    private func stackIcons(for item: ClipItem) -> [Data]? {
+        guard item.fileURLs.count > 1 else { return nil }
+        let icons = FileIconStack.icons(forFilesAt: item.fileURLs)
+        return icons.isEmpty ? nil : icons
     }
 
     /// What the entry's files actually turn out to be, for the kinds the capture

@@ -101,6 +101,7 @@ public final class HistoryStore {
                     existing.text = item.text
                 }
                 backfillPreview(details.preview, into: existing)
+                backfillStack(details.stackIcons, into: existing)
                 try context.save()
                 reload()
                 return true
@@ -133,6 +134,20 @@ public final class HistoryStore {
         record.thumbnailData = preview.thumbnail
         record.imageWidth = preview.pixelSize?.width
         record.imageHeight = preview.pixelSize?.height
+    }
+
+    /// Gives a row the stack of file icons it was stored without.
+    ///
+    /// Every entry captured before stacks existed has none, and so does one
+    /// whose files were unreadable at the time. Same rule as the preview beside
+    /// it — a repeat copy is the only thing that revisits a row — with one
+    /// difference: a stack that is already there is replaced rather than kept,
+    /// because the row's file list is replaced in the same breath, and a stack
+    /// left over from the previous copy would picture files this row no longer
+    /// holds.
+    private func backfillStack(_ icons: [Data]?, into record: ClipRecord) {
+        guard let icons else { return }
+        record.stackIcons = icons
     }
 
     // MARK: - Reading

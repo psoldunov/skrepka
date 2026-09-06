@@ -23,7 +23,19 @@ final class ClipRecord {
     /// nil rather than claiming every old entry is zero bytes.
     var byteCount: Int?
     /// Small PNG preview. Inline: it is read for every visible row.
+    ///
+    /// A picture *decoded from the copied content*, and nothing else — the row
+    /// height, ``ClipSummary/isPicture`` and the Settings Images tile all read
+    /// it as one. A copied spreadsheet's icon does not belong here however well
+    /// it would draw; that is what ``stackIcons`` is for.
     var thumbnailData: Data?
+    /// One small PNG per file for the row's stack, front first, when the entry
+    /// holds several files.
+    ///
+    /// Optional with no default, so a store written before stacks existed
+    /// migrates by leaving it nil — those rows keep the single preview and the
+    /// count badge they were stored with until the copy is made again.
+    var stackIcons: [Data]?
     /// Absolute URL of every file the entry holds, when it holds files.
     ///
     /// The payload carries the first one and no more — see ``ClipItem/fileURLs``
@@ -51,6 +63,7 @@ final class ClipRecord {
         imageHeight: Int?,
         byteCount: Int?,
         thumbnailData: Data?,
+        stackIcons: [Data]?,
         fileURLStrings: [String]?,
         payloadData: Data
     ) {
@@ -66,6 +79,7 @@ final class ClipRecord {
         self.imageHeight = imageHeight
         self.byteCount = byteCount
         self.thumbnailData = thumbnailData
+        self.stackIcons = stackIcons
         self.fileURLStrings = fileURLStrings
         self.payloadData = payloadData
     }

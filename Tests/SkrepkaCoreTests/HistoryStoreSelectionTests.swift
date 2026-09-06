@@ -138,6 +138,64 @@ struct HistoryStoreSelectionTests {
         #expect(Set(pasted) == Set([first, second]))
     }
 
+    @Test("A copy of several files is stored with a stack of their icons")
+    func storesAStackOfIcons() async throws {
+        let store = try makeStore()
+        let picture = try Fixtures.writePNG(width: 300, height: 200, named: "one.png")
+        let document = try Fixtures.writeTextFile(named: "notes.txt")
+        defer {
+            for url in [picture, document] {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
+
+        await store.capture(selectionItem([picture, document]))
+
+        let summary = try #require(store.items.first)
+        #expect(summary.stackIcons.count == 2)
+        // Front layer first, and each layer is that file's own picture.
+        #expect(summary.stackIcons == [picture, document].compactMap(FileIconStack.icon(forFileAt:)))
+        #expect(summary.stackIcons[0] != summary.stackIcons[1])
+    }
+
+    @Test("A row holding one file gets no stack")
+    func singleFileHasNoStack() async throws {
+        // A stack of one is a picture with extra steps, and the row already has
+        // a way to draw a single file.
+        let store = try makeStore()
+        let url = try Fixtures.writeTextFile(named: "notes.txt")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        await store.capture(
+            ClipItem(kind: .file, text: "notes.txt", payload: Fixtures.fileURLPayload(url))
+        )
+        #expect(try #require(store.items.first).stackIcons.isEmpty)
+    }
+
+    @Test("Re-copying a different selection redraws the stack rather than keeping it")
+    func stackFollowsTheFilesTheRowHolds() async throws {
+        // The dedupe branch rewrites the file list, so a stack left over from
+        // the previous copy would picture files this row no longer holds.
+        let store = try makeStore()
+        let first = try Fixtures.writeTextFile(named: "a.txt")
+        let second = try Fixtures.writePNG(width: 8, height: 8, named: "b.png")
+        defer {
+            for url in [first, second] {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
+
+        await store.capture(selectionItem([first, second]))
+        let before = try #require(store.items.first).stackIcons
+        await store.capture(selectionItem([second, first]))
+
+        #expect(store.items.count == 1)
+        let after = try #require(store.items.first).stackIcons
+        #expect(after.count == 2)
+        // Same two files, the other way round: the front layer swaps.
+        #expect(after == before.reversed())
+    }
+
     @Test("A copy too large to name in full still counts and pastes every file")
     func namesAreCappedButFilesAreNot() async throws {
         // Paths that do not exist: nothing here turns on what is at the end of
