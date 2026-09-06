@@ -52,12 +52,16 @@ struct ShortAuthStringTests {
         #expect(pair != impostor)
     }
 
-    @Test("It is rendered as two groups of four uppercase hex characters")
+    /// Spelled as literals rather than derived from ``ShortAuthString``: this is
+    /// the shape a human compares on two screens, so the numbers here are the
+    /// contract rather than an echo of the implementation. `A3F2-91BC-D4E7-0182`
+    /// is nineteen characters, and `PairingSheet` is sized for exactly that.
+    @Test("It is rendered as four groups of four uppercase hex characters")
     func rendersAsGroupsOfFour() throws {
         let string = ShortAuthString.derive(publicKeys: [keyA, keyB], pairedAt: pairedAt)
-        #expect(string.count == 9)
+        #expect(string.count == 19)
         let groups = string.split(separator: "-")
-        #expect(groups.count == 2)
+        #expect(groups.count == 4)
         #expect(groups.allSatisfy { $0.count == 4 })
         #expect(groups.allSatisfy { $0.allSatisfy { "0123456789ABCDEF".contains($0) } })
     }

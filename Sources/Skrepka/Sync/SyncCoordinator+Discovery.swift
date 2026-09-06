@@ -121,8 +121,18 @@ extension SyncCoordinator {
     /// Idempotent, and called from every path that changes either set —
     /// ``PeerLink/start()`` on a running link does nothing, so a browse event
     /// that re-announces a peer costs nothing.
+    /// Refuses to build anything while sync is going away.
+    ///
+    /// `runtime` is not the flag to read for that: ``SyncCoordinator/stop()``
+    /// nils it at the *end* of a tear-down that takes several awaits, and this
+    /// is reached from two places that do not go through the lifecycle queue —
+    /// a browse event already dispatched before `browseTask` was cancelled, and
+    /// a `serve` task finishing into ``pairedSetMayHaveChanged()``. Either one
+    /// landing after `links.removeAll()` used to rebuild a link for every peer
+    /// still in `paired`, which the tear-down had already walked past. Those
+    /// links then dialled forever against a shut-down event-loop group.
     func reconcileLinks() {
-        guard let runtime else { return }
+        guard !isTearingDown, let runtime else { return }
         for deviceID in links.keys where paired[deviceID] == nil {
             let link = links.removeValue(forKey: deviceID)
             progress[deviceID] = nil

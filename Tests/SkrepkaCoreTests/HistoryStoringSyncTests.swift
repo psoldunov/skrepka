@@ -143,53 +143,6 @@ extension HistoryStoringTests {
         )
     }
 
-    /// The transition the two cases above cover only the ends of: metadata is
-    /// eager and payload is lazy (design §7), so the row lands empty and the
-    /// transport fetches the bytes afterwards. A second capture is the only way
-    /// they can arrive.
-    ///
-    /// It is also where the offer changes, and both engines have to change it at
-    /// the same instant. `SyncClipMeta.representations` claims what its owner can
-    /// serve: Mac A holds an item as text and PDF, Linux B learns it and fetches
-    /// only the text, and B advertising the PDF to Mac C promises bytes C will ask
-    /// B for and B cannot send. The row keeps the peer's claim internally — one
-    /// with nothing to request syncs as a ghost — so this is the offering side.
-    @Test("Bytes fetched later fill in a row learned from a peer", arguments: HistoryStoreEngine.all)
-    func captureFillsInAPayloadFetchedLater(engine: HistoryStoreEngine) async throws {
-        let store = try await Self.makeStore(engine)
-        let meta = EngineFixtures.meta("from a peer")
-        let bytes = Data("from a peer".utf8)
-        try await store.capture(meta, payloads: [:])
-        #expect(try await store.syncIndex(since: nil).first?.representations.isEmpty == true)
-
-        try await store.capture(meta, payloads: [EngineFixtures.plainTextKey: bytes])
-
-        // One row, now with something to paste — and now worth offering bytes for.
-        #expect(try await store.summaries().map(\.text) == ["from a peer"])
-        #expect(try await store.payload(for: meta.contentHash, key: EngineFixtures.plainTextKey) == bytes)
-        #expect(try await store.syncIndex(since: nil).first?.representations == meta.representations)
-    }
-
-    /// Identity is `contentHash`, so a peer can name content this machine
-    /// captured itself. Filling in absent bytes must not become a way to replace
-    /// bytes that are there.
-    @Test(
-        "A later capture never overwrites payload bytes this store holds",
-        arguments: HistoryStoreEngine.all
-    )
-    func captureNeverOverwritesHeldBytes(engine: HistoryStoreEngine) async throws {
-        let store = try await Self.makeStore(engine)
-        #expect(await store.capture(EngineFixtures.item("mine", at: EngineFixtures.at(1))))
-        let meta = EngineFixtures.meta("mine")
-        try await store.capture(meta, payloads: [EngineFixtures.plainTextKey: Data("theirs".utf8)])
-
-        #expect(try await store.summaries().count == 1)
-        #expect(
-            try await store.payload(for: meta.contentHash, key: EngineFixtures.plainTextKey)
-                == Data("mine".utf8)
-        )
-    }
-
     // MARK: - Tombstones
 
     @Test("A tombstone folds into one already held for the same content", arguments: HistoryStoreEngine.all)

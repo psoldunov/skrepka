@@ -25,14 +25,4 @@ public enum LivePushPayload {
         let total = payloads.values.reduce(0) { $0 + $1.count }
         return total <= SyncLimits.livePushInlineLimit ? payloads : [:]
     }
-
-    /// Whether a `livePush` built from these payloads leaves the peer with a
-    /// fetch to make.
-    ///
-    /// The sender's half of the same question the receiver answers by looking
-    /// at an empty `inline` — spelled out so a caller deciding whether to keep
-    /// the connection warm does not re-derive the rule.
-    public static func needsFetch(_ payloads: [RepresentationKey: Data]) -> Bool {
-        !payloads.isEmpty && inline(payloads).isEmpty
-    }
 }

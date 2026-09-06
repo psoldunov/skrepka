@@ -22,7 +22,10 @@ extension SyncCoordinator {
         _ proposal: PairingProposal,
         direction: PendingPairing.Direction
     ) async -> Bool {
-        guard pendingPairing == nil, !isPairingInFlight else { return false }
+        // `isTearingDown` as well as the two slot guards: a connection accepted
+        // just before the switch went off would otherwise raise a sheet after
+        // sync has stopped, and an accepted one writes a pin.
+        guard !isTearingDown, pendingPairing == nil, !isPairingInFlight else { return false }
         let pending = PendingPairing(
             direction: direction,
             peerName: proposal.peer.deviceName,
@@ -175,10 +178,24 @@ extension SyncCoordinator {
         return pending
     }
 
+    /// Ends a pairing and reports why, to whichever surface can still say it.
+    ///
+    /// **Falls back to ``SyncCoordinator/errorMessage`` when there is no sheet.**
+    /// A pairing can fail before one exists — `resolve` throwing because the peer
+    /// went to sleep, `SyncClient.connect` refused or timed out, or
+    /// `savePairedPeer` throwing after the sheet has already been cleared — and
+    /// `pendingPairing?.stage` on a nil sheet writes the reason nowhere. The
+    /// user had clicked Pair and got no sheet, no error and no spinner ending:
+    /// the interface simply did nothing, and the only record was a log line they
+    /// will not read.
     private func finish(pairing stage: PendingPairing.Stage) {
         pairingAnswer?.resume(returning: false)
         pairingAnswer = nil
-        pendingPairing?.stage = stage
+        guard let pendingPairing else {
+            if case .ended(let reason) = stage { errorMessage = reason }
+            return
+        }
+        pendingPairing.stage = stage
     }
 
     // MARK: - Forgetting

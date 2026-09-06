@@ -130,6 +130,27 @@ public struct SyncExchange: Sendable {
     }
 
     /// The content this device holds once `plan` has been applied.
+    ///
+    /// **What the store will accept, not what the plan asked for**, which is the
+    /// distinction a concealed item turns into a permanent cost. `applyRemote`
+    /// drops an `.insert` whose metadata is concealed on both engines, so
+    /// crediting one here has this exchange fetch a full payload for a row that
+    /// does not exist, and `capture` refuse the bytes on arrival — every round,
+    /// for as long as the peer keeps offering it, out of a budget that would
+    /// otherwise have gone to items the user can see. A well-behaved peer never
+    /// offers concealed content, because `syncIndex` filters it; a paired peer is
+    /// authenticated rather than trusted to be well-behaved.
+    ///
+    /// **Stale by the time it is used, and knowingly so.** It is computed from
+    /// one plan and then consulted across a fetch that can run for minutes, while
+    /// neither engine's `capture` consults the tombstone table. So a clip deleted
+    /// locally — in the picker, or by another peer's tombstone — while its bytes
+    /// are in flight is written back by `capture` and sits beside its own
+    /// tombstone until the next merge removes it again, within
+    /// ``PeerLink/resyncInterval``. Left as it is: closing it means `capture`
+    /// reading tombstones on every insert, which is the hot path for ordinary
+    /// local copies as well, and the cost of the race is one row visible for one
+    /// round.
     private static func contentHeld(
         afterApplying plan: [MergeAction],
         to local: Set<String>
@@ -137,7 +158,9 @@ public struct SyncExchange: Sendable {
         var held = local
         for action in plan {
             switch action {
-            case .insert(let meta): held.insert(meta.contentHash)
+            case .insert(let meta):
+                guard !meta.isConcealed else { break }
+                held.insert(meta.contentHash)
             case .deleteLocally(let contentHash): held.remove(contentHash)
             case .bumpCreatedAt, .applyPin, .recordTombstone, .dropTombstone: break
             }

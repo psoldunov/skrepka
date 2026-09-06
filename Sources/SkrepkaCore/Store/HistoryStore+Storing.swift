@@ -96,12 +96,39 @@
         /// bytes have nowhere to go and the row sits in the picker with a preview
         /// and nothing to paste.
         ///
-        /// **A non-empty payload is left alone.** Identity is `contentHash`, so a
-        /// peer can name content this machine captured itself, and overwriting
-        /// would let it replace local bytes with its own.
+        /// **A representation that already has bytes is left alone; one that does
+        /// not is filled.** Identity is `contentHash`, so a peer can name content
+        /// this machine captured itself, and overwriting would let it replace
+        /// local bytes with its own — but the unit of that rule is the
+        /// representation, not the row.
+        ///
+        /// Guarding the whole row instead was wrong, and wrong permanently rather
+        /// than once. `SyncExchange` can fetch an item's representations in
+        /// pieces: its per-round budget can run out mid-item, and a
+        /// representation the peer no longer holds comes back as an empty final
+        /// chunk. So round one lands the text, `payloadData` stops being empty,
+        /// and the RTF that arrives in round two is dropped — while the stored
+        /// index still reports it missing, so it is fetched and dropped again
+        /// every ``PeerLink/resyncInterval`` for the life of the pairing. The
+        /// bytes never land and the bandwidth is spent forever.
+        ///
+        /// The SQLite engine had this right — its `UPDATE … WHERE bytes IS NULL`
+        /// is per representation — and the two disagreeing is the more serious
+        /// half: `HistoryStoringContractTests` exists so that the answer to a
+        /// question like this is the same on both engines.
         private func fillPayload(of record: ClipRecord, with representations: [String: Data]) throws {
-            guard record.payloadData.isEmpty, !representations.isEmpty else { return }
-            let payload = ClipPayload(representations: representations)
+            guard !representations.isEmpty else { return }
+            var held: [String: Data] = [:]
+            if !record.payloadData.isEmpty {
+                held = try ClipRecordMapping.decodePayload(record.payloadData).representations
+            }
+            // The arrived bytes go *under* what is already held, so a peer cannot
+            // replace a representation this machine captured itself, and the ones
+            // it has nothing for are filled.
+            let merged = held.merging(representations) { local, _ in local }
+            guard merged.count > held.count else { return }
+
+            let payload = ClipPayload(representations: merged)
             record.payloadData = try ClipRecordMapping.encode(payload)
             // Merged into the stored index rather than replacing it: a fetch that
             // brought one of two representations must not retract the peer's claim

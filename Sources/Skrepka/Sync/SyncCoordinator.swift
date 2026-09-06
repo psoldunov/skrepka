@@ -24,10 +24,15 @@ import os
 /// A device that is not pairing advertises no such key and cannot complete a
 /// handshake with a stranger at all.
 ///
-/// The other half of this type is in `SyncCoordinator+Serving.swift`,
-/// `SyncCoordinator+Discovery.swift`, `SyncCoordinator+Pairing.swift` and
-/// `SyncCoordinator+LivePush.swift`. Swift scopes `private` to the file, so
-/// everything they touch is internal.
+/// The other half of this type is in `SyncCoordinator+Lifecycle.swift`,
+/// `SyncCoordinator+Serving.swift`, `SyncCoordinator+Discovery.swift`,
+/// `SyncCoordinator+Pairing.swift` and `SyncCoordinator+LivePush.swift`. Swift
+/// scopes `private` to the file, so everything they touch is internal.
+///
+/// This file is the type, its state, and the switch that drives it. Bringing
+/// sync up and taking it down is next door, because those two are what the
+/// state above exists to be mutated by, and keeping them together is what makes
+/// the ordering rule in ``enqueueLifecycle(_:)`` readable in one place.
 @MainActor
 @Observable
 final class SyncCoordinator {
@@ -40,7 +45,17 @@ final class SyncCoordinator {
         didSet {
             guard isEnabled != oldValue else { return }
             preferences.syncEnabled = isEnabled
-            Task { isEnabled ? await start() : await stop() }
+            // `wanted` is captured here rather than read inside the task, and the
+            // work is queued *synchronously* from `didSet`. Both matter: two
+            // bare `Task {}`s are unordered, so a quick off-on used to run the
+            // bring-up first, find `runtime` still non-nil from the tear-down
+            // behind it, and return — leaving the switch reading on with nothing
+            // listening. See ``enqueueLifecycle(_:)``.
+            let wanted = isEnabled
+            enqueueLifecycle { [weak self] in
+                guard let self else { return }
+                wanted ? await performStart() : await performStop()
+            }
         }
     }
 
@@ -87,6 +102,20 @@ final class SyncCoordinator {
 
     var acceptTask: Task<Void, Never>?
     var pairingAcceptTask: Task<Void, Never>?
+    /// Closes the pairing window if nothing pairs through it — see
+    /// ``SyncCoordinator/pairingWindow``.
+    var pairingExpiryTask: Task<Void, Never>?
+
+    /// Which pairing window is open, counted up each time one is.
+    ///
+    /// Two things decide to close a window — a device paired, or the window
+    /// expired — and each decides *before* its work reaches the lifecycle queue.
+    /// Ordering alone cannot tell whether the window running when the work gets
+    /// there is the same one the decision was about, and the case is not
+    /// hypothetical: pairing a device closes the window, and the obvious next
+    /// thing a user does is reopen it to pair a second device. Without this, a
+    /// close decided a moment before that reopen shuts the new window instead.
+    var pairingWindowGeneration = 0
     var browseTask: Task<Void, Never>?
 
     /// Devices seen on the network this session, by identifier. The browse
@@ -124,6 +153,31 @@ final class SyncCoordinator {
     /// Writes a received live push to the pasteboard.
     let livePushReceiver: LivePushReceiver
 
+    /// The last queued change to the running stack, or nil if none has been
+    /// asked for yet. See ``enqueueLifecycle(_:)``.
+    var lifecycleTail: Task<Void, Never>?
+
+    /// The last queued write to a per-peer setting. See ``enqueueSetting(_:)``.
+    ///
+    /// A second chain rather than the lifecycle one, because the two order
+    /// different things and sharing a queue would make them wait on each other:
+    /// flicking a peer's live-push switch has no business queuing behind a
+    /// listener rebind, and a listener rebind must not be delayed by a Keychain
+    /// write.
+    var settingTail: Task<Void, Never>?
+
+    /// Whether ``performStop()`` has begun.
+    ///
+    /// Set as its first statement and cleared as its last, because tearing down
+    /// takes several awaits and this actor is re-entrant across every one of
+    /// them. Anything that can rebuild part of the stack — ``reconcileLinks()``
+    /// above all — has to be able to tell "sync is running" from "sync is in the
+    /// middle of going away", and `runtime` cannot say so: it is nilled at the
+    /// *end* of the tear-down, so for the whole of it a browse event or a
+    /// finishing `serve` task would read a live coordinator and rebuild links
+    /// that nothing will ever stop again.
+    var isTearingDown = false
+
     init(preferences: Preferences, store: HistoryStore, livePushReceiver: LivePushReceiver) {
         self.preferences = preferences
         self.store = store
@@ -133,118 +187,6 @@ final class SyncCoordinator {
         isEnabled = preferences.syncEnabled
     }
 
-    // MARK: - Lifecycle
-
-    /// Brings sync up, or does nothing when the user has it switched off.
-    ///
-    /// Every failure lands in ``errorMessage`` rather than throwing: this is
-    /// called from `AppCoordinator.start()`, where there is nobody to catch it,
-    /// and a Mac that cannot open a listening socket should still be a
-    /// clipboard manager.
-    func start() async {
-        guard isEnabled, runtime == nil else { return }
-        errorMessage = nil
-        do {
-            try await bringUp()
-        } catch {
-            errorMessage = SyncFailureText.describe(error)
-            SkrepkaLog.sync.error(
-                "Sync could not start: \(String(describing: error), privacy: .public)"
-            )
-            await stop()
-        }
-    }
-
-    func stop() async {
-        // Anyone parked on a sheet is answered "no" before the machinery that
-        // would have carried a "yes" goes away. A continuation that is never
-        // resumed is a task suspended for the life of the process.
-        answerPairing(false)
-        pendingPairing = nil
-        isPairingInFlight = false
-
-        acceptTask?.cancel()
-        pairingAcceptTask?.cancel()
-        browseTask?.cancel()
-        acceptTask = nil
-        pairingAcceptTask = nil
-        browseTask = nil
-
-        for link in links.values {
-            await link.stop()
-        }
-        links.removeAll()
-
-        await stopPairingListener()
-        await syncServer?.stop()
-        syncServer = nil
-        if let discovery {
-            await discovery.stopAdvertising()
-            await discovery.stopBrowsing()
-        }
-        discovery = nil
-        // Callback form rather than `syncShutdownGracefully()`: the blocking one
-        // parks a cooperative-pool thread until the loops drain, and draining
-        // them resumes continuations that need a cooperative thread to run on.
-        group?.shutdownGracefully { _ in }
-        group = nil
-        runtime = nil
-        localDeviceID = nil
-        sighted.removeAll()
-        progress.removeAll()
-        isAcceptingPairing = false
-        refreshRows()
-    }
-
-    private func bringUp() async throws {
-        let certificate = try await trust.localIdentity()
-        localDeviceID = certificate.deviceID
-        // The store stamps new rows with this and writes tombstones only once it
-        // has one, so it has to land before anything is captured or offered.
-        store.localDeviceID = certificate.deviceID
-
-        let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
-        self.group = group
-        let runtime = SyncRuntime(
-            certificate: certificate,
-            pairing: PairingSession(
-                localIdentity: PeerIdentity(
-                    deviceID: certificate.deviceID,
-                    deviceName: displayName,
-                    platform: .macos,
-                    protocolVersion: .current
-                ),
-                localCertificate: certificate
-            ),
-            trust: trust,
-            store: store,
-            group: group
-        )
-        self.runtime = runtime
-
-        try await reloadPairedPeers()
-        try await startSyncListener(runtime: runtime)
-        try await startDiscovery(runtime: runtime)
-        reconcileLinks()
-    }
-
-    /// Re-reads the paired set and the live-push choices that go with it.
-    func reloadPairedPeers() async throws {
-        let peers = try await trust.pairedPeers()
-        paired = Dictionary(uniqueKeysWithValues: peers.map { ($0.deviceID, $0) })
-        var choices: [SyncDeviceID: LivePushChoice] = [:]
-        for peer in peers {
-            choices[peer.deviceID] = try await trust.livePushChoice(for: peer.deviceID)
-        }
-        livePushChoices = choices
-        refreshRows()
-    }
-
-    /// The name this device publishes, which is the one the user set in Sharing.
-    private static func deviceName() -> String {
-        let name = Host.current().localizedName ?? ""
-        return name.isEmpty ? "Mac" : name
-    }
 }
 
 /// A device seen on the network, with the browse result needed to resolve it

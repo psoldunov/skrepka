@@ -158,7 +158,7 @@ struct LoopbackSyncTests {
         // that this device has never met the one answering.
         let initiator = try harness.initiator(for: firstContact.client, expecting: nil)
         let proposal = try await initiator.pair(at: harness.now)
-        #expect(proposal.shortAuthenticationString.count == 9)  // "A3F2-91BC"
+        #expect(proposal.shortAuthenticationString.count == ShortAuthString.renderedLength)
         #expect(proposal.peer.deviceID == harness.serverIdentity.deviceID)
 
         // Both ends derived the same string without agreeing who went first.

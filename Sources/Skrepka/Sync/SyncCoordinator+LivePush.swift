@@ -91,6 +91,28 @@ extension SyncCoordinator {
     /// The hash is remembered **before** the write, not after: the write is what
     /// the watcher might see, so a set updated afterwards would be updated after
     /// the race it exists to lose.
+    ///
+    /// **The clipboard write happens only for an item whose bytes came inline,
+    /// and that is a known limitation of this phase rather than the intent.**
+    /// `LivePushPayload.inline` sends nothing when a push's representations
+    /// total more than `SyncLimits.livePushInlineLimit` (256 KB), which is most
+    /// images. The `inline.isEmpty` guard below then declines, so the handoff
+    /// the user is watching for does not happen. The item is still in history —
+    /// `SyncResponder` stored it before calling this — and its bytes arrive on
+    /// the next exchange, within `PeerLink.resyncInterval`, after which it
+    /// pastes normally from the picker.
+    ///
+    /// Fetching the bytes here instead is **not** a small change, and the reason
+    /// is `SyncInitiator`. `LivePushSink` carries no peer identity, so this has
+    /// nothing to name the link to fetch over; and were that fixed, the fetch
+    /// would be a second concurrent requester on an initiator whose
+    /// `fetchPayload` awaits between its `send` and its `expect`. Two interleaved
+    /// requests on one initiator take each other's `payloadChunk` replies.
+    /// Turn-taking survives live push today precisely because a push expects no
+    /// answer; a fetch does. So this needs a request lock on `SyncInitiator`
+    /// first, and that is the change that would stop
+    /// ``SkrepkaSync/SyncInitiator``'s no-correlation-identifier argument being
+    /// true. Recorded under step 4 in `docs/linux-sync/phase-3-runbook.md`.
     func receiveLivePush(_ meta: SyncClipMeta, inline: [RepresentationKey: Data]) async {
         guard isEnabled, !meta.isConcealed, !inline.isEmpty else { return }
         recentlyReceived.remember(meta.contentHash, at: Date())
@@ -100,17 +122,27 @@ extension SyncCoordinator {
     // MARK: - The per-peer switch
 
     /// Records the user's live-push choice for one peer.
-    func setLivePush(_ choice: LivePushChoice, for deviceID: SyncDeviceID) async {
-        guard let runtime else { return }
-        do {
-            try await runtime.trust.setLivePushChoice(choice, for: deviceID)
-            livePushChoices[deviceID] = choice
-            refreshRows()
-        } catch {
-            errorMessage = "Skrepka could not save that setting."
-            SkrepkaLog.sync.error(
-                "Saving a live-push choice failed: \(String(describing: error), privacy: .public)"
-            )
+    ///
+    /// **Synchronous, and queues the write**, for the reason
+    /// ``SyncCoordinator/enqueueSetting(_:)`` exists: the caller is a `Binding`
+    /// setter, so a caller that started its own task would hand two quick flips
+    /// to two unordered tasks and persist whichever finished last rather than
+    /// whichever the user chose last. Off-then-on landing as on is this switch
+    /// continuing to send a peer everything the user copies, after they turned
+    /// it off.
+    func setLivePush(_ choice: LivePushChoice, for deviceID: SyncDeviceID) {
+        enqueueSetting { [weak self] in
+            guard let self, let runtime else { return }
+            do {
+                try await runtime.trust.setLivePushChoice(choice, for: deviceID)
+                livePushChoices[deviceID] = choice
+                refreshRows()
+            } catch {
+                errorMessage = "Skrepka could not save that setting."
+                SkrepkaLog.sync.error(
+                    "Saving a live-push choice failed: \(String(describing: error), privacy: .public)"
+                )
+            }
         }
     }
 }

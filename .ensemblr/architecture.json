@@ -241,13 +241,13 @@
 						"path": "Sources/Skrepka/Sync/SyncCoordinator.swift"
 					},
 					{
-						"path": "Sources/Skrepka/Sync/SyncCoordinator+Serving.swift"
+						"path": "Sources/Skrepka/Sync/SyncCoordinator+Lifecycle.swift"
 					},
 					{
-						"path": "Sources/Skrepka/Sync/SyncCoordinator+Discovery.swift"
+						"path": "Sources/Skrepka/Sync/SyncCoordinator+Serving.swift"
 					}
 				],
-				"sublabel": "two listeners — pinned always, pairing only while asked",
+				"sublabel": "two listeners — pinned always, pairing only while asked; one serial queue orders every change to them",
 				"type": "security"
 			},
 			{

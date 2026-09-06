@@ -184,6 +184,33 @@ enum EngineFixtures {
         RepresentationDescriptor(key: plainTextKey, byteCount: byteCount)
     }
 
+    /// A second representation, so a test can offer one item whose bytes arrive
+    /// in more than one instalment — which is what `SyncExchange` does whenever
+    /// its per-round budget runs out mid-item.
+    static let richTextKey = RepresentationKey(
+        canonical: "text/rtf",
+        origin: PasteboardType.rtf
+    )
+
+    /// One item claiming both representations, so a caller can hand over one set
+    /// of bytes now and the other later.
+    static func twoRepresentationMeta(_ text: String) -> SyncClipMeta {
+        let base = meta(text)
+        return SyncClipMeta(
+            contentHash: base.contentHash,
+            kind: base.kind,
+            preview: base.preview,
+            createdAt: base.createdAt,
+            isPinned: base.isPinned,
+            isConcealed: base.isConcealed,
+            originDeviceID: base.originDeviceID,
+            representations: [
+                plainTextDescriptor(byteCount: text.utf8.count),
+                RepresentationDescriptor(key: richTextKey, byteCount: text.utf8.count),
+            ]
+        )
+    }
+
     static func peer(named name: String) -> PairedPeer {
         PairedPeer(
             certificateDER: Data("certificate-of-\(name)".utf8),

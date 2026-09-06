@@ -25,16 +25,60 @@ import Foundation
 ///   pairing looks like an attack.
 /// - **The timestamp** is what kills replay. Without it a recorded pairing
 ///   exchange keeps producing a string the user already approved once, forever.
+///
+/// **This derivation lets whoever moves second choose its own inputs after
+/// seeing the first mover's**, which is why the width below is what it is. See
+/// [OQ-15](../../../docs/linux-sync/open-questions.md) for the structural fix —
+/// commit-then-reveal — and why it is a change to make before this ships rather
+/// than after.
 public enum ShortAuthString {
     /// How many hex characters the user compares.
     ///
-    /// Eight is 32 bits, which is a one-in-four-billion collision for an
-    /// attacker who gets a single attempt against a human who is looking. The
-    /// freshness window on the timestamp is what keeps it to a single attempt.
-    public static let hexDigitCount = 8
+    /// Sixteen, so 64 bits, rendered `A3F2-91BC-D4E7-0182`.
+    ///
+    /// **The width is the whole defence, because nothing here commits either
+    /// side's inputs.** An attacker relaying a pairing sees the honest device's
+    /// key and timestamp before choosing its own: as the responder on one leg it
+    /// answers after reading the `pairRequest`, and as the initiator on the
+    /// other it picks both a fresh keypair — unbounded — and any `pairedAt`
+    /// inside ``SyncLimits/pairingFreshnessWindow``. So it is not guessing a
+    /// fixed string once; it is searching for a second preimage with two free
+    /// variables, and the only thing bounding that search is how many bits it
+    /// has to hit.
+    ///
+    /// At 32 bits that search was ~2³² hashes of a short input — seconds on one
+    /// GPU, comfortably inside the freshness window, which made the
+    /// man-in-the-middle this type exists to stop merely expensive rather than
+    /// impossible. At 64 it is ~1.8 × 10¹⁹: about 58 years at ten billion hashes
+    /// a second, and still hours against a cluster.
+    ///
+    /// **The width alone is what makes that infeasible.** The attack is online —
+    /// the target digest is not known until the honest device sends its
+    /// `pairRequest`, and `SyncChannelWiring.pairingReadTimeout` gives that
+    /// device up to ``SyncLimits/pairingFreshnessWindow`` to be answered — so
+    /// there is a second bound as well. But 64 bits does not lean on it: even an
+    /// attacker who could hold the honest side open indefinitely, or who ground
+    /// offline for a week, would not get there. Do not read the two constants as
+    /// jointly load-bearing and shorten one because the other looks generous.
+    ///
+    /// What is *not* true, and was written here before, is that the window keeps
+    /// an attacker to a single attempt. It bounds how long a search may run; it
+    /// does not make the search a guess.
+    public static let hexDigitCount = 16
 
     /// Characters per rendered group.
     public static let groupSize = 4
+
+    /// How long the grouped string is, separators included.
+    ///
+    /// Here rather than counted at each call site, because two things depend on
+    /// it that are nowhere near each other: `PairingSheet` sizes its one line to
+    /// hold exactly this many characters, and the suites that check a proposal
+    /// carries a code assert against it rather than spelling a number that a
+    /// change to ``hexDigitCount`` would leave stale in four files.
+    public static var renderedLength: Int {
+        hexDigitCount + (hexDigitCount - 1) / groupSize
+    }
 
     /// Derives the string both ends display.
     ///

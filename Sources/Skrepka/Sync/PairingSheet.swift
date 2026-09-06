@@ -57,11 +57,26 @@ struct PairingSheet: View {
     /// `.monospaced` is not decoration here: the whole defence is a human
     /// comparing two strings in about three seconds, and a proportional face
     /// that renders those pairs alike is what makes a wrong comparison read as a
-    /// right one. Grouped `A3F2-91BC` by `ShortAuthString` for the same reason.
+    /// right one. Grouped `A3F2-91BC-D4E7-0182` by `ShortAuthString` for the
+    /// same reason.
+    ///
+    /// Sized to fit nineteen characters on **one line**, which is what the
+    /// widening to 64 bits made a constraint. SF Mono advances 0.6em, so at 24pt
+    /// the code is 19 × 14.4 + 19 × 1.5 tracking ≈ 302pt inside the 332pt this
+    /// sheet leaves between its padding. `minimumScaleFactor` is the backstop
+    /// rather than the plan: it keeps a future width change from truncating the
+    /// thing the user is here to read, and truncation is the failure that
+    /// matters, because two codes agreeing on their first sixteen characters is
+    /// exactly what an attacker is trying to produce.
+    ///
+    /// One line rather than two groups over two: a user comparing a stacked code
+    /// reads the top line and assumes the rest.
     private var code: some View {
         Text(pairing.code)
-            .font(.system(size: 30, weight: .semibold, design: .monospaced))
-            .tracking(2)
+            .font(.system(size: 24, weight: .semibold, design: .monospaced))
+            .tracking(1.5)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .textSelection(.enabled)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)

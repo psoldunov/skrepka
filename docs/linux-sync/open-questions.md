@@ -8,12 +8,14 @@ research their way to an answer; they are about scope, cost and what the product
 is for. **All nine were taken on 2026-09-05** and are recorded below with the
 reasoning that was on the table at the time.
 
-**Research questions (OQ-1 … OQ-14)** are answerable by anyone with a machine
+**Research questions (OQ-1 … OQ-15)** are answerable by anyone with a machine
 and an afternoon. Each says what it blocks, how to answer it, and what changes
-under each answer. **Ten of the fourteen were answered on 2026-09-05**; the four
-that remain need hardware rather than time. As they close, edit the entry in
-place with the answer, the date, and where it was verified — an unrecorded
-answer gets researched twice.
+under each answer. **Ten of the first fourteen were answered on 2026-09-05**;
+four of those need hardware rather than time, and
+**[OQ-15](#oq-15) was raised on 2026-09-06** by the Phase 3 review and is
+mitigated rather than closed. As they close, edit the entry in place with the
+answer, the date, and where it was verified — an unrecorded answer gets
+researched twice.
 
 ---
 
@@ -333,6 +335,7 @@ its answer, the date, and where it was verified.
 | [OQ-12](#oq-12) | Are `CGPath` / `CGAffineTransform` available on Linux? | **answered — no**, and neither is the `CoreGraphics` module | Phase 4 exclusion, Phase 7 tray |
 | [OQ-13](#oq-13) | swift-format, SwiftLint, Periphery on Linux; SwiftPM multi-target build | **answered** — and `scripts/doctor-linux.sh` now exists | Phase 4's quality gate |
 | [OQ-14](#oq-14) | What do CrossPaste / ClipCascade / ClipSync actually do on the wire? | **answered** — only CrossPaste syncs history, and none of the three syncs deletion | nothing, but it was 20 minutes |
+| [OQ-15](#oq-15) | The pairing code lets whoever moves second choose its inputs | **mitigated 2026-09-06** — widened to 64 bits; commit-then-reveal still owed | a wire change to make before this ships |
 
 The four still open all need hardware this machine does not have:
 **[OQ-1](#oq-1)** and **[OQ-2](#oq-2)** need a second Apple device, and
@@ -1097,3 +1100,72 @@ one habit worth borrowing is CrossPaste's: **prefer the receiver's clock for
 anything stored**, and treat a sender's timestamp as data to order by rather
 than as truth. Skrepka's LWW register already breaks ties on device identifier
 rather than on the clock alone, which is the same instinct.
+
+<a id="oq-15"></a>
+### OQ-15 — The short authentication string lets whoever moves second choose its inputs
+
+**Raised 2026-09-06 during the Phase 3 review. Mitigated, not closed.**
+`ShortAuthString.hexDigitCount` went from 8 to 16 — 32 bits to 64 — which makes
+the search below infeasible inside the freshness window. The structural fix is a
+protocol change and has not been made.
+
+**The problem.** `ShortAuthString.derive` is
+`SHA256(sort(K_a, K_b) ‖ bigendian_millis(pairedAt))`, truncated. Nothing in the
+exchange commits either side's contribution before the other's is known, and an
+attacker relaying a pairing is second on both legs:
+
+- On the leg where the honest device dials it, the attacker is the **responder**.
+  It reads the `pairRequest` — which carries the honest device's certificate and
+  its chosen `pairedAt` — before it has to answer with anything.
+- On the leg where it dials the honest peer, the attacker is the **initiator**,
+  and `SyncInitiator.pair(at:)` lets it choose *both* a fresh keypair, of which
+  there are unlimited, and any `pairedAt` that `PairingSession.verify` accepts —
+  600,000 millisecond values inside `SyncLimits.pairingFreshnessWindow`.
+
+So the attacker is not guessing a fixed string once. It is searching for a second
+preimage of a digest it already knows, with two free variables and no
+commitment, and the only thing bounding that search is the number of bits it has
+to hit. At 32 that was roughly 2³² hashes of a short input: seconds on one GPU,
+against a 300-second window. The comment that used to sit on `hexDigitCount` —
+that the freshness window "keeps it to a single attempt" — was false, and is the
+specific reasoning this entry exists to correct. The window bounds the
+*timestamp* dimension. The keypair dimension is free.
+
+**Why the width was raised rather than the window cut.** The attack is online:
+the target digest is not known until the honest device sends its `pairRequest`,
+and `SyncChannelWiring.pairingReadTimeout` — which is defined as
+`pairingFreshnessWindow` — is how long that device will wait to be answered. So
+there is a time bound as well as a width. But **the width is the one doing the
+work**: 2⁶⁴ is ~1.8 × 10¹⁹, about 58 years at ten billion hashes a second, so
+even an attacker who could hold the honest side open indefinitely or grind
+offline for a week does not get there. Nothing on the *initiator's* side refuses
+a stale `pairRequest` — only the responder's `PairingSession.verify` does — so
+the socket timeout is the only thing bounding that leg, and it is worth knowing
+that 64 bits does not depend on it.
+
+Cutting `pairingFreshnessWindow` from 300 s to 30 s would therefore buy very
+little, and would pay for it with a real failure on two machines whose clocks
+were never synchronised against NTP — which is the case that constant's own
+comment was written for. The two constants are **not** jointly load-bearing:
+do not shorten one because the other looks generous.
+
+**The structural fix, not done: commit-then-reveal on both legs.** The initiator
+sends `H(nonce_i)` in the `pairRequest`; the responder replies with `nonce_r` in
+the clear; the initiator then reveals `nonce_i`, and both derive over
+`sort(K_a, K_b) ‖ nonce_i ‖ nonce_r`. Neither side can choose its contribution
+after seeing the other's, which is what ZRTP and Bluetooth Secure Simple Pairing
+do and what lets them get away with a six-digit code. A responder nonce alone
+does **not** fix it: the attacker is second on the responder leg too, so it would
+still be choosing after seeing.
+
+**Why it was not done here.** It turns a two-message first contact into four, and
+`PinPolicy.pairingMessages` carries a written argument that exactly two messages
+is what makes "does an unauthenticated peer see anything of mine" checkable by
+eye. It rewrites the wire format, both roles, the probe and the sheet flow, in
+the most security-critical file in the repository. A botched commitment is worse
+than a wide code, so widening bought the room to do it deliberately.
+
+**What it blocks.** Nothing today; 64 bits is a sound mitigation. It should be
+done **before this ships to anyone**, not after, because it is a wire change and
+`ProtocolVersion` would have to carry it — which is cheap while the installed
+base is one machine ([D-8](#d-8)) and expensive once it is not.

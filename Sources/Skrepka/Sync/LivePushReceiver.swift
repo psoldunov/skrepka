@@ -56,6 +56,14 @@ struct LivePushReceiver {
     /// handoff of the clipboard, not a paste into whatever happens to be
     /// frontmost. Synthesising ⌘V here would type a peer's clipboard into the
     /// user's document.
+    ///
+    /// **Only ever called with bytes that came inline**, so an item over
+    /// `SyncLimits.livePushInlineLimit` reaches this device's history and never
+    /// its clipboard. `.noUsableRepresentation` below is the refusal that
+    /// records it. That is a limitation of this phase, not a defence: see
+    /// ``SyncCoordinator/receiveLivePush(_:inline:)`` for why fetching the
+    /// missing bytes needs a request lock on `SyncInitiator` before it can be
+    /// wired, and `docs/linux-sync/phase-3-runbook.md` step 4.
     func write(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async {
         guard !isPickerVisible() else { return refuse(.pickerOpen) }
         let representations = RepresentationKeyMap.utiKeyed(payloads)

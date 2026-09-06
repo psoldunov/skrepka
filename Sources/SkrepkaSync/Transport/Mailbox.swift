@@ -31,9 +31,17 @@ private let defaultMailboxCapacity = 16
 /// second `receive()` arrive while the first is still parked. An earlier version
 /// of this type kept one waiter and overwrote it, which drops a
 /// `CheckedContinuation` on the floor — a permanent hang and a
-/// `SWIFT TASK CONTINUATION MISUSE`. One connection has two readers
-/// (``SyncResponder`` and ``SyncInitiator``) and each of them parks here, so
-/// waiters are held in arrival order and woken in it.
+/// `SWIFT TASK CONTINUATION MISUSE`.
+///
+/// It is *not* the case that one connection has two readers, whatever an earlier
+/// version of this comment said. A dialled connection is read by a
+/// ``SyncInitiator`` and nothing else, an accepted one by a ``SyncResponder``
+/// and nothing else, and a pair of machines holds one of each — see
+/// ``PeerLink``. The queue is right anyway, and for a reason that outlives that:
+/// a reader whose call suspends here can be re-entered by a second call on the
+/// same actor, and two `receive()`s parked at once must be woken in the order
+/// they arrived or one takes the other's reply. Keeping one waiter would still
+/// be a dropped continuation the first time that happened.
 ///
 /// **The queue is bounded.** `autoRead` is on, so the event loop keeps reading
 /// and decoding whether or not anyone is draining. Nothing else applies

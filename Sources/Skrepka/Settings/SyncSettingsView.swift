@@ -75,7 +75,12 @@ struct SyncSettingsView: View {
                 "",
                 isOn: Binding(
                     get: { sync.isAcceptingPairing },
-                    set: { accepting in Task { await sync.setAcceptingPairing(accepting) } }
+                    // Called directly rather than wrapped in a `Task`: two rapid
+                    // flips through two unordered tasks reach the coordinator's
+                    // lifecycle queue in an undefined order, and off-then-on
+                    // leaves an unpinned listener bound. `setAcceptingPairing`
+                    // queues the work itself.
+                    set: { sync.setAcceptingPairing($0) }
                 )
             )
             .labelsHidden()
@@ -98,9 +103,11 @@ struct SyncSettingsView: View {
                         peer: peer,
                         pair: { Task { await sync.pair(with: peer.deviceID) } },
                         unpair: { Task { await sync.unpair(peer.deviceID) } },
-                        setLivePush: { choice in
-                            Task { await sync.setLivePush(choice, for: peer.deviceID) }
-                        }
+                        // Called directly, like the pairing switch above and for
+                        // the same reason: a `Task` per flip is a `Task` per
+                        // flip in no particular order, and this one decides
+                        // whether a peer keeps receiving what the user copies.
+                        setLivePush: { sync.setLivePush($0, for: peer.deviceID) }
                     )
                 }
             }

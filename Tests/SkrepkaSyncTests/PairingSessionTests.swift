@@ -119,7 +119,11 @@ struct PairingSessionTests {
         )
         #expect(proposal.peer.deviceID == remote.deviceID)
         #expect(proposal.peer.platform == .linux)
-        #expect(proposal.shortAuthenticationString.count == 9)
+        // Derived rather than spelled: what this test is about is that a proposal
+        // carries a code at all. `ShortAuthStringTests` owns the rendered shape,
+        // and widening the code should not need a sweep through every suite that
+        // happens to see one.
+        #expect(proposal.shortAuthenticationString.count == ShortAuthString.renderedLength)
     }
 
     @Test("A request whose certificate does not hash to the claimed identity is refused")

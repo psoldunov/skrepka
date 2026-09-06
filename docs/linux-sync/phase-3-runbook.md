@@ -31,7 +31,7 @@ five times while this was written and was green each time.
 | 1 | **Pairing** — same code both sides, both persist, relaunch reconnects | `probe-runbook.sh cross` | **Pass.** Both ends derive the same eight characters; the initiator pins the peer; a relaunch against the same stores keeps the device identity, keeps the pin, and raises no second sheet. |
 | 2 | **Mismatch** — refusing leaves nothing paired on either end | `probe-runbook.sh apple` | **Pass, by the refusal path.** The probe is told to `reject`; the initiator reports "the peer declined the pairing" and neither side records a peer. See the note below on what this does *not* prove. |
 | 3 | **History both ways** | `probe-runbook.sh cross` | **Pass.** Each peer holds the other's clipping after one exchange in each direction. |
-| 4 | **Live push is on**, because the probe advertises `plat=linux` | `probe-runbook.sh cross` (protocol half) | **Partial.** The push crosses the wire and the receiving peer stores it. **Landing on the Mac's pasteboard is not covered** — the probe has no clipboard, which is the point of it. |
+| 4 | **Live push is on**, because the probe advertises `plat=linux` | `probe-runbook.sh cross` (protocol half) | **Partial, and limited by design in this phase.** The push crosses the wire and the receiving peer stores it. **Landing on the Mac's pasteboard is not covered** — the probe has no clipboard, which is the point of it. Separately, **only an item whose bytes came inline is written to the clipboard at all** — see the note below. |
 | 5 | **No echo loop** | `RecentHashesTests`, `LivePushPolicyTests` | **Partial.** The suppression rule is asserted directly: a hash accepted from a peer is not re-broadcast, the set is bounded by count and by age, and suppression lapses so a deliberate re-copy still syncs. **A real two-machine loop is not exercised**, because reproducing one needs two pasteboards. |
 | 6 | **Pins propagate**, both directions, and an unpin too | `probe-runbook.sh cross` | **Partial.** A pin made on one peer reaches the other. **The unpin direction is not driven**; the register it rides on is the same one, and `LWWRegisterTests` covers the ordering. |
 | 7 | **Deletes do not resurrect** | `probe-runbook.sh cross` | **Pass.** Deleted on one peer, two forced re-syncs later it is still gone from the other. |
@@ -42,6 +42,30 @@ five times while this was written and was green each time.
 | 12 | **Unpair** — the pin goes and the ex-peer cannot reconnect | `probe-runbook.sh apple` | **Pass.** After an unpair the ex-peer's next handshake is refused at TLS with `SSLV3_ALERT_CERTIFICATE_UNKNOWN`, which is the pinning callback doing its job. |
 
 ---
+
+## A known limitation of step 4, not a gap in the testing
+
+**A live push over 256 KB reaches history and never reaches the clipboard.**
+`LivePushPayload.inline` sends no bytes at all when a push's representations
+total more than `SyncLimits.livePushInlineLimit`, and
+`SyncCoordinator.receiveLivePush` declines an empty set. Design §11 says to
+"push metadata and let the peer fetch lazily"; this phase implements the first
+half. Most images are over the limit, so for images live push currently means
+"the row appears in the picker" rather than "the clipboard is handed over".
+
+The item is not lost: it is in history immediately, its bytes arrive on the next
+exchange within `PeerLink.resyncInterval`, and it pastes normally from the
+picker. What the user does not get is the ⌘V-and-it-is-there path.
+
+Wiring the fetch is blocked on something structural rather than on effort.
+`LivePushSink` carries no peer identity, so the receiving side cannot name the
+link to fetch over — and if it could, that fetch would be a second concurrent
+requester on a `SyncInitiator` whose `fetchPayload` suspends between its `send`
+and its `expect`. Two interleaved requests on one initiator take each other's
+`payloadChunk` replies. Live push is safe on a turn-taking protocol *only*
+because it expects no answer; a fetch expects one. So this needs a request lock
+on `SyncInitiator` first, which is the same change that would end the argument
+in that type's doc comment for why no message needs a correlation identifier.
 
 ## What the automated half does not prove
 

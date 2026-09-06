@@ -98,6 +98,31 @@ refute() {
 	if grep -q -- "$3" "${WORK}/$2"; then fail "$1 (found /$3/ in $2)"; else pass "$1"; fi
 }
 
+# poll_for <name> <a|b> <command> <file> <pattern> [seconds]
+#
+# Asks a peer `command` until `pattern` shows up in its output, or gives up.
+#
+# For an assertion whose subject is a peer's own retry loop rather than a command
+# this script sent. Two things make a fixed sleep wrong here. The delay is not
+# fixed — `PeerLink.retryDelays` grows 2 → 5 → 15 → 60, so any single number
+# either lands in a bucket and fails or is padded to the worst case and slows
+# every clean run. And the probe only *prints* a link's state when asked: it is
+# `peers` that renders `linkState`, so waiting without asking again watches a
+# file nothing is writing to.
+poll_for() {
+	local name="$1" peer="$2" command="$3" file="$4" pattern="$5"
+	local deadline=$((SECONDS + ${6:-40}))
+	while ((SECONDS < deadline)); do
+		"say_${peer}" "${command}"
+		sleep 2
+		if grep -q -- "${pattern}" "${WORK}/${file}"; then
+			pass "${name}"
+			return
+		fi
+	done
+	fail "${name} (no /${pattern}/ in ${file} within ${6:-40}s)"
+}
+
 # MARK: - Cross-platform: the pair live push exists for
 
 scenario_cross() {
@@ -220,14 +245,11 @@ scenario_apple() {
 	say_a "unpair ${PEER}"
 	sleep 3
 	expect "step 12 — the pin is forgotten" a.out "forgot "
-	# The ex-peer keeps trying, and its handshake is now refused at TLS. Its own
-	# retry backoff is seconds, so this waits for one full cycle rather than for
-	# the next `sync`, which only shortens a wait the link is not in.
+	# The ex-peer keeps trying and its handshake is now refused at TLS. When that
+	# lands is its own business, so this asks until it has happened.
 	say_b sync
-	sleep 12
-	say_b peers
-	sleep 2
-	expect "step 12 — the ex-peer's certificate is no longer accepted" b.out "sslError"
+	poll_for "step 12 — the ex-peer's certificate is no longer accepted" \
+		b peers b.out "sslError"
 
 	stop_peers
 }
