@@ -104,11 +104,11 @@ struct CaptureRulesTests {
 
     @Test("A file URL pointing at a folder is still captured as .file")
     func doesNotConsultTheDiskForKind() throws {
-        // The rules run inside the poller's tick, which advances the change
-        // count before it reads: a blocking file-system call here does not slow
-        // a capture down, it loses the copies made while it blocks. So a folder
-        // reads as `.file` at this stage and `ThumbnailRenderer` corrects it —
-        // see `FileURLKindTests`.
+        // The rules run inside `ClipboardWatcher.checkForChange()`, which writes
+        // the change count down before it reads: a blocking file-system call here
+        // does not slow a capture down, it loses the copies made while it blocks.
+        // So a folder reads as `.file` at this stage and `ThumbnailRenderer`
+        // corrects it — see `FileURLKindTests`.
         let folder = try Fixtures.makeDirectory()
         defer { try? FileManager.default.removeItem(at: folder) }
 

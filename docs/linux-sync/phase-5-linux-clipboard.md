@@ -87,7 +87,7 @@ Case 5 is GNOME, and it is a supported configuration with a known remedy
 
 ### 3. The three readers
 
-All three conform to `ClipboardSource` from Phase 4, so `PasteboardPoller`,
+All three conform to `ClipboardSource` from Phase 4, so `ClipboardWatcher`,
 `CaptureRules`, `PrivacyMarkers` and the whole capture pipeline are the ported
 code and only the source is new.
 
@@ -103,7 +103,7 @@ has to accommodate both shapes — a `changeCount()`-style poll and a push strea
 That loop is not the Swift concurrency runtime's, so it needs a thread and a
 carefully drawn boundary; an `actor` owning the connection, with the dispatch
 loop on its own thread feeding an `AsyncStream`, is the shape that matches how
-`PasteboardPoller` already behaves.
+`ClipboardWatcher` already behaves.
 
 **Selection data arrives through a pipe.** `receive` hands over a file
 descriptor per MIME type, and reading them all means reading several

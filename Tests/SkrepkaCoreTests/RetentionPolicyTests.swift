@@ -20,7 +20,7 @@ struct RetentionPolicyTests {
             isConcealed: false,
             imageSize: nil,
             byteCount: nil,
-            thumbnail: nil
+            hasThumbnail: false
         )
     }
 

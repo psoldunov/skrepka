@@ -10,10 +10,13 @@ struct ClipRowView: View {
     let item: ClipSummary
     let index: Int
     let isSelected: Bool
+    /// Resolved by the list, so the row draws its picture in the same pass it
+    /// draws everything else. See ``ClipThumbnailView/image``.
+    let thumbnail: NSImage?
 
     var body: some View {
         HStack(spacing: 11) {
-            ClipThumbnailView(item: item)
+            ClipThumbnailView(item: item, image: thumbnail)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.previewText)

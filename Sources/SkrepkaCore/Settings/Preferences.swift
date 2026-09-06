@@ -23,6 +23,7 @@ public final class Preferences {
         launchAtLogin = defaults.value(for: .launchAtLogin)
         pasteAutomatically = defaults.value(for: .pasteAutomatically)
         hasCompletedFirstRun = defaults.value(for: .hasCompletedFirstRun)
+        syncEnabled = defaults.value(for: .syncEnabled)
     }
 
     /// Maximum unpinned entries, nil for unlimited.
@@ -54,6 +55,16 @@ public final class Preferences {
     /// Set once the welcome window has been shown, so it never reappears.
     public var hasCompletedFirstRun: Bool {
         didSet { defaults.set(hasCompletedFirstRun, for: .hasCompletedFirstRun) }
+    }
+
+    /// Whether history is shared with paired devices on the local network.
+    ///
+    /// Off by default, and deliberately not a thing an upgrade switches on:
+    /// turning it on opens a listening socket and publishes this machine on the
+    /// local network, which is not something to start doing to somebody who
+    /// installed a clipboard manager.
+    public var syncEnabled: Bool {
+        didSet { defaults.set(syncEnabled, for: .syncEnabled) }
     }
 
     public var retentionPolicy: RetentionPolicy {
@@ -97,6 +108,9 @@ struct PreferenceKey<Value: Sendable>: Sendable {
     }
     static var hasCompletedFirstRun: PreferenceKey<Bool> {
         .init(name: "hasCompletedFirstRun", defaultValue: false)
+    }
+    static var syncEnabled: PreferenceKey<Bool> {
+        .init(name: "syncEnabled", defaultValue: false)
     }
 }
 

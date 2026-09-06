@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-05T20:16:18.000Z",
+	"generatedAt": "2026-09-06T10:37:08.526Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -15,7 +15,11 @@
 					"hotkey",
 					"paste",
 					"permissions",
-					"app-diagnostics"
+					"app-diagnostics",
+					"keychain-trust",
+					"sync-coordinator",
+					"live-push",
+					"sync-ui"
 				]
 			},
 			{
@@ -25,6 +29,8 @@
 					"capture",
 					"privacy-rules",
 					"store",
+					"store-sync",
+					"sqlite-store",
 					"models",
 					"search",
 					"preferences",
@@ -34,10 +40,25 @@
 			},
 			{
 				"kind": "region",
+				"label": "SkrepkaSync — portable, builds on Linux from day one",
+				"wraps": [
+					"sync-model",
+					"sync-wire",
+					"sync-merge",
+					"sync-pairing",
+					"sync-transport",
+					"sync-discovery",
+					"sync-session"
+				]
+			},
+			{
+				"kind": "region",
 				"label": "Build & quality gate",
 				"wraps": [
 					"tests",
-					"scripts"
+					"scripts",
+					"linux-image",
+					"probe"
 				]
 			},
 			{
@@ -48,7 +69,11 @@
 					"filesystem",
 					"frontmost-app",
 					"keyboard-shortcuts",
-					"notary"
+					"notary",
+					"bonjour",
+					"keychain",
+					"sqlite",
+					"nio"
 				]
 			},
 			{
@@ -83,7 +108,7 @@
 						"path": "Sources/Skrepka/Diagnostics/AppCoordinator+Diagnostics.swift"
 					}
 				],
-				"sublabel": "owns store, capture loop, hotkey, panel",
+				"sublabel": "owns store, capture loop, hotkey, panel, sync",
 				"type": "backend"
 			},
 			{
@@ -116,8 +141,25 @@
 						"path": "Sources/Skrepka/Settings"
 					}
 				],
-				"sublabel": "General, History, Privacy, Diagnostics",
+				"sublabel": "General, History, Privacy, Sync, Status",
 				"type": "frontend"
+			},
+			{
+				"id": "sync-ui",
+				"label": "Sync pane & pairing sheet",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Settings/SyncSettingsView.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Sync/PairingSheet.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Sync/PeerRowView.swift"
+					}
+				],
+				"sublabel": "the code two humans compare is the whole MITM defence",
+				"type": "security"
 			},
 			{
 				"id": "welcome",
@@ -149,7 +191,7 @@
 						"path": "Sources/Skrepka/Platform/PasteService.swift"
 					}
 				],
-				"sublabel": "writes pasteboard, synthesizes ⌘V",
+				"sublabel": "the one owner of the pasteboard",
 				"type": "backend"
 			},
 			{
@@ -166,7 +208,7 @@
 						"path": "Sources/Skrepka/Platform/SystemSettingsLink.swift"
 					}
 				],
-				"sublabel": "Accessibility trust, login item",
+				"sublabel": "Accessibility trust, login item, and the Local Network pane sync sends you to",
 				"type": "security"
 			},
 			{
@@ -181,20 +223,62 @@
 				"type": "backend"
 			},
 			{
-				"id": "capture",
-				"label": "Pasteboard capture",
+				"id": "keychain-trust",
+				"label": "Keychain trust store",
 				"sources": [
 					{
-						"path": "Sources/SkrepkaCore/Clipboard/PasteboardPoller.swift"
+						"path": "Sources/Skrepka/Sync/KeychainTrustStore.swift"
+					}
+				],
+				"sublabel": "device key in the Keychain, never synchronizable; peers in the store",
+				"type": "security"
+			},
+			{
+				"id": "sync-coordinator",
+				"label": "Sync coordinator",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Sync/SyncCoordinator.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Sync/SyncCoordinator+Lifecycle.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Sync/SyncCoordinator+Serving.swift"
+					}
+				],
+				"sublabel": "comes up in two steps — listeners need no permission, publishing and dialling wait for the browse; one serial queue orders every change",
+				"type": "security"
+			},
+			{
+				"id": "live-push",
+				"label": "Live push",
+				"sources": [
+					{
+						"path": "Sources/Skrepka/Sync/LivePushReceiver.swift"
+					},
+					{
+						"path": "Sources/Skrepka/Sync/SyncCoordinator+LivePush.swift"
+					}
+				],
+				"sublabel": "pause → write → resume, plus a bounded recently-received set",
+				"type": "backend"
+			},
+			{
+				"id": "capture",
+				"label": "Clipboard capture",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/ClipboardWatcher.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Clipboard/ClipboardSource.swift"
 					},
 					{
 						"path": "Sources/SkrepkaCore/Clipboard/PasteboardReader.swift"
-					},
-					{
-						"path": "Sources/SkrepkaCore/Clipboard/CaptureDecision.swift"
 					}
 				],
-				"sublabel": "poller actor, 200 ms changeCount",
+				"sublabel": "watcher actor over ClipboardSource — poll or push",
 				"type": "backend"
 			},
 			{
@@ -216,10 +300,44 @@
 				"label": "History store",
 				"sources": [
 					{
-						"path": "Sources/SkrepkaCore/Store"
+						"path": "Sources/SkrepkaCore/Store/HistoryStore.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Store/ClipProjection.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Store/HistoryStore+Projection.swift"
 					}
 				],
-				"sublabel": "SwiftData, retention, previews, kind & size",
+				"sublabel": "SwiftData; items incremental; kind, size & preview off-actor",
+				"type": "database"
+			},
+			{
+				"id": "store-sync",
+				"label": "Store sync surface",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Store/HistoryStore+Sync.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Store/HistoryStore+Storing.swift"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Store/HistoryStore+Pairing.swift"
+					}
+				],
+				"sublabel": "concealed filtered on BOTH emitting paths — syncIndex and payload",
+				"type": "security"
+			},
+			{
+				"id": "sqlite-store",
+				"label": "SQLite history store",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/Store/SQLite"
+					}
+				],
+				"sublabel": "Linux only — second HistoryStoring engine; store created 0600",
 				"type": "database"
 			},
 			{
@@ -252,7 +370,7 @@
 						"path": "Sources/SkrepkaCore/Settings/Preferences.swift"
 					}
 				],
-				"sublabel": "UserDefaults-backed",
+				"sublabel": "UserDefaults-backed; sync is off until asked for",
 				"type": "database"
 			},
 			{
@@ -284,14 +402,108 @@
 				"type": "frontend"
 			},
 			{
+				"id": "sync-model",
+				"label": "Sync model",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Model"
+					}
+				],
+				"sublabel": "device id, LWW register, clip meta, limits, live-push policy",
+				"type": "backend"
+			},
+			{
+				"id": "sync-wire",
+				"label": "Wire codec",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Wire"
+					}
+				],
+				"sublabel": "framed canonical CBOR — bounded depth, length and item count",
+				"type": "security"
+			},
+			{
+				"id": "sync-merge",
+				"label": "Merge engine",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Merge"
+					}
+				],
+				"sublabel": "pure: converges in any order; retention ≠ deletion",
+				"type": "backend"
+			},
+			{
+				"id": "sync-pairing",
+				"label": "Pairing & identity",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Pairing"
+					}
+				],
+				"sublabel": "self-signed P-256, short auth string bound to the tunnel",
+				"type": "security"
+			},
+			{
+				"id": "sync-transport",
+				"label": "Sync transport",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Transport"
+					}
+				],
+				"sublabel": "TLS 1.3 pinned-cert only; bounds queue, timeouts and clock skew",
+				"type": "security"
+			},
+			{
+				"id": "sync-session",
+				"label": "Peer link & exchange",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Session"
+					}
+				],
+				"sublabel": "dial, handshake, exchange, retry — a device pushes only where it dialled",
+				"type": "backend"
+			},
+			{
+				"id": "sync-discovery",
+				"label": "Peer discovery",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaSync/Discovery"
+					}
+				],
+				"sublabel": "_skrepka._tcp; the browse is the Local Network gate, and pair= is amended in place rather than republished",
+				"type": "backend"
+			},
+			{
+				"id": "probe",
+				"label": "skrepka-sync-probe",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaProbe"
+					},
+					{
+						"path": "Sources/skrepka-sync-probe"
+					}
+				],
+				"sublabel": "headless peer; speaks it all and never touches a pasteboard",
+				"type": "backend"
+			},
+			{
 				"id": "tests",
-				"label": "Core tests",
+				"label": "Tests",
 				"sources": [
 					{
 						"path": "Tests/SkrepkaCoreTests"
+					},
+					{
+						"path": "Tests/SkrepkaSyncTests"
 					}
 				],
-				"sublabel": "Swift Testing",
+				"sublabel": "Swift Testing; one HistoryStoring suite across every conformance",
 				"type": "backend"
 			},
 			{
@@ -302,7 +514,21 @@
 						"path": "scripts"
 					}
 				],
-				"sublabel": "doctor, bundle, notarize, make-icon",
+				"sublabel": "doctor, doctor-linux, probe-runbook, linux, bundle, notarize",
+				"type": "backend"
+			},
+			{
+				"id": "linux-image",
+				"label": "Linux build image",
+				"sources": [
+					{
+						"path": "docker/Dockerfile.linux"
+					},
+					{
+						"path": "scripts/linux-image.sh"
+					}
+				],
+				"sublabel": "Swift 6.3.3, SwiftLint, libsqlite3 — required, not optional",
 				"type": "backend"
 			},
 			{
@@ -326,13 +552,43 @@
 			{
 				"id": "keyboard-shortcuts",
 				"label": "KeyboardShortcuts",
-				"sublabel": "sindresorhus, 3.0.1",
+				"sublabel": "sindresorhus, 3.0.1 — macOS only",
 				"type": "external"
 			},
 			{
 				"id": "notary",
 				"label": "Apple notary service",
 				"sublabel": "App Store Connect API key",
+				"type": "cloud"
+			},
+			{
+				"id": "bonjour",
+				"label": "mDNSResponder",
+				"sublabel": "DNSServiceRegister owns no port; DNSServiceUpdateRecord amends the TXT in place",
+				"type": "external"
+			},
+			{
+				"id": "keychain",
+				"label": "Keychain",
+				"sublabel": "device private key, never synchronizable",
+				"type": "external"
+			},
+			{
+				"id": "sqlite",
+				"label": "libsqlite3",
+				"sublabel": "Linux only, via the CSQLite module map",
+				"type": "external"
+			},
+			{
+				"id": "nio",
+				"label": "swift-nio + NIOSSL",
+				"sublabel": "one transport on both platforms",
+				"type": "external"
+			},
+			{
+				"id": "peer",
+				"label": "Paired peer",
+				"sublabel": "another Mac, or a Linux box in Phase 6",
 				"type": "cloud"
 			}
 		],
@@ -353,7 +609,7 @@
 			{
 				"from": "capture",
 				"id": "e-capture-pasteboard",
-				"label": "polls changeCount",
+				"label": "changeCount or push",
 				"to": "pasteboard"
 			},
 			{
@@ -389,6 +645,12 @@
 				"to": "models"
 			},
 			{
+				"from": "store",
+				"id": "e-store-storesync",
+				"label": "sync surface",
+				"to": "store-sync"
+			},
+			{
 				"from": "coordinator",
 				"id": "e-coordinator-picker",
 				"label": "show / dismiss",
@@ -397,7 +659,7 @@
 			{
 				"from": "picker",
 				"id": "e-picker-store",
-				"label": "reads history",
+				"label": "reads items, thumbnails per row",
 				"to": "store"
 			},
 			{
@@ -482,6 +744,12 @@
 			},
 			{
 				"from": "settings-ui",
+				"id": "e-settings-syncui",
+				"label": "Sync pane",
+				"to": "sync-ui"
+			},
+			{
+				"from": "settings-ui",
 				"id": "e-settings-diagnostics",
 				"label": "Status pane",
 				"to": "app-diagnostics"
@@ -530,9 +798,217 @@
 				"to": "branding"
 			},
 			{
+				"from": "coordinator",
+				"id": "e-coordinator-synccoord",
+				"label": "starts, stops, and offers each capture",
+				"to": "sync-coordinator",
+				"variant": "emphasis"
+			},
+			{
+				"from": "sync-coordinator",
+				"id": "e-synccoord-keychaintrust",
+				"label": "identity and pins",
+				"to": "keychain-trust",
+				"variant": "security"
+			},
+			{
+				"from": "sync-coordinator",
+				"id": "e-synccoord-transport",
+				"label": "two listeners, one policy each",
+				"to": "sync-transport",
+				"variant": "security"
+			},
+			{
+				"from": "sync-coordinator",
+				"id": "e-synccoord-discovery",
+				"label": "advertises and browses",
+				"to": "sync-discovery"
+			},
+			{
+				"from": "sync-coordinator",
+				"id": "e-synccoord-session",
+				"label": "one link per paired peer",
+				"to": "sync-session",
+				"variant": "emphasis"
+			},
+			{
+				"from": "sync-coordinator",
+				"id": "e-synccoord-livepush",
+				"label": "a peer pushed this",
+				"to": "live-push"
+			},
+			{
+				"from": "sync-ui",
+				"id": "e-syncui-synccoord",
+				"label": "pair, unpair, live-push choice",
+				"to": "sync-coordinator",
+				"variant": "security"
+			},
+			{
+				"from": "sync-ui",
+				"id": "e-syncui-permissions",
+				"label": "Open Settings, but only when the local network was refused",
+				"to": "permissions",
+				"variant": "dashed"
+			},
+			{
+				"from": "live-push",
+				"id": "e-livepush-paste",
+				"label": "writes through the one owner",
+				"to": "paste"
+			},
+			{
+				"from": "live-push",
+				"id": "e-livepush-capture",
+				"label": "pause / resume, so the write is not re-recorded",
+				"to": "capture",
+				"variant": "security"
+			},
+			{
+				"from": "sync-session",
+				"id": "e-session-transport",
+				"label": "dials, handshakes, fetches",
+				"to": "sync-transport"
+			},
+			{
+				"from": "sync-session",
+				"id": "e-session-merge",
+				"label": "plans, applies, then fetches what is missing",
+				"to": "sync-merge"
+			},
+			{
+				"from": "store-sync",
+				"id": "e-storesync-syncmodel",
+				"label": "SyncClipMeta, Tombstone",
+				"to": "sync-model"
+			},
+			{
+				"from": "store-sync",
+				"id": "e-storesync-syncmerge",
+				"label": "applies the plan",
+				"to": "sync-merge"
+			},
+			{
+				"from": "sqlite-store",
+				"id": "e-sqlite-storing",
+				"label": "second HistoryStoring engine",
+				"to": "sync-transport",
+				"variant": "dashed"
+			},
+			{
+				"from": "sqlite-store",
+				"id": "e-sqlite-lib",
+				"label": "C library",
+				"to": "sqlite"
+			},
+			{
+				"from": "sync-merge",
+				"id": "e-syncmerge-syncmodel",
+				"label": "plans over",
+				"to": "sync-model"
+			},
+			{
+				"from": "sync-wire",
+				"id": "e-syncwire-syncmodel",
+				"label": "encodes",
+				"to": "sync-model"
+			},
+			{
+				"from": "sync-transport",
+				"id": "e-synctransport-syncwire",
+				"label": "frames",
+				"to": "sync-wire",
+				"variant": "emphasis"
+			},
+			{
+				"from": "sync-transport",
+				"id": "e-synctransport-syncpairing",
+				"label": "pins the certificate",
+				"to": "sync-pairing",
+				"variant": "security"
+			},
+			{
+				"from": "sync-transport",
+				"id": "e-synctransport-syncmerge",
+				"label": "bounds clock skew before merging",
+				"to": "sync-merge",
+				"variant": "security"
+			},
+			{
+				"from": "sync-transport",
+				"id": "e-synctransport-nio",
+				"to": "nio"
+			},
+			{
+				"from": "sync-transport",
+				"id": "e-synctransport-peer",
+				"label": "TLS 1.3, mutual auth",
+				"to": "peer",
+				"variant": "security"
+			},
+			{
+				"from": "sync-discovery",
+				"id": "e-syncdiscovery-bonjour",
+				"label": "registers & browses",
+				"to": "bonjour"
+			},
+			{
+				"from": "sync-discovery",
+				"id": "e-syncdiscovery-synccoord",
+				"label": "the browse reaching ready is the Local Network gate — publish and dial only after it",
+				"to": "sync-coordinator",
+				"variant": "security"
+			},
+			{
+				"from": "sync-discovery",
+				"id": "e-syncdiscovery-peer",
+				"label": "finds on the LAN",
+				"to": "peer",
+				"variant": "dashed"
+			},
+			{
+				"from": "keychain-trust",
+				"id": "e-keychain-trust-pairing",
+				"label": "TrustStore conformance",
+				"to": "sync-pairing",
+				"variant": "security"
+			},
+			{
+				"from": "keychain-trust",
+				"id": "e-keychain-trust-keychain",
+				"label": "device key",
+				"to": "keychain"
+			},
+			{
+				"from": "keychain-trust",
+				"id": "e-keychain-trust-storesync",
+				"label": "paired peers",
+				"to": "store-sync"
+			},
+			{
+				"from": "probe",
+				"id": "e-probe-session",
+				"label": "the same link the app uses",
+				"to": "sync-session",
+				"variant": "dashed"
+			},
+			{
+				"from": "probe",
+				"id": "e-probe-transport",
+				"label": "serves and pairs",
+				"to": "sync-transport",
+				"variant": "dashed"
+			},
+			{
 				"from": "tests",
 				"id": "e-tests-store",
 				"to": "store",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-sqlite",
+				"to": "sqlite-store",
 				"variant": "dashed"
 			},
 			{
@@ -548,10 +1024,44 @@
 				"variant": "dashed"
 			},
 			{
+				"from": "tests",
+				"id": "e-tests-syncwire",
+				"to": "sync-wire",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-probe",
+				"label": "one HistoryStoring suite, two conformances",
+				"to": "probe",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-syncmerge",
+				"label": "gossips to quiescence over every order",
+				"to": "sync-merge",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-synctransport",
+				"label": "loopback pair → index → fetch → live push",
+				"to": "sync-transport",
+				"variant": "dashed"
+			},
+			{
 				"from": "scripts",
 				"id": "e-scripts-entry",
 				"label": "builds .app",
 				"to": "app-entry",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-probe",
+				"label": "probe-runbook.sh drives two of them",
+				"to": "probe",
 				"variant": "dashed"
 			},
 			{
@@ -567,13 +1077,20 @@
 				"label": "submit + staple",
 				"to": "notary",
 				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-linuximage",
+				"label": "doctor-linux requires it",
+				"to": "linux-image",
+				"variant": "dashed"
 			}
 		],
 		"layout": {
 			"mode": "organic"
 		},
 		"meta": {
-			"subtitle": "macOS 26 clipboard-history manager — menu-bar daemon, Liquid Glass picker",
+			"subtitle": "macOS 26 clipboard-history manager, and a portable LAN sync core that also builds on Linux",
 			"title": "Skrepka"
 		},
 		"schemaVersion": 1

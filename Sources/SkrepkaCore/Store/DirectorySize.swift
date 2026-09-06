@@ -14,7 +14,7 @@ import Foundation
 /// deadline buys is that a folder which merely *is* enormous stops quickly; the
 /// unresponsive-volume case is handled by where this runs, not by this —
 /// ``ThumbnailRenderer``, where a stall delays one row instead of stalling the
-/// poller or the picker.
+/// clipboard watcher or the picker.
 enum DirectorySize {
     /// How long a single folder may be measured for.
     ///
@@ -22,7 +22,7 @@ enum DirectorySize {
     /// a folder of about 12,000 files — comfortably every folder a person
     /// copies on purpose, and not `~/Library`. It runs on ``ThumbnailRenderer``
     /// rather than the main actor, so what it delays is the new row appearing,
-    /// not the interface; the poller's own cadence is 200 ms.
+    /// not the interface; the watcher's own polling cadence is 200 ms.
     static let deadline: Duration = .milliseconds(250)
 
     /// Total bytes of every regular file under `url`, or nil when the deadline

@@ -9,7 +9,7 @@ struct ClipSummaryTests {
         kind: ClipKind,
         text: String = "",
         byteCount: Int? = nil,
-        thumbnail: Data? = nil
+        hasThumbnail: Bool = false
     ) -> ClipSummary {
         ClipSummary(
             id: UUID(),
@@ -21,7 +21,7 @@ struct ClipSummaryTests {
             isConcealed: false,
             imageSize: nil,
             byteCount: byteCount,
-            thumbnail: thumbnail
+            hasThumbnail: hasThumbnail
         )
     }
 
@@ -35,7 +35,7 @@ struct ClipSummaryTests {
         // The case the Settings Images tile used to miss: `public.file-url`
         // outranks `public.png`, so a screenshot copied out of Finder is `.file`
         // and counting by kind alone reported zero.
-        let shot = summary(kind: .file, text: "shot.png", thumbnail: Data([0x89, 0x50]))
+        let shot = summary(kind: .file, text: "shot.png", hasThumbnail: true)
         #expect(shot.isPicture)
     }
 
@@ -108,7 +108,7 @@ struct ClipSummaryTests {
             isConcealed: true,
             imageSize: nil,
             byteCount: 4096,
-            thumbnail: nil
+            hasThumbnail: false
         )
         #expect(concealed.sizeText() == nil)
     }

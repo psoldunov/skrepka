@@ -1,0 +1,57 @@
+# The Linux build image for Skrepka.
+#
+# Build it with scripts/linux-image.sh, which tags it skrepka-linux:6.3 and is
+# what scripts/linux.sh looks for. The stock swift:6.3-noble image is missing
+# two things this repository needs, and both are cheap to add here rather than
+# rediscovering them per machine:
+#
+#   libsqlite3-dev  the Linux history store is raw SQLite through the C library
+#                   (D-3), and the stock image ships neither sqlite3.h nor a
+#                   sqlite3.pc, so a `.systemLibrary` target cannot resolve.
+#   swiftlint       publishes a prebuilt Linux binary, so the Linux quality gate
+#                   can run the same lint the macOS one does instead of
+#                   reporting it as a permanent skip.
+#
+# Deliberately NOT here: periphery. It ships no Linux binary — the 3.8.0
+# artifactbundle declares only macOS slices — and a from-source build would add
+# minutes to every image rebuild for a check the macOS gate already runs.
+# scripts/doctor-linux.sh reports it as a named skip and says why.
+
+ARG SWIFT_VERSION=6.3
+FROM swift:${SWIFT_VERSION}-noble
+
+# pkg-config so the `.systemLibrary` target can find sqlite3.pc; curl to fetch
+# the SwiftLint release asset below, which swift:6.3-noble does not ship even
+# though it does ship unzip.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		ca-certificates \
+		curl \
+		libsqlite3-dev \
+		pkg-config \
+		unzip \
+	&& rm -rf /var/lib/apt/lists/*
+
+# Pinned rather than "latest": an image whose linter changes underneath it turns
+# an unrelated commit red, and the version is what a failure has to be
+# reproducible against.
+ARG SWIFTLINT_VERSION=0.65.1
+RUN set -eux; \
+	case "$(dpkg --print-architecture)" in \
+		arm64) asset=swiftlint_linux_arm64.zip ;; \
+		amd64) asset=swiftlint_linux_amd64.zip ;; \
+		*) echo "no SwiftLint Linux build for $(dpkg --print-architecture)" >&2; exit 1 ;; \
+	esac; \
+	curl -fsSL -o /tmp/swiftlint.zip \
+		"https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/${asset}"; \
+	unzip -q -o /tmp/swiftlint.zip -d /tmp/swiftlint; \
+	install -m 0755 /tmp/swiftlint/swiftlint /usr/local/bin/swiftlint; \
+	rm -rf /tmp/swiftlint /tmp/swiftlint.zip; \
+	swiftlint version
+
+# scripts/linux.sh runs the container as the host user, who owns no home
+# directory inside the image. SwiftPM and SwiftLint both want somewhere to
+# cache; giving them a world-writable one keeps every artefact owned by whoever
+# ran the build rather than by root.
+RUN mkdir -p /tmp/skrepka-linux-home && chmod 1777 /tmp/skrepka-linux-home
+ENV HOME=/tmp/skrepka-linux-home

@@ -22,6 +22,18 @@ enum SystemSettingsLink {
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Pasteboard"
     )
 
+    /// Privacy & Security, for the Local Network list.
+    ///
+    /// The pane and not the row, deliberately. The two links above name an
+    /// anchor because `SecurityPrivacyExtension.appex` carries one for each —
+    /// and on macOS 26 it carries no `Privacy_LocalNetwork` to go with them,
+    /// which was checked in its strings rather than assumed. An anchor that does
+    /// not exist is not ignored gracefully, so this opens the pane the list is
+    /// on and leaves the user one scroll from it.
+    static let localNetwork = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security"
+    )
+
     static func open(_ url: URL?) {
         guard let url else { return }
         NSWorkspace.shared.open(url)

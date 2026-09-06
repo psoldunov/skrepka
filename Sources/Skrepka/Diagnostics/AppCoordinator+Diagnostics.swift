@@ -46,16 +46,16 @@ extension AppCoordinator {
     /// Provokes the system's pasteboard access alert, and records the answer.
     ///
     /// Capture is paused for the round trip: the probe writes a marker to the
-    /// general pasteboard, and an unpaused poller would file that marker as the
-    /// user's very first history entry. `resume()` re-baselines the change
+    /// general pasteboard, and an unpaused watcher would file that marker as
+    /// the user's very first history entry. `resume()` re-baselines the change
     /// counter, so the write is skipped rather than captured late.
     ///
     /// - Returns: true when the marker read back intact — the only proof
     ///   available after an "Allow Once", which leaves the policy at `.ask`.
     func probeClipboardAccess() async -> Bool {
-        await poller.pause()
+        await watcher.pause()
         let granted = gatherer.probeAccess()
-        await poller.resume()
+        await watcher.resume()
         if granted { captureHealth.recordSuccessfulProbe() }
         refreshHealth()
         return granted

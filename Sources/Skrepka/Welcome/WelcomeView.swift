@@ -176,7 +176,7 @@ struct WelcomeView: View {
     ///
     /// The coordinator owns the round trip because it has to pause capture for
     /// the duration — the probe writes to the general pasteboard, and an
-    /// unpaused poller would file that marker as the user's first history
+    /// unpaused watcher would file that marker as the user's first history
     /// entry. It also records a successful read-back, which is the only proof
     /// available after an "Allow Once": that answer leaves the policy at
     /// `.ask`, so nothing else here would ever report `.working`.
