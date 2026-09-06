@@ -35,12 +35,12 @@ What exists today, and both quality gates are green over it:
 | `Sources/SkrepkaCore/Store/` | Phase 2 — three-entity schema, tombstones, the sync surface, and the merge apply path |
 | `Sources/SkrepkaCore/Store/SQLite/` | Phase 4's storage half — the Linux `HistoryStoring` conformance over raw SQLite (D-3), and `HistoryStoringTests` running one suite against both engines |
 | `docker/Dockerfile.linux` | the Linux build image: Swift 6.3.3, SwiftLint 0.65.1, SQLite 3.45.1. Built by `scripts/linux-image.sh` |
-| `Sources/Skrepka/Sync/` | Phase 3 — `SyncCoordinator` and its five halves, one `PeerLink` per paired peer, the pairing sheet, the peer row, `LivePushReceiver`. Two listeners: the advertised pinned one, and a pairing one that runs only while the user has asked to pair and whose port is the record's new `pair=` key |
+| `Sources/Skrepka/Sync/` | Phase 3 — `SyncCoordinator`, split across the extensions that own its lifecycle, its listeners, discovery, pairing, live push and the rows the pane reads; one `PeerLink` per paired peer, the pairing sheet, the peer row, `LivePushReceiver`. Two listeners: the advertised pinned one, and a pairing one that runs only while the user has asked to pair and whose port is the record's new `pair=` key |
 | `Sources/SkrepkaSync/Session/` | Phase 3 — `PeerLink` and `SyncExchange`, in the portable target rather than the app so the probe and the Phase 6 daemon drive the same implementation |
 | `Sources/SkrepkaProbe/` + `Sources/skrepka-sync-probe/` | Phase 3 — a headless peer that speaks the whole protocol and never touches a pasteboard. `ProbeStore` is the second `HistoryStoring` conformance the shared contract suite runs against |
 | `scripts/probe-runbook.sh` | Phase 3 — two probe peers over loopback, asserting nine of the twelve runbook steps |
-| `scripts/doctor.sh` | **435 tests / 57 suites green** |
-| `scripts/doctor-linux.sh` | **365 tests / 46 suites green, SwiftLint included** |
+| `scripts/doctor.sh` | **436 tests / 57 suites green** |
+| `scripts/doctor-linux.sh` | **366 tests / 46 suites green, SwiftLint included** |
 
 Two things the plan assumed and that turned out to be false, both recorded in
 [`open-questions.md`](open-questions.md): `SwiftCBOR` is unsuitable and the codec
