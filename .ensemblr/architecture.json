@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-05T20:16:18.000Z",
+	"generatedAt": "2026-09-06T16:42:39.138Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -149,7 +149,7 @@
 						"path": "Sources/Skrepka/Platform/PasteService.swift"
 					}
 				],
-				"sublabel": "writes pasteboard, synthesizes ⌘V",
+				"sublabel": "writes pasteboard, one item per file, synthesizes ⌘V",
 				"type": "backend"
 			},
 			{
@@ -194,7 +194,7 @@
 						"path": "Sources/SkrepkaCore/Clipboard/CaptureDecision.swift"
 					}
 				],
-				"sublabel": "poller actor, 200 ms changeCount",
+				"sublabel": "poller actor, 200 ms changeCount, every item's file URL",
 				"type": "backend"
 			},
 			{
@@ -219,7 +219,7 @@
 						"path": "Sources/SkrepkaCore/Store"
 					}
 				],
-				"sublabel": "SwiftData, retention, previews, kind & size",
+				"sublabel": "SwiftData, retention, previews, file icons, kind & size",
 				"type": "database"
 			},
 			{
@@ -230,7 +230,7 @@
 						"path": "Sources/SkrepkaCore/Models"
 					}
 				],
-				"sublabel": "item, summary, payload, kind",
+				"sublabel": "item, summary, payload, kind, file list",
 				"type": "backend"
 			},
 			{
@@ -379,7 +379,7 @@
 			{
 				"from": "store",
 				"id": "e-store-filesystem",
-				"label": "kind, size, preview",
+				"label": "kind, size, preview, file icons",
 				"to": "filesystem"
 			},
 			{
