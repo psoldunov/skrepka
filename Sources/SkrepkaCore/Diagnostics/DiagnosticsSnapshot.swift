@@ -5,11 +5,28 @@ import Foundation
 /// A value type so the report is a pure function of it, and so the whole thing
 /// can be tested without a pasteboard, a window server or a login item.
 public struct DiagnosticsSnapshot: Sendable, Hashable {
-    public enum LoginItemState: String, Sendable, Hashable {
+    public enum LoginItemState: String, Sendable, Hashable, CaseIterable {
         case enabled = "Enabled"
         case requiresApproval = "Waiting for approval"
         case notRegistered = "Not enabled"
         case notFound = "Not found — move Skrepka to Applications"
+
+        /// Whether a registration exists with launchd.
+        ///
+        /// `.requiresApproval` counts. `SMAppService.h` describes it as a
+        /// service that "has been successfully registered, but the user needs
+        /// to take action in System Settings" — the registration is real, and a
+        /// surface that drew it as absent would read as a failure and invite
+        /// the user to ask for it a second time. Saying what the remaining step
+        /// is belongs to whatever sits beside the control, not to this.
+        ///
+        /// `.notFound` is not registered. `SMAppService.h` defines it broadly —
+        /// "an error occurred and no such service could be found" — and the
+        /// common cause is launchd refusing an app in a temporary location.
+        /// Whatever the cause, nothing was recorded.
+        public var isRegistered: Bool {
+            self == .enabled || self == .requiresApproval
+        }
     }
 
     public enum Storage: Sendable, Hashable {
