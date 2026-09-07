@@ -111,6 +111,20 @@ compositor and it is not uniformly yes.
 `wayland-protocols` 1.39. The wlroots protocol's own XML now describes itself as
 deprecated and not intended for production use.
 
+**KWin before 6.6 belongs in the "wlr-data-control only" row.** The port
+happened in KWin merge request !6606 and landed in Plasma **6.6**, so a KDE
+session older than that advertises `zwlr_data_control_manager_v1` instead.
+Worth knowing rather than filing as trivia: this project's test rig is a Steam
+Deck on SteamOS 3.8 stable, which runs Plasma **6.4.3** — so the first real KDE
+hardware this design meets exercises the *deprecated* protocol, and the
+`ext-data-control-v1` row needs the SteamOS 3.9 preview channel (Plasma 6.7.3)
+or another compositor entirely. Verified 2026-09-07 against the KWin merge
+request and the SteamOS 3.8/3.9 release notes.
+
+The `gamescope` row has a practical consequence now that the rig is a Steam
+Deck: **Game Mode is not a clipboard environment**, and no phase should treat it
+as one. Skrepka on that machine means Desktop Mode.
+
 **GNOME verified directly:** `src/meson.build` on Mutter `main` enumerates its
 Wayland protocols; fetched and grepped, it contains **zero** occurrences of
 `data-control`. There is no external-client path.
@@ -159,6 +173,18 @@ unconditionally, but the `Display` global filter was not traced.*
 `.deb` / `.rpm` is the right target. AppImage works for a plain binary but not
 for a GNOME extension. The Static Linux SDK (musl, fully static) suits a
 headless daemon and is unusable for a GTK GUI, which needs glibc, GL and D-Bus.
+
+**And a second consequence, added 2026-09-07: immutable distributions need a
+user-scope installer.** Atomic desktops — SteamOS, Silverblue, Bazzite — have a
+read-only root that a `.deb` or `.rpm` has nowhere to land in, and their
+sanctioned answer is Flatpak, which the paragraph above has just ruled out. What
+is left is `$HOME`: binaries in `~/.local/bin`, desktop entries in
+`~/.local/share/applications`, a systemd **user** unit in
+`~/.config/systemd/user`, all of which survive an atomic update because `/home`
+does. That installer is a Phase 8 deliverable, it is how builds reach this
+project's own test hardware, and it doubles as the no-root install path for any
+distribution. See
+[`docs/linux-sync/phase-8-gnome-packaging.md`](linux-sync/phase-8-gnome-packaging.md).
 
 ---
 
@@ -751,9 +777,17 @@ extension must degrade honestly: if it is not installed, the daemon says so in
 - **Static Linux SDK** (musl, fully static) suits `skrepkad` and is unusable for
   the GTK GUI, which needs glibc, GL and D-Bus. If a headless-only package is
   ever wanted, that is the tool for it.
+- **A `curl`-able `install.sh`** alongside both, added 2026-09-07: binaries into
+  `~/.local/bin`, desktop entries into `~/.local/share/applications`, the systemd
+  user unit into `~/.config/systemd/user`, no `sudo` and nothing outside `$HOME`.
+  It is the only route onto an immutable distribution, and the project's own test
+  hardware is one.
 
 **Done when:** a package installs on Ubuntu and Fedora, the daemon starts under
-systemd, and a fresh machine can pair with the Mac from a clean install.
+systemd, a fresh machine can pair with the Mac from a clean install, and
+`install.sh` survives an atomic OS update on the test rig. GNOME's live
+verification is deferred until there is a GNOME machine; the extension is still
+written and submitted.
 
 *A week, plus review latency outside anyone's control.*
 
@@ -817,8 +851,11 @@ on Linux (`OQ-11`). Answer them there rather than here.
    is a stub.
 2. Whether Universal Clipboard delivers bytes or a promise (§3.1).
 3. Whether GNOME shows a persistent screen-sharing indicator for a
-   clipboard-only RemoteDesktop session.
+   clipboard-only RemoteDesktop session. *Deferred 2026-09-07: the project has
+   no GNOME machine. The Shell extension still gets built; only this check
+   waits.*
 4. Whether KWin applies sway's sandbox filter to the data-control globals.
+   *Answerable from 2026-09-07: a Steam Deck OLED supplies a real KWin session.*
 
 **APIs, needs the installed interface read:**
 

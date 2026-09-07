@@ -16,6 +16,16 @@ to be useful.
   be a problem.
 - Phase 3's runbook results to hand. Every numbered step there gets re-run here
   against a real second machine, and the results should be comparable.
+- **The real second machine is the Steam Deck**, on the same Wi-Fi as the Mac
+  ([D-10](open-questions.md#d-10)). That is what closes the gap the README's
+  Linux-environment section flags: mDNS across the macOS ↔ OrbStack boundary was
+  never verified, and now it does not have to be. Desktop Mode only.
+- **The daemon gets onto it through `install.sh`, not a package** — SteamOS has
+  an immutable root, so the user unit lands in `~/.config/systemd/user` and the
+  binaries in `~/.local/bin`. The installer is a
+  [Phase 8](phase-8-gnome-packaging.md#0-the-user-scope-installer) deliverable;
+  if Phase 6 is being run before it exists, write the throwaway version of it
+  here and let Phase 8 harden it rather than inventing a second layout.
 
 ## Deliverables
 
@@ -140,8 +150,9 @@ integration test, same assertions, on both platforms.
 
 ## Done when
 
-Every step of the Phase 3 runbook re-run with a real Linux machine in place of
-the probe, and recorded. Specifically:
+Every step of the Phase 3 runbook re-run with a real Linux machine — the Steam
+Deck ([D-10](open-questions.md#d-10)) — in place of the probe, and recorded.
+Specifically:
 
 1. Mac and Linux box discover each other over the LAN and pair, with matching
    SAS on both.
@@ -172,7 +183,9 @@ paired peer, which is cheap and turns a baffling bug into a line of output.
 **Firewalls.** Ubuntu ships `ufw` inactive and Fedora ships `firewalld` active,
 which blocks mDNS and the sync port by default. The daemon cannot fix that and
 must not try; it must *notice* and say so, or Phase 8 collects bug reports that
-are all the same bug.
+are all the same bug. *Unverified: what SteamOS runs.* Check on the device
+before concluding a discovery failure is a Skrepka bug — the test rig's firewall
+posture is not something this plan has established.
 
 **The GUI is now the only thing left, and it is the expensive part.** This is a
 good place to stop and take stock. A CLI-driven Linux daemon that syncs with the

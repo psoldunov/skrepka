@@ -2,10 +2,19 @@
 
 **Status, 2026-09-06: Phases 1, 2 and 3 built, Phase 4 done bar its
 `doctor-linux` polish, ten of the fourteen research questions answered.** All
-eight phases are in scope ([D-6](open-questions.md#d-6)). Nine decisions are
+eight phases are in scope ([D-6](open-questions.md#d-6)). Ten decisions are
 settled. The four questions still open ([OQ-1](open-questions.md#oq-1) to
 [OQ-4](open-questions.md#oq-4)) need hardware — a second Apple device, a real
 GNOME session, a real KWin session — rather than time.
+
+**Amended 2026-09-07:** one of those three pieces of hardware now exists. A
+**Steam Deck OLED** is the Linux test rig ([D-10](open-questions.md#d-10)) — a
+real KWin session, a real display and a real LAN neighbour for the Mac. It is a
+*stand-in for a proper Linux machine, not a shipping target*: Ubuntu and Fedora
+remain what Phase 8 packages for. **Desktop Mode only**; Game Mode is out of
+scope in every phase. GNOME work still gets built as planned — only its
+*testing* is deferred until a GNOME machine exists. See
+[the test hardware](#the-test-hardware).
 
 [Phase 3](phase-3-macos-sync.md) is built and its automatable half is verified:
 `SyncCoordinator`, live push both ways, the pairing sheet, the Sync settings pane
@@ -75,7 +84,7 @@ from that tree and will drift as the tree grows — re-measure before starting i
 | [5](phase-5-linux-clipboard.md) | Linux clipboard read/write, headless | 1½ weeks | no |
 | [6](phase-6-linux-daemon.md) | **Linux daemon — real Mac ↔ Linux sync** | 1½ weeks | **yes — CLI-driven** |
 | [7](phase-7-linux-gui.md) | Linux GUI | 2–3 weeks | yes |
-| [8](phase-8-gnome-packaging.md) | GNOME extension and packaging | 1 week + review | yes |
+| [8](phase-8-gnome-packaging.md) | GNOME extension, `install.sh`, and packaging | 1 week + review | yes |
 
 Estimates assume the person doing the work already knows this codebase. They are
 working days of focused effort, not calendar time, and Phase 7 has the widest
@@ -125,7 +134,7 @@ mid-phase leaves a half-ported target that nothing builds.
 
 ## Decisions already taken
 
-Nine, on 2026-09-05, recorded in full in
+Nine on 2026-09-05 and one on 2026-09-07, recorded in full in
 [`open-questions.md`](open-questions.md):
 
 | # | Decision | Lands in |
@@ -139,6 +148,7 @@ Nine, on 2026-09-05, recorded in full in
 | D-7 | Concealed items never sync; no toggle in v1 | [Phase 2](phase-2-plumbing.md) |
 | D-8 | One machine, expendable history — migration is not a constraint | [Phase 2](phase-2-plumbing.md) |
 | D-9 | The Mac app stays native; the Linux port never degrades it | [Phase 2](phase-2-plumbing.md), [Phase 4](phase-4-core-on-linux.md) |
+| D-10 | A Steam Deck OLED is the test rig, Desktop Mode only; a user-scope `install.sh` is how builds reach it | [Phase 5](phase-5-linux-clipboard.md), [Phase 6](phase-6-linux-daemon.md), [Phase 7](phase-7-linux-gui.md), [Phase 8](phase-8-gnome-packaging.md) |
 
 Ten of the fourteen research questions were answered on 2026-09-05.
 
@@ -159,9 +169,13 @@ other still needs hardware.
 
 The four questions still open — [OQ-1](open-questions.md#oq-1) to
 [OQ-4](open-questions.md#oq-4) — are in
-[`open-questions.md`](open-questions.md) alongside the nine decisions, which
+[`open-questions.md`](open-questions.md) alongside the ten decisions, which
 are settled, and the ten answers. Nothing is waiting on a judgement call; what
-is left is work, verification, and three pieces of hardware.
+is left is work, verification, and hardware. One of the three missing pieces
+arrived on 2026-09-07: [OQ-4](open-questions.md#oq-4) needed a real KWin session
+and [the Steam Deck](#the-test-hardware) is one. Still missing: a second Apple
+device ([OQ-1](open-questions.md#oq-1), [OQ-2](open-questions.md#oq-2)) and a
+GNOME session ([OQ-3](open-questions.md#oq-3)).
 
 ## The Linux environment
 
@@ -184,16 +198,86 @@ Both Phase 8 targets, covered.
 
 - **Phases 5 and 7 need a compositor and a display.** An OrbStack machine has
   neither by default. Whether headless Sway works inside one is exactly the
-  question Phase 5 leaves open, and it is untested.
+  question Phase 5 leaves open, and it is untested. **This is what the Steam
+  Deck is for** — see below.
 - **mDNS across the macOS ↔ OrbStack boundary is unverified.** Phase 6's real
   Mac ↔ Linux discovery may or may not work against an OrbStack machine. Worth
-  a spike before assuming it stands in for a second physical box.
+  a spike before assuming it stands in for a second physical box. The Deck is on
+  the same Wi-Fi as the Mac and settles this by being a second physical box.
 - **[OQ-1](open-questions.md#oq-1) and [OQ-2](open-questions.md#oq-2) need a
   second Apple device.** Nothing containerised helps.
 
 One operational note: under Claude Code's default sandbox the Docker socket at
 `~/.orbstack/run/docker.sock` is not reachable, so agent-run Linux spikes need
 that permission granted first.
+
+### The test hardware
+
+**A Steam Deck OLED, in Desktop Mode**, decided 2026-09-07
+([D-10](open-questions.md#d-10)). It is the only real Linux hardware this
+project has, and it is a **stand-in for a proper Linux machine rather than a
+target the product ships to**. Nothing in the plan gets shaped around SteamOS;
+Ubuntu and Fedora stay the Phase 8 packaging targets, and a finding that is true
+only of SteamOS is a finding about the rig, not about Skrepka.
+
+What it is, verified 2026-09-07 against Valve's tech specs and the SteamOS 3.8
+and 3.9 release coverage:
+
+| | |
+|---|---|
+| CPU | AMD Zen 2 APU — **`x86_64` only**. No `arm64` hardware exists on this project |
+| OS | SteamOS 3.x, Arch-based, **immutable root** with A/B atomic updates |
+| Desktop | KDE Plasma in Desktop Mode. **Plasma 6.4.3** on the installed SteamOS 3.8 stable; SteamOS 3.9 preview moves it to 6.7.3 |
+| Session | Wayland by default since SteamOS 3.8, with an X11 session still available |
+| Screen | 1280×800 at 90 Hz — small, and the picker has to look right on it |
+
+**Game Mode is out of scope.** Everything here happens in Desktop Mode.
+gamescope implements no data-control protocol at all (design §4's matrix already
+says so), so a clipboard manager has nothing to observe there, and no phase
+should spend a line on it.
+
+**Which clipboard backend the rig exercises depends on the update channel**, and
+that is the single most useful thing to know before Phase 5:
+
+| Channel | Plasma | Global advertised | Phase 5 reader under test |
+|---|---|---|---|
+| SteamOS 3.8 stable — **what is installed today** | 6.4.3 | `zwlr_data_control_manager_v1` | `WlrDataControlReader` |
+| SteamOS 3.9 preview | 6.7.3 | `ext_data_control_manager_v1` | `ExtDataControlReader` |
+| Either, X11 session | — | — | `XFixesReader` |
+
+KWin ported data control from `wlr-data-control` to `ext-data-control-v1` in
+Plasma **6.6** (KWin merge request !6606), which is why the two channels split
+cleanly. Switching the Deck's channel therefore exercises **all three of Phase
+5's readers** on one device. What it does not give is a second *compositor*:
+Sway still needs a machine or a VM, because a reader that works against KWin can
+still be wrong about wlroots.
+
+*Unverified:* whether KWin 6.6+ kept `zwlr_data_control_manager_v1` alongside
+the new global or dropped it. The merge request is titled "port to", which reads
+like a replacement; enumerate the globals on the 3.9 preview rather than
+assuming.
+
+**What the Deck does not answer:** anything GNOME. [OQ-3](open-questions.md#oq-3)
+and the Phase 8 Shell extension still need a GNOME session, so that work gets
+**built** on schedule and **tested later** — the extension is written and
+submitted against the documented interfaces, and the honest-degradation path
+([Phase 5](phase-5-linux-clipboard.md#5-diagnostics)) is what covers users until
+someone can run it.
+
+**Getting a build onto it is not `.deb` or `.rpm`.** SteamOS's root filesystem is
+read-only, `steamos-readonly disable` is undone by the next OS update, and with
+systemd-sysext extensions merged `/usr` stays read-only even then. So the rig is
+fed by a **user-scope installer** — a `curl`-able shell script that puts binaries
+under `~/.local/bin`, desktop entries under `~/.local/share/applications` and the
+systemd user unit under `~/.config/systemd/user`, all of which survive an OS
+update because `/home` does. That script is a
+[Phase 8](phase-8-gnome-packaging.md#0-the-user-scope-installer) deliverable and
+it is useful well beyond the Deck: it is the no-root install path for any
+distribution, including the ones nobody packages for.
+
+Flatpak would be the SteamOS-native answer and it stays **out**, for the reason
+Phase 8 already records: a sandboxed client is refused the data-control globals.
+The immutable-distribution case makes that ruling more consequential, not less.
 
 **`scripts/linux.sh` is the entry point**, added 2026-09-05, over the image
 `scripts/linux-image.sh` builds from `docker/Dockerfile.linux`. It runs any command
