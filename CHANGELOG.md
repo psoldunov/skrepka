@@ -8,6 +8,103 @@ notes alongside the notarized `Skrepka.zip` for that version.
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path.
 
+## [0.1.4](https://github.com/psoldunov/skrepka/releases/tag/v0.1.4) — 2026-09-07
+
+Your clipboard follows you to your other Mac, over the local network and
+nowhere else.
+
+### Added
+
+- **Clipboard history syncs between devices you have paired.** Settings gains a
+  Sync pane: one switch to share history, one to open a pairing window, and the
+  list of devices this Mac trusts and can see. Paired devices exchange history
+  every half minute, "Sync Now" is there for impatience, and each device has a
+  live-clipboard switch of its own that pushes what you copy across the moment
+  you copy it. There is no account, no server and no relay — Skrepka finds the
+  other machine on the local network with Bonjour and talks to it directly.
+- **Pairing is a code you compare on both screens.** Both machines show the same
+  sixteen hex digits, grouped `A3F2-91BC-D4E7-0182` in a face where `0` and `O`
+  differ, and neither pairs until a person confirms on both ends. That
+  comparison is the whole man-in-the-middle defence: TLS proves the two ends
+  share a tunnel and says nothing about which machine is on the far end, so
+  nothing is pre-selected and the button says what it confirms. Devices are
+  identified afterwards by a pinned self-signed certificate; a device that
+  cannot present the certificate you approved is refused, not re-asked.
+- **Everything crosses inside TLS 1.3, and only to a device on the pinned
+  list.** The port that serves history accepts approved certificates and nothing
+  else. Accepting *new* devices is a second, separate listener that runs only
+  while you have asked for it, and it closes itself — on the first pairing that
+  succeeds, and on a five-minute expiry — so the window every attack on first
+  contact needs is not left standing open because you got distracted.
+- **Concealed content never leaves the machine.** A password your manager marked
+  `org.nspasteboard.ConcealedType` is filtered out of both paths that could emit
+  it — the index a peer browses and the payload it can fetch — so a peer is not
+  even told the hash. Entries from apps on your exclusion list, and anything
+  carrying a privacy marker, never reached storage to begin with and so cannot
+  sync either.
+- **Unpairing forgets the device.** Its certificate is dropped, its
+  live-clipboard choice goes with it rather than lingering in preferences to
+  re-apply if that machine ever pairs again, and anything already synced stays
+  where it is.
+
+### Changed
+
+- **Skrepka now uses the network, and says so.** macOS asks for Local Network
+  access the first time you switch sharing on, and Skrepka asks once: the
+  bring-up stops after discovery, which is the one call that waits for your
+  answer rather than failing on it, and publishing and dialling resume by
+  themselves the moment you allow it. Decline it and the Sync pane says so with
+  a button straight to the right System Settings pane. The whole feature is off
+  until you turn it on, and [SECURITY.md](SECURITY.md)'s threat model has been
+  rewritten around it.
+- **Launch at Login reads launchd rather than a stored copy of it.** The switch
+  was a preference that was reconciled only when you clicked it, so it went
+  stale after a toggle in System Settings, after an approval granted there, and
+  after the app was moved out of `/Applications` — and the card could show
+  "Waiting for your approval" above a switch reading off. The preference is
+  gone; `SMAppService` is the only authority.
+
+### Fixed
+
+- **Settings and the welcome window take focus, and stay in front until you
+  dismiss them.** Skrepka has no Dock icon and never becomes the active app, so
+  both windows opened without keyboard focus and the first click elsewhere
+  buried them — with no Cmd-Tab entry to dig them back out and, for the welcome
+  window, no way to reopen it at all. Both are now non-activating panels that
+  float, take key while Skrepka is inactive, and stay visible in Mission
+  Control. Alerts and the exclusion-list file picker were lifted with them, so a
+  dialog opened from Settings can no longer draw behind the window that asked
+  for it.
+- **The first-run window opens centred.** It was placed before its content had
+  been measured, and grew from that corner — 229pt off centre on the test
+  display.
+- **The Settings tab bar no longer crowds the traffic lights**, and switching to
+  Status no longer redraws every card 17pt narrower. Under legacy scrollers a
+  pane tall enough to scroll was laid out beside its scrollbar; the gutter is
+  now reserved in every pane, which keeps the scrollbar for anyone who asked for
+  one.
+- **A copied file is asked about once rather than twice.** Two overlapping
+  file-system round trips per captured file are microseconds on a local disk and
+  a doubled stall on a path under a mount that has stopped responding — which is
+  the case the whole detail pass exists for. It is also an atomic snapshot: the
+  two old lookups could disagree about a file deleted between them.
+- **A schema migration and the stamp recording it now land together or not at
+  all.** A crash between the two left a database carrying the new column and
+  still reading the old version, and every subsequent open threw on re-running
+  the migration. A store nobody can reopen is worse than an upgrade that never
+  happened.
+
+### Known limitations
+
+- **A live-pushed item over 256 KB reaches the other machine's history but not
+  its clipboard.** It is in the picker on the far side and pastes normally; it
+  simply does not land on the system pasteboard by itself. Below 256 KB — which
+  is every text, link and small image — live push carries the bytes inline and
+  the clipboard follows.
+- **Sync is between machines running Skrepka on your local network.** Two
+  devices that cannot see each other over Bonjour cannot pair or exchange
+  anything, and there is no relay to fall back on.
+
 ## [0.1.3](https://github.com/psoldunov/skrepka/releases/tag/v0.1.3) — 2026-09-06
 
 A copy of several files is one row that knows it holds several files.

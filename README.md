@@ -15,6 +15,8 @@ their source app and a ⌘N shortcut on each row](docs/images/picker.png)
 - Per-app exclusions, on top of automatically skipping anything a password
   manager marks transient or concealed
 - Retention by item count and age, both configurable
+- Optional sync with devices you pair, over the local network only — no
+  account, no server, no relay
 
 ## Requirements
 
@@ -117,6 +119,30 @@ The app icon artwork is full-bleed square on purpose. macOS 26 masks a legacy
 on this machine by asking `NSWorkspace.icon(forFile:)` for a throwaway bundle,
 not assumed from the icon's own corners.
 
+## Sync
+
+Off until you turn it on, in Settings → Sync. Switch on "Share clipboard
+history" on both machines, switch on "Allow new devices to pair" on both, and
+press Pair. Each shows the same sixteen hex digits — `A3F2-91BC-D4E7-0182` —
+and neither trusts the other until a person confirms the codes match on both
+screens. That comparison is the man-in-the-middle defence: TLS proves the two
+ends share a tunnel and nothing about who is on the far end.
+
+After that, paired devices exchange history every half minute over TLS 1.3,
+pinned to the self-signed certificate each one approved. "Sync Now" is there
+for impatience, and each device has a live-clipboard switch that pushes what
+you copy across immediately. Unpair and Skrepka forgets the certificate and the
+choice; what already synced stays.
+
+Concealed content never leaves the machine — it is filtered out of both the
+index a peer browses and the payload it can fetch, so a peer is not even told
+the hash. Anything excluded by app, or carrying a privacy marker, never reached
+storage in the first place.
+
+Two limits worth knowing: a live-pushed item over 256 KB reaches the other
+machine's history but not its clipboard, and there is no relay, so two devices
+that cannot see each other over Bonjour cannot pair or exchange anything.
+
 ## Permissions
 
 - **None** for capturing history or for the global shortcut. The hotkey goes
@@ -125,18 +151,26 @@ not assumed from the icon's own corners.
   ⌘V. It asks the first time you paste something. Decline it and Skrepka falls
   back to copying, which you then paste yourself. That fallback is also
   available deliberately: turn off "Paste automatically" in Settings.
+- **Local Network**, only for sync, and only once you switch sharing on. It is
+  what lets Skrepka find and reach the devices you have paired with. Decline it
+  and everything else works exactly as before; the Sync pane says what happened
+  and offers a button to the right System Settings pane.
 
 ## Layout
 
 ```
 Sources/SkrepkaCore/    models, storage, pasteboard, search — testable, no UI
+Sources/SkrepkaSync/    sync protocol, wire codec, merge engine, TLS transport
 Sources/Skrepka/        app shell, panel, SwiftUI views, platform glue
-Tests/SkrepkaCoreTests/ Swift Testing
+Tests/                  Swift Testing, one suite directory per library
 ```
 
-`SkrepkaCore` is a plain SwiftPM library with no window-server dependency, so
-`swift test` runs in well under a second. The app target holds only what cannot
-run without a live window.
+`SkrepkaCore` and `SkrepkaSync` are plain SwiftPM libraries with no
+window-server dependency, so `swift test` runs in well under a second.
+`SkrepkaSync` deliberately does not depend on `SkrepkaCore`: it owns the wire
+format and the merge rules, and reaches storage through a protocol the app
+target conforms to. The app target holds only what cannot run without a live
+window.
 
 ## Quality gate
 
@@ -163,6 +197,12 @@ SwiftData at
 payloads use `@Attribute(.externalStorage)`, so large blobs land beside the
 database rather than inside a row. The picker holds only lightweight summaries
 plus a small thumbnail; a full payload is read only when an entry is pasted.
+
+Sync keeps the record of each paired device — its name, its pinned certificate
+fingerprint and its live-clipboard choice — in the same store. This device's own
+private key lives in the login Keychain under the service
+`dev.soldunov.skrepka.sync`, never synchronised to iCloud, so the identity stays
+on the Mac that created it.
 
 ## Contributing
 

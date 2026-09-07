@@ -8,7 +8,7 @@ what is in scope rather than leaving you to guess.
 
 | Version | Supported |
 | --- | --- |
-| Latest release ([0.1.3](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
+| Latest release ([0.1.4](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
 | Any earlier release | ❌ |
 | `master` | Best effort — fixes land here first |
 
@@ -54,15 +54,27 @@ outcome than a silent disclosure.
 
 ## Threat model
 
-Skrepka's job is to keep a local history and hand it back. It has **no network
-code at all** — no telemetry, no sync, no update check. Nothing you copy leaves
-the Mac unless you paste it somewhere.
+Skrepka's job is to keep a local history and hand it back. There is **no
+telemetry and no update check**, and nothing is ever sent to a server operated
+by anyone: no account, no relay, no cloud.
+
+Since 0.1.4 there is one way clipboard content can leave the Mac, and you have
+to turn it on: **sync**, in Settings → Sync, off by default. With it on,
+Skrepka shares history with devices *you have paired with by hand*, over the
+local network only, inside TLS 1.3 pinned to a self-signed certificate you
+approved. Pairing requires a person to compare a sixteen-hex-digit code on both
+screens; that comparison, not TLS, is what identifies the far end. Concealed
+content is filtered out of both the index a peer browses and the payload it can
+fetch, so it never crosses and a peer is not even told its hash. Leave sync off
+and nothing you copy leaves the Mac unless you paste it somewhere.
 
 History lives in a SwiftData store at
 `~/Library/Application Support/dev.soldunov.skrepka/skrepka.store`, with large
 image payloads in external files beside it. It is protected by macOS file
 permissions and by FileVault if you have it on. **It is not separately
-encrypted at rest.**
+encrypted at rest.** This device's sync private key lives in the login Keychain
+under the service `dev.soldunov.skrepka.sync` and is never synchronised to
+iCloud.
 
 ### In scope
 
@@ -86,6 +98,23 @@ encrypted at rest.**
 - Path traversal, injection or memory-safety issues in decoding pasteboard
   payloads — a malicious app controls exactly what it puts on the pasteboard
 
+And, since sync exists:
+
+- Concealed content reaching a peer by any route — the index, a payload fetch,
+  a live push, or a hash a peer could grind
+- Any content leaving the Mac while sync is switched off, or reaching a device
+  that was never paired or has since been unpaired
+- Impersonating a paired device without its private key, or getting a
+  certificate pinned that the user did not confirm a code for — including any
+  way to make the two machines display codes that agree
+- Reading or tampering with what crosses between two paired devices
+- Accepting a connection on the pairing listener while "Allow new devices to
+  pair" is off, or that listener staying open past the pairing or the
+  five-minute expiry that should close it
+- Memory-safety or resource-exhaustion issues in decoding the wire format — an
+  unauthenticated peer on the same network controls those bytes up to the point
+  the certificate is checked
+
 ### Not in scope
 
 These are consequences of what a clipboard manager is, and reports about them
@@ -101,6 +130,19 @@ will be closed with a pointer to this section:
 - **A password manager that sets no `org.nspasteboard.*` marker gets recorded.**
   Skrepka honours the markers that exist and offers a per-app exclusion list as
   the backstop. Tell the password manager's authors too.
+- **A device you paired with keeps what it already received.** Unpairing stops
+  the trust and forgets the certificate; it does not reach into the other
+  machine and delete history. Sync is a copy, and a copy on a machine you no
+  longer trust is a machine you need to deal with directly.
+- **Anyone on your local network can see that a Mac is running Skrepka.** While
+  sharing is on, the Bonjour advertisement carries the device name you see in
+  the Sync pane, its device identifier and the protocol version, and — only
+  while you have opened the pairing window — that it is accepting pairings. No
+  clipboard content is in it. Discovery without an advertisement is not a thing
+  Bonjour offers.
+- **A live-pushed item over 256 KB reaches history but not the clipboard.** A
+  known limitation, recorded in [CHANGELOG.md](CHANGELOG.md); it fails towards
+  less content moving, not more.
 - **Reports from automated scanners with no working proof of concept**, and
   anything requiring a macOS release older than 26, which Skrepka does not
   support.
