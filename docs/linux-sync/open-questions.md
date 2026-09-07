@@ -3,10 +3,11 @@
 Everything still unsettled about
 [the implementation plan](README.md), in two kinds.
 
-**Decisions (D-1 … D-9)** are calls only the project owner can make. Nobody can
+**Decisions (D-1 … D-10)** are calls only the project owner can make. Nobody can
 research their way to an answer; they are about scope, cost and what the product
-is for. **All nine were taken on 2026-09-05** and are recorded below with the
-reasoning that was on the table at the time.
+is for. **Nine were taken on 2026-09-05** and are recorded below with the
+reasoning that was on the table at the time; **[D-10](#d-10) was taken on
+2026-09-07**, when Linux test hardware arrived.
 
 **Research questions (OQ-1 … OQ-15)** are answerable by anyone with a machine
 and an afternoon. Each says what it blocks, how to answer it, and what changes
@@ -21,10 +22,11 @@ researched twice.
 
 ## Decisions
 
-Taken 2026-09-05. Summary:
+Taken 2026-09-05, except [D-10](#d-10). Summary:
 
 | # | Decision |
 |---|---|
+| [D-10](#d-10) | **A Steam Deck OLED is the Linux test rig**, Desktop Mode only — a stand-in for a proper Linux box, not a shipping target. Builds reach it through a user-scope `install.sh`. |
 | [D-6](#d-6) | **Build all eight phases.** Phases 3 and 6 stay as escape hatches, not plans. |
 | [D-2](#d-2) | Mac↔Mac ships because it falls out of the same code — **Mac↔Linux is the goal**, and the positioning follows that. |
 | [D-1](#d-1) | If Continuity delivers a promise: **fetch on demand.** |
@@ -34,6 +36,72 @@ Taken 2026-09-05. Summary:
 | [D-7](#d-7) | **Concealed items never sync**, and no toggle in v1. |
 | [D-8](#d-8) | **Install base is one machine, and the history on it is expendable.** Migration is not a constraint. |
 | [D-9](#d-9) | **The Mac app stays native.** The Linux port never gets to degrade it. |
+
+<a id="d-10"></a>
+### D-10 — What Linux machine does this get tested on, and how do builds reach it?
+
+**Decided 2026-09-07: a Steam Deck OLED in Desktop Mode, fed by a `curl`-able
+user-scope installer.**
+
+Every phase from 5 onward has been written around hardware the project did not
+have. This settles what it is.
+
+**The rig is a stand-in, not a target.** The Deck happens to be the Linux
+computer in the room. Ubuntu and Fedora remain what [Phase 8](phase-8-gnome-packaging.md)
+packages for, the product is not "Skrepka for SteamOS", and a bug that
+reproduces only on SteamOS is a fact about the rig until it reproduces on a
+Phase 8 target too. Written down because a test rig quietly becomes a
+requirements document if nobody says it is not one.
+
+**Desktop Mode only.** Game Mode is out of scope in every phase. gamescope
+implements no data-control protocol (design §4), so there is nothing for a
+clipboard manager to observe there; no phase should spend effort on it, and
+"works in Game Mode" is not a bug report this project accepts.
+
+What the decision buys, per phase:
+
+| Phase | What the Deck answers |
+|---|---|
+| [5](phase-5-linux-clipboard.md) | A real KWin session and a real X11 session. Two of the three backends, on real hardware — and *which* Wayland one depends on the update channel, see below |
+| [6](phase-6-linux-daemon.md) | A second physical machine on the same LAN as the Mac. Real mDNS, real pairing, real Wi-Fi drops — the thing OrbStack could not stand in for |
+| [7](phase-7-linux-gui.md) | KDE half of "on KDE **and** on Sway", including the SNI tray, `xdg-desktop-portal-kde` and a 1280×800 screen the picker has to fit |
+| [8](phase-8-gnome-packaging.md) | An immutable distribution, which is what forces the user-scope installer to exist |
+
+**The channel decides which Wayland reader is under test.** The installed
+SteamOS 3.8 stable ships **Plasma 6.4.3**, and KWin did not port data control to
+`ext-data-control-v1` until Plasma **6.6** (KWin merge request !6606). So the
+Deck as it stands exercises `zwlr_data_control_manager_v1` and
+`WlrDataControlReader` — the legacy branch of `SessionProbe`, which would
+otherwise have gone untested. SteamOS 3.9 preview moves Desktop Mode to Plasma
+6.7.3 and swaps the branch to `ExtDataControlReader`. Both, from one device, by
+changing the update channel. Verified 2026-09-07 against the SteamOS 3.8 and 3.9
+release coverage and the KWin merge request; the Plasma version on the device
+was confirmed by its owner.
+
+**`x86_64` only.** The Deck's APU is Zen 2, so every real-hardware result this
+project ever gets is `amd64`. `arm64` correctness stays a claim backed by
+containers alone — worth remembering when [Phase 8](phase-8-gnome-packaging.md)
+says to run the packaging matrix on both.
+
+**Why an installer and not a package.** SteamOS's root filesystem is read-only,
+`steamos-readonly disable` is undone by the next atomic OS update, and with
+systemd-sysext extensions merged `/usr` stays read-only even after disabling it.
+`.deb` and `.rpm` have nowhere to land. `/home` survives updates, so the
+installer writes only there: `~/.local/bin`, `~/.local/share/applications`,
+`~/.config/systemd/user`. Flatpak is the SteamOS-native answer and remains **out**
+for the reason already recorded — a sandboxed client is refused the data-control
+globals ([OQ-4](#oq-4) governs only how that is explained, not whether it holds).
+
+The installer is not Deck-specific and should not be written as if it were. It
+is the no-root install path for any distribution, and after
+[Phase 6](phase-6-linux-daemon.md) a headless daemon plus a CLI installed into
+`~/.local` is a legitimate way to ship.
+
+**GNOME work is unaffected.** [D-5](#d-5) stands: the Shell extension gets
+built, kept thin, and submitted. What the missing GNOME machine defers is its
+*verification* — [OQ-3](#oq-3) and the GNOME rows of Phase 8's test matrix — not
+the work. The extension is written against documented interfaces and the
+honest-degradation path is what covers users in the meantime.
 
 <a id="d-9"></a>
 ### D-9 — May the Linux port change how the Mac app is built?
@@ -323,8 +391,8 @@ its answer, the date, and where it was verified.
 |---|---|---|---|
 | [OQ-1](#oq-1) | Is a Continuity pasteboard change detectable? | **open** — needs a second Apple device | Phase 0 |
 | [OQ-2](#oq-2) | Bytes or a promise? | **open** — needs a second Apple device | Phase 0, and a possible shipping bug |
-| [OQ-3](#oq-3) | Does GNOME show a sharing indicator for a clipboard-only RemoteDesktop session? | **open** — needs a real GNOME session | nothing — it reopens a rejected option |
-| [OQ-4](#oq-4) | Does KWin apply sway's sandbox filter? | **open** — needs a real KWin session | nothing — it changes an explanation |
+| [OQ-3](#oq-3) | Does GNOME show a sharing indicator for a clipboard-only RemoteDesktop session? | **open, deferred** — needs a real GNOME session, and the project has none ([D-10](#d-10)) | nothing — it reopens a rejected option |
+| [OQ-4](#oq-4) | Does KWin apply sway's sandbox filter? | **open, and now answerable** — the [Steam Deck](README.md#the-test-hardware) is a real KWin session ([D-10](#d-10)) | nothing — it changes an explanation |
 | [OQ-5](#oq-5) | `NIOSSLCustomVerificationCallback` and `TLSConfiguration` shape | **answered** — `([NIOSSLCertificate], EventLoopPromise<NIOSSLVerificationResult>) -> Void`, set on the *handler*, and dead unless `certificateVerification` is stronger than `.none` | Phase 2 transport |
 | [OQ-6](#oq-6) | `swift-certificates` API, and does it build on Linux? | **answered** — builds on Linux aarch64; DER re-encodes byte-identically on both platforms | Phase 2 identity, Phase 4 |
 | [OQ-7](#oq-7) | `NWListener.Service` / `NWBrowser.Descriptor` signatures | **answered** — and `Network.swiftinterface` *does* ship, so there is a ground truth | Phase 2 discovery |
@@ -340,6 +408,9 @@ its answer, the date, and where it was verified.
 The four still open all need hardware this machine does not have:
 **[OQ-1](#oq-1)** and **[OQ-2](#oq-2)** need a second Apple device, and
 **[OQ-3](#oq-3)** / **[OQ-4](#oq-4)** need a real GNOME and a real KWin session.
+**Amended 2026-09-07:** [D-10](#d-10) supplies the KWin session — a Steam Deck
+OLED — so [OQ-4](#oq-4) is now work rather than a hardware gap. GNOME hardware
+is still missing and [OQ-3](#oq-3) is deferred with it.
 Nothing on the roadmap is blocked on them — OQ-1 and OQ-2 gate Phase 0, which is
 its own spike, and OQ-3 and OQ-4 only change how a settled decision is explained.
 
@@ -386,8 +457,13 @@ resolution is measurable.
 <a id="oq-3"></a>
 ### OQ-3 — Does GNOME badge a clipboard-only RemoteDesktop session?
 
-**Still open as of 2026-09-05.** It needs a real GNOME session on real
-hardware; a container cannot answer it.
+**Still open as of 2026-09-05, and deferred as of 2026-09-07.** It needs a real
+GNOME session on real hardware; a container cannot answer it, and the project's
+only Linux machine is a KDE one ([D-10](#d-10)).
+
+Deferring the answer does not defer the work: [D-5](#d-5) stands and the GNOME
+Shell extension still gets built and submitted on schedule. This question only
+matters if the portal path is being reconsidered, which it is not.
 
 `org.freedesktop.portal.Clipboard` cannot open its own session; it only extends
 a RemoteDesktop or InputCapture session. If GNOME shows a permanent
@@ -400,12 +476,20 @@ extension path in Phase 8 is being reconsidered.
 <a id="oq-4"></a>
 ### OQ-4 — Does KWin apply sway's sandbox filter to the data-control globals?
 
-**Still open as of 2026-09-05.** It needs a running KWin session.
+**Still open as of 2026-09-05. Answerable from 2026-09-07** — [D-10](#d-10)
+brought a KWin session onto the project in the shape of a Steam Deck OLED, so
+this is now a task rather than a hardware gap.
 
 Sway's `is_privileged()` refuses both data-control managers to any client with a
 security context, which is what rules Flatpak out. KWin's `wayland_server.cpp`
 registers `DataControlDeviceManagerV1Interface` unconditionally, but its
 `Display` global filter was not traced.
+
+**How to answer, now that there is hardware:** enumerate the Wayland globals
+from inside a Flatpak sandbox on the Deck and again outside one, and compare.
+Note which manager is advertised while doing it — SteamOS 3.8 stable is on
+Plasma 6.4.3, which predates KWin's port to `ext-data-control-v1` in Plasma 6.6,
+so the global to look for there is `zwlr_data_control_manager_v1`.
 
 Does not change the packaging decision — Flatpak is out either way, because a
 GNOME Shell extension cannot register from a sandbox. It changes how the

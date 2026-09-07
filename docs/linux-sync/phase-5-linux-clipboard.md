@@ -10,9 +10,32 @@ and on X11. No GUI.
 ## Preconditions
 
 - Phase 4 done, including the `ClipboardSource` protocol.
-- Test machines or VMs running **Sway**, **KDE Plasma 6.6+** and **X11**. Three
+- Test machines running **Sway**, **KDE Plasma** and **X11**. Three
   environments, because the three backends fail differently and a bug in one is
   invisible from the other two.
+
+  **What exists, as of 2026-09-07** ([D-10](open-questions.md#d-10)): a **Steam
+  Deck OLED in Desktop Mode**, which covers the KDE and X11 environments on real
+  hardware. It is a stand-in for a proper Linux box, not a target — nothing in
+  this phase gets shaped around SteamOS. Game Mode is out of scope: gamescope
+  advertises no data-control global at all.
+
+  **Which KDE environment it is depends on the update channel**, and this phase
+  should plan for both:
+
+  | Channel | Plasma | Global | Reader exercised |
+  |---|---|---|---|
+  | SteamOS 3.8 stable — installed today | 6.4.3 | `zwlr_data_control_manager_v1` | `WlrDataControlReader` |
+  | SteamOS 3.9 preview | 6.7.3 | `ext_data_control_manager_v1` | `ExtDataControlReader` |
+
+  KWin ported data control to `ext-data-control-v1` in Plasma **6.6** (KWin merge
+  request !6606), so the rig as delivered proves the *legacy* path first. Plan on
+  writing `WlrDataControlReader` no later than `ExtDataControlReader` — the
+  deprecated protocol is the one with hardware behind it on day one.
+
+  **Sway still needs a VM or a second machine**, and **GNOME needs hardware
+  nobody has**: its diagnostics case below can be asserted in unit tests but not
+  demonstrated live until then.
 - Design §4's support matrix re-checked. It is dated 2026-09-04 and every claim
   in it is about a third-party project's current state.
 
@@ -77,7 +100,10 @@ So probe in this order, and record what was found for the diagnostics:
 1. Connect to the Wayland display, if any, and enumerate globals.
 2. `ext_data_control_manager_v1` present → `ExtDataControlReader`.
 3. Only `zwlr_data_control_manager_v1` present → `WlrDataControlReader`, with a
-   note that the protocol's own XML now describes itself as deprecated.
+   note that the protocol's own XML now describes itself as deprecated. **This
+   is the branch the test rig takes today** — Plasma 6.4.3 on SteamOS 3.8 stable
+   ([D-10](open-questions.md#d-10)) — so "deprecated" must not be read as
+   "unexercised".
 4. Neither, but `DISPLAY` connects → `XFixesReader` over XWayland, and record
    that this is the lossy path.
 5. Neither and no X11 → **report the failure**, do not fall back to nothing.
@@ -164,9 +190,19 @@ difference between a backend that is tested and one that is merely demonstrated.
 
 - logs every clipboard change with the correct `ClipKind` and representations
 - writes a selection back that another app can paste
-- reports the right `DiagnosticsProblem` when run under GNOME Wayland, rather
-  than silently capturing nothing
 - survives the compositor restarting under it
+
+The KDE and X11 runs happen on the Steam Deck ([D-10](open-questions.md#d-10)),
+in Desktop Mode, and the KDE run should be done on **both** update channels —
+one proves `WlrDataControlReader`, the other `ExtDataControlReader`, and neither
+substitutes for the other.
+
+**Deferred, not dropped:** that the probe reports the right
+`DiagnosticsProblem` under GNOME Wayland rather than silently capturing nothing.
+There is no GNOME machine ([OQ-3](open-questions.md#oq-3)), so this phase closes
+with that case asserted in unit tests over a synthetic global list and marked
+unverified against a live session. It is the first thing to run when GNOME
+hardware appears, because it is the message every GNOME user meets first.
 
 `scripts/doctor-linux.sh` green. `scripts/doctor.sh` still green — the
 `ClipboardSource` shape may have moved.

@@ -16,6 +16,16 @@ Hotkey → picker → select → pasted, on KDE and on Sway, with a working tray
   both toolkits fail, the project stops at Phase 6.** Not Qt, not XWayland-only.
   Step 1 below is how the decision gets made with code rather than on paper.
 - [OQ-12](open-questions.md#oq-12) answered, because the mark has to render.
+- **A KDE session to build against: the Steam Deck, in Desktop Mode**
+  ([D-10](open-questions.md#d-10)). It supplies `xdg-desktop-portal-kde` for the
+  global shortcut and a native StatusNotifierItem host for the tray, which are
+  steps 3 and 4 below. **Sway still needs a second machine or a VM.** Game Mode
+  is out of scope — this phase builds a desktop picker and nothing else.
+- Note the screen it has to look right on: **1280×800 at 90 Hz**. The macOS
+  picker's metrics were drawn for a laptop display, and a palette that is
+  perfectly proportioned on a Mac can cover half of that one. Check early — it
+  is a layout decision, and layout decisions get expensive after the widgets
+  exist.
 
 ## The honest starting position
 
@@ -98,11 +108,13 @@ working after a suspend is the most annoying possible failure for this app.
 
 ### 4. Tray
 
-StatusNotifierItem. Native on KDE. **GNOME Shell ships no SNI host** and needs
-the AppIndicator extension, which distributions package but do not install by
-default — so detect its absence and say so through the Phase 5 diagnostics,
-rather than showing nothing and leaving the user to conclude the app did not
-start.
+StatusNotifierItem. Native on KDE, and therefore demonstrable on the test rig.
+**GNOME Shell ships no SNI host** and needs the AppIndicator extension, which
+distributions package but do not install by default — so detect its absence and
+say so through the Phase 5 diagnostics, rather than showing nothing and leaving
+the user to conclude the app did not start. That detection is written now and
+**verified when GNOME hardware exists** ([OQ-3](open-questions.md#oq-3)); until
+then it is covered by a unit test over a faked bus, not by a screenshot.
 
 The mark itself comes from `PaperclipPath`, which is where
 [OQ-12](open-questions.md#oq-12) lands. If Core Graphics path types are absent
@@ -145,7 +157,7 @@ genuine win, because it proves the two platforms draw the same mark.
 
 ## Done when
 
-On KDE **and** on Sway:
+On KDE — the Steam Deck in Desktop Mode — **and** on Sway:
 
 1. Hotkey opens the picker over the frontmost app, which keeps its caret.
 2. Typing filters. Arrows navigate. Return pastes into the app underneath.
@@ -154,6 +166,8 @@ On KDE **and** on Sway:
 5. Pairing can be completed entirely from the GUI.
 6. The picker opens in under 150 ms from a cold daemon — the macOS one is
    effectively instant and a visibly slower Linux picker will read as broken.
+7. The picker, its rows and the Settings window fit **1280×800** with nothing
+   clipped and nothing needing a scroll that does not need one on a Mac.
 
 `scripts/doctor-linux.sh` green.
 
