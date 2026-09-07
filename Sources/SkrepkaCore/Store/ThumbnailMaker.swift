@@ -32,16 +32,30 @@
         /// file afterwards leaves the row showing the picture as it was, which is
         /// the same promise the rest of the history makes.
         public func makePreview(from payload: ClipPayload) -> Preview? {
-            previewFromImageData(payload) ?? previewFromReferencedFile(payload)
+            makePreview(fromImageBytesIn: payload) ?? previewFromReferencedFile(payload)
         }
 
-        private func previewFromImageData(_ payload: ClipPayload) -> Preview? {
+        /// A preview drawn from the payload's own image bytes, never from a file
+        /// it names.
+        ///
+        /// What content learned from a peer needs. A synced payload carries the
+        /// bytes and nothing else this machine can open: its `public.file-url` is
+        /// a path on the machine that made the copy, so ``makePreview(from:)``'s
+        /// fallback would at best open nothing and at worst draw whatever
+        /// unrelated file this machine happens to keep at the same path.
+        /// Internal rather than public for the reason
+        /// ``ThumbnailRenderer/preview(fromImageBytesIn:)`` is: both are reached
+        /// only from inside this module, and exporting one of a matched pair
+        /// freezes an API nothing outside asks for.
+        func makePreview(fromImageBytesIn payload: ClipPayload) -> Preview? {
             let imageTypes = [PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf]
             for type in imageTypes {
                 guard let data = payload.data(forType: type), let image = NSImage(data: data) else {
                     continue
                 }
-                guard let thumbnail = scaledPNG(from: image) else { return nil }
+                // On to the next type rather than out of the loop: a PDF that
+                // decodes and will not scale must not hide the PNG behind it.
+                guard let thumbnail = scaledPNG(from: image) else { continue }
                 return Preview(thumbnail: thumbnail, pixelSize: Self.pixelSize(of: image))
             }
             return nil
@@ -56,8 +70,28 @@
 
         /// Pixel dimensions of the original, which is what the row subtitle shows.
         /// `NSImage.size` is in points; the bitmap rep carries the real pixels.
+        ///
+        /// **Nil unless both come back positive**, because a representation that
+        /// is not a bitmap has no pixels to report and says so with zero rather
+        /// than by refusing. `NSPDFImageRep` is the case that reaches here: both
+        /// come back `0` however large the page is, measured rather than assumed.
+        /// It is reachable rather than theoretical — `com.adobe.pdf` sits in
+        /// ``PasteboardType/readOrder``, `CaptureRules.kind(for:)` calls it
+        /// `.image`, and ``makePreview(fromImageBytesIn:)`` tries it third, so any
+        /// clipping carrying a PDF and no decodable PNG or TIFF is measured by
+        /// this line.
+        ///
+        /// Zero read as a measurement rather than as its absence is what made
+        /// that row's subtitle say `0 × 0`, and both callers are written for the
+        /// nil this now returns instead: `ClipRecordMapping` falls back to
+        /// ``ClipItem/imageSize`` on the local capture path, and
+        /// ``HistoryStore/backfillPreview(_:into:)`` keeps the dimensions a peer
+        /// sent on the sync one. Neither can fire against a non-nil zero, so the
+        /// guard belongs here rather than in front of each of them.
         static func pixelSize(of image: NSImage) -> ClipItem.ImageSize? {
-            guard let rep = image.representations.first else { return nil }
+            guard let rep = image.representations.first,
+                rep.pixelsWide > 0, rep.pixelsHigh > 0
+            else { return nil }
             return ClipItem.ImageSize(width: rep.pixelsWide, height: rep.pixelsHigh)
         }
 

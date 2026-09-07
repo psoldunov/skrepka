@@ -49,6 +49,23 @@
             )
         }
 
+        /// A preview for content learned from a peer, drawn from the bytes that
+        /// arrived with it.
+        ///
+        /// Separate from ``details(for:)`` because a synced row has none of what
+        /// that pass reads: no local file to describe, no selection to measure,
+        /// and a `public.file-url` naming a path on the other machine — see
+        /// ``ThumbnailMaker/makePreview(fromImageBytesIn:)``. Bytes are the whole
+        /// of what a peer hands over, so bytes are the whole of what is read.
+        ///
+        /// Routed through this actor rather than called on a ``ThumbnailMaker``
+        /// directly, for the reason the actor exists: a sync round fetches up to
+        /// `PeerLink.payloadBudgetPerSync` of payloads and would otherwise decode
+        /// several pictures at once, beside whatever the user is copying.
+        func preview(fromImageBytesIn payload: ClipPayload) -> ThumbnailMaker.Preview? {
+            maker.makePreview(fromImageBytesIn: payload)
+        }
+
         /// What the file system says about every file the entry names, for the
         /// kinds that name one.
         ///

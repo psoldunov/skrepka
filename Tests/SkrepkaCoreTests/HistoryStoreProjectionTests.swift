@@ -215,7 +215,7 @@
             let store = try Self.makeStore()
             await store.capture(Self.item("local", at: 1))
 
-            try store.capture(
+            try await store.capture(
                 EngineFixtures.meta("learned", at: EngineFixtures.at(2)),
                 payloads: [EngineFixtures.plainTextKey: Data("learned".utf8)]
             )
