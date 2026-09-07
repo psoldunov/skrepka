@@ -122,7 +122,8 @@ public struct CaptureRules: Sendable {
             case PasteboardType.rtfd, PasteboardType.rtf, PasteboardType.html: return .richText
             case PasteboardType.fileURL: return .file
             case PasteboardType.url: return .link
-            case PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf: return .image
+            case PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf, PasteboardType.jpeg:
+                return .image
             case PasteboardType.string: return .text
             default: continue
             }

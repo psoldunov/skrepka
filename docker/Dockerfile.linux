@@ -2,8 +2,8 @@
 #
 # Build it with scripts/linux-image.sh, which tags it skrepka-linux:6.3 and is
 # what scripts/linux.sh looks for. The stock swift:6.3-noble image is missing
-# two things this repository needs, and both are cheap to add here rather than
-# rediscovering them per machine:
+# several things this repository needs, and they are cheap to add here rather
+# than rediscovering them per machine:
 #
 #   libsqlite3-dev  the Linux history store is raw SQLite through the C library
 #                   (D-3), and the stock image ships neither sqlite3.h nor a
@@ -11,6 +11,34 @@
 #   swiftlint       publishes a prebuilt Linux binary, so the Linux quality gate
 #                   can run the same lint the macOS one does instead of
 #                   reporting it as a permanent skip.
+#   libwayland-dev  the Phase 5 data-control backends are C interop over
+#   libx11-dev      libwayland-client, libX11 and libXfixes. Each needs its
+#   libxfixes-dev   headers and its .pc file for a `.systemLibrary` target.
+#   libwayland-bin  wayland-scanner, for scripts/regenerate-wayland-protocols.sh.
+#                   The build itself never needs it — the generated C is checked
+#                   in — but regenerating is a container job because macOS has
+#                   no scanner.
+#
+# And three that exist purely so the Linux gate can *test* the clipboard
+# backends rather than merely compile them, which is the difference Phase 5
+# calls out:
+#
+#   sway            runs against WLR_BACKENDS=headless with no display and no
+#                   DRM device, and advertises zwlr_data_control_manager_v1 —
+#                   so WlrDataControlReader gets a real compositor to talk to.
+#                   sway 1.9 is wlroots 0.17, which predates
+#                   ext_data_control_manager_v1; ExtDataControlReader has no
+#                   compositor here and stays unit-tested only.
+#   xvfb            a real X server with the XFIXES extension, so XFixesReader
+#                   gets real XFixesSelectionNotify events.
+#   wl-clipboard    a second, independent clipboard client on each side, so a
+#   xclip           test asserts interoperability rather than Skrepka agreeing
+#                   with itself.
+#
+# Deliberately NOT here: wayland-protocols. The two data-control descriptions
+# are vendored under Sources/CWaylandProtocols/protocol-xml/ instead — one of
+# them (wlr) is packaged by no distribution at all, and the other is absent from
+# every LTS older than noble. See scripts/regenerate-wayland-protocols.sh.
 #
 # Deliberately NOT here: periphery. It ships no Linux binary — the 3.8.0
 # artifactbundle declares only macOS slices — and a from-source build would add
@@ -20,16 +48,28 @@
 ARG SWIFT_VERSION=6.3
 FROM swift:${SWIFT_VERSION}-noble
 
-# pkg-config so the `.systemLibrary` target can find sqlite3.pc; curl to fetch
-# the SwiftLint release asset below, which swift:6.3-noble does not ship even
-# though it does ship unzip.
+# pkg-config so the `.systemLibrary` targets can find sqlite3.pc, xfixes.pc and
+# wayland-client.pc; curl to fetch the SwiftLint release asset below, which
+# swift:6.3-noble does not ship even though it does ship unzip.
+#
+# --no-install-recommends matters more than usual for sway and xvfb: with
+# recommends on, the two pull in a desktop's worth of fonts, a policy kit and a
+# session manager, and none of it is reachable from a test.
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		ca-certificates \
 		curl \
 		libsqlite3-dev \
+		libwayland-bin \
+		libwayland-dev \
+		libx11-dev \
+		libxfixes-dev \
 		pkg-config \
+		sway \
 		unzip \
+		wl-clipboard \
+		xclip \
+		xvfb \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Pinned rather than "latest": an image whose linter changes underneath it turns

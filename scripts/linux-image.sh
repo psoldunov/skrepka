@@ -4,9 +4,10 @@
 #
 #   scripts/linux-image.sh          build (or rebuild) skrepka-linux:6.3
 #
-# scripts/linux.sh uses this image when it exists and falls back to stock
-# swift:6.3-noble when it does not, so a fresh clone works without running this
-# first — it simply gets a gate with two more skips in it and no SQLite.
+# scripts/linux.sh requires this image and does not fall back to stock
+# swift:6.3-noble: the stock image resolves neither CSQLite nor the Phase 5
+# wayland and X11 system libraries, so the fallback produced a pkg-config
+# failure that read as a broken repository. Run this first on a fresh clone.
 #
 # Set SKREPKA_LINUX_IMAGE to override the tag both scripts use.
 
@@ -33,4 +34,16 @@ docker build \
 
 echo
 echo "built ${IMAGE}:"
-docker run --rm "${IMAGE}" bash -lc 'swift --version | head -1; swiftlint version | sed "s/^/swiftlint /"; pkg-config --modversion sqlite3 | sed "s/^/sqlite3 /"'
+# Every line here is a thing the gate needs and would otherwise discover as a
+# link failure halfway through a build.
+docker run --rm "${IMAGE}" bash -lc '
+	swift --version | head -1
+	swiftlint version | sed "s/^/swiftlint /"
+	for lib in sqlite3 wayland-client x11 xfixes; do
+		printf "%s %s\n" "${lib}" "$(pkg-config --modversion "${lib}")"
+	done
+	wayland-scanner --version 2>&1 | sed "s/^/scanner /"
+	sway --version | sed "s/^/headless /"
+	# Xvfb has no --version; it prints usage and exits non-zero for anything it
+	# does not recognise, so the package database is what can answer.
+	dpkg-query -W -f "headless Xvfb \${Version}\n" xvfb'

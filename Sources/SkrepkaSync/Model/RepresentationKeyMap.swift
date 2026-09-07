@@ -33,6 +33,17 @@ public enum RepresentationKeyMap {
         Entry(canonical: "text/html", uti: "public.html", linuxTargets: ["text/html"], loss: nil),
         Entry(canonical: "image/png", uti: "public.png", linuxTargets: ["image/png"], loss: nil),
         Entry(canonical: "image/tiff", uti: "public.tiff", linuxTargets: ["image/tiff"], loss: nil),
+        // Not in design §8's table, added 2026-09-07 for Phase 5. §8 lists
+        // `image/jpeg` among GTK4's built-in serializers but gives it no row,
+        // which left the one type a Linux app is most likely to offer for a
+        // photograph mapping to nothing at all. `public.jpeg` is verified
+        // against `UTCoreTypes.h` in the installed macOS SDK, where `UTTypeJPEG`
+        // is documented as `public.jpeg` conforming to `public.image`.
+        //
+        // Lossless on the wire because nothing transcodes it: §8's own rule is
+        // that `contentHash` is defined over representation bytes, so a JPEG
+        // crosses as the bytes it arrived as.
+        Entry(canonical: "image/jpeg", uti: "public.jpeg", linuxTargets: ["image/jpeg"], loss: nil),
         Entry(
             canonical: "application/pdf",
             uti: "com.adobe.pdf",

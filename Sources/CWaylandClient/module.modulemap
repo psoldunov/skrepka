@@ -1,0 +1,9 @@
+// libwayland-client, as a Swift module.
+//
+// [system] suppresses warnings from headers this repository does not own, which
+// otherwise fail the build outright: every target here is compiled with
+// `.treatAllWarnings(as: .error)`.
+module CWaylandClient [system] {
+    header "shim.h"
+    export *
+}

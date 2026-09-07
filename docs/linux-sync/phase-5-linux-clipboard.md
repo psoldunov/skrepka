@@ -1,5 +1,18 @@
 # Phase 5 — Linux clipboard backends
 
+**Built 2026-09-07.** Both quality gates green over it: `scripts/doctor.sh`
+**526 tests / 69 suites**, `scripts/doctor-linux.sh` **481 tests / 58 suites**,
+SwiftLint included.
+
+Two of the three backends are **integration-tested against a live compositor**
+rather than merely demonstrated — the "worth trying" note under *Tests* below
+turned out to work, on both halves. `docker/Dockerfile.linux` now carries a
+headless **Sway 1.9** (wlroots 0.17, advertising
+`zwlr_data_control_manager_v1` v2) and **Xvfb** with XFIXES, and 17 tests drive
+the real protocols with `wl-copy`, `wl-paste` and `xclip` as the other end.
+`ExtDataControlReader` has no compositor to test against anywhere on this
+project and remains unverified live — see *Done when*.
+
 **A week and a half. The least familiar territory on the roadmap.**
 
 ## Goal
@@ -20,18 +33,23 @@ and on X11. No GUI.
   this phase gets shaped around SteamOS. Game Mode is out of scope: gamescope
   advertises no data-control global at all.
 
-  **Which KDE environment it is depends on the update channel**, and this phase
-  should plan for both:
+  **Which KDE environment it is depends on the update channel — corrected
+  2026-09-07.** The table here used to say Plasma 6.4.3 exercised the legacy
+  reader, on the belief that KWin's port landed in Plasma 6.6. It landed in
+  Plasma **6.4** (merge request !6606, merged 2025-04-12), and 6.4 advertises
+  **both** globals from one implementation; 6.5 dropped the legacy one.
 
-  | Channel | Plasma | Global | Reader exercised |
+  | Channel | Plasma | Globals advertised | Reader exercised |
   |---|---|---|---|
-  | SteamOS 3.8 stable — installed today | 6.4.3 | `zwlr_data_control_manager_v1` | `WlrDataControlReader` |
-  | SteamOS 3.9 preview | 6.7.3 | `ext_data_control_manager_v1` | `ExtDataControlReader` |
+  | SteamOS 3.8 stable — installed today | 6.4.3 | **both** | `ExtDataControlReader` |
+  | SteamOS 3.9 preview | 6.7.3 | ext only | `ExtDataControlReader` |
 
-  KWin ported data control to `ext-data-control-v1` in Plasma **6.6** (KWin merge
-  request !6606), so the rig as delivered proves the *legacy* path first. Plan on
-  writing `WlrDataControlReader` no later than `ExtDataControlReader` — the
-  deprecated protocol is the one with hardware behind it on day one.
+  Two consequences, and both shaped what was built. `SessionProbe` **prefers
+  `ext` and ignores `wlr` when both are present**, or it would bind two devices
+  to one seat on 6.4 and record every copy twice. And **the Deck exercises the
+  legacy path on neither channel**, so it got a compositor of its own: a
+  headless Sway 1.9 in the build image, which advertises
+  `zwlr_data_control_manager_v1` v2 and nothing newer.
 
   **Sway still needs a VM or a second machine**, and **GNOME needs hardware
   nobody has**: its diagnostics case below can be asserted in unit tests but not
@@ -184,6 +202,25 @@ headless backend, which would make `ExtDataControlReader` testable without a
 display. Confirm whether that works before promising it — if it does, it is the
 difference between a backend that is tested and one that is merely demonstrated.
 
+**It works — confirmed 2026-09-07, and it is what shipped.** `sway` with
+`WLR_BACKENDS=headless` runs inside the Linux build image with no DRM device and
+no display, and advertises `zwlr_data_control_manager_v1` v2. `Xvfb` gives the
+X11 side a real server carrying XFIXES. Both are in
+`docker/Dockerfile.linux`; `Tests/SkrepkaLinuxPlatformTests/HeadlessSession.swift`
+starts and stops them per test, and `wl-copy`, `wl-paste` and `xclip` are the
+other end of every assertion — a test where Skrepka is on both sides proves only
+that it agrees with itself.
+
+One correction to the hope above: it makes **`WlrDataControlReader`** testable,
+not `ExtDataControlReader`. Sway 1.9 is wlroots 0.17, which predates
+`ext-data-control-v1` entirely.
+
+Two bugs came out of running against a real compositor that no unit test would
+have found: the Wayland loop indexed its `poll` results positionally into a
+transfer list that dispatching could grow, and the write ends of the `receive`
+pipes were closed before the flush that sends them — libwayland stores the raw
+descriptor number in a ring buffer rather than duplicating it.
+
 ## Done when
 
 `skrepka-clip-probe` runs on Sway, on KDE Wayland and on X11, and for each:
@@ -192,10 +229,23 @@ difference between a backend that is tested and one that is merely demonstrated.
 - writes a selection back that another app can paste
 - survives the compositor restarting under it
 
+**Status 2026-09-07.** The first two are asserted automatically against a
+headless Sway and an Xvfb, for `WlrDataControlReader` and `XFixesReader` — text,
+HTML, a 1 MB payload through the pipe, X11's `INCR` in both directions, the
+ICCCM-mandated `TARGETS`/`TIMESTAMP`/`MULTIPLE`, the KDE privacy hint honoured
+by value, and a selection `wl-paste` and `xclip` can read back. The third —
+surviving a compositor restart — is a reconnect loop in `skrepka-clip-probe
+watch` and is **not** covered by a test; the reconnection *policy* belongs to
+the Phase 6 daemon.
+
+Still to run by hand, and none of them a code task: the probe on the Steam
+Deck's KDE session, which is the only way `ExtDataControlReader` gets exercised
+at all; the probe on a Sway session with a display; and the GNOME case below.
+
 The KDE and X11 runs happen on the Steam Deck ([D-10](open-questions.md#d-10)),
-in Desktop Mode, and the KDE run should be done on **both** update channels —
-one proves `WlrDataControlReader`, the other `ExtDataControlReader`, and neither
-substitutes for the other.
+in Desktop Mode. Both update channels exercise `ExtDataControlReader` — see the
+corrected table under *Preconditions* — so running both is no longer worth the
+reinstall. `WlrDataControlReader` is covered by the headless Sway instead.
 
 **Deferred, not dropped:** that the probe reports the right
 `DiagnosticsProblem` under GNOME Wayland rather than silently capturing nothing.
