@@ -35,6 +35,10 @@ enum UserAlert {
 
     private static func run(_ alert: NSAlert) -> Bool {
         NSApp.activate()
+        // Both of these can be asked for while the settings window is open, and
+        // that window floats — see ``AppModalWindow`` for what an alert left at
+        // its own level does underneath one.
+        AppModalWindow.liftAboveFloatingPanels(alert.window)
         return alert.runModal() == .alertFirstButtonReturn
     }
 }
