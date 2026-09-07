@@ -8,6 +8,20 @@ struct GeneralSettingsView: View {
 
     @State private var loginItemError: String?
     @State private var isAccessibilityTrusted = AccessibilityPermission.isTrusted
+    /// launchd's answer, not a stored preference — see ``Preferences`` for why
+    /// there is no `launchAtLogin` setting to read instead. One snapshot rather
+    /// than a `status` poll per property, so the switch and every notice
+    /// *derived from it* describe the same instant.
+    ///
+    /// `loginItemError` is the exception and is not derived from this: it
+    /// records what happened at one click and outlives its own cause, which is
+    /// why ``refreshLoginItemFromSystem()`` retires it once the status moves.
+    ///
+    /// Optional and filled by the refresh rather than initialised inline, the
+    /// way ``DiagnosticsSettingsView`` holds its snapshot: reading it here would
+    /// run a blocking XPC call to `smd` on *every* construction of this view —
+    /// once per tab change — and SwiftUI keeps only the first.
+    @State private var loginItem: DiagnosticsSnapshot.LoginItemState?
 
     private var preferences: Preferences { coordinator.preferences }
 
@@ -73,7 +87,9 @@ struct GeneralSettingsView: View {
                 Toggle(
                     "",
                     isOn: Binding(
-                        get: { preferences.launchAtLogin },
+                        // Nil only until the first refresh lands; an
+                        // unanswered status is not a registration.
+                        get: { loginItem?.isRegistered ?? false },
                         set: { setLaunchAtLogin($0) }
                     )
                 )
@@ -83,7 +99,7 @@ struct GeneralSettingsView: View {
 
             if let loginItemError {
                 SettingsNotice(tone: .error, message: loginItemError)
-            } else if LoginItem.requiresApproval {
+            } else if loginItem == .requiresApproval {
                 SettingsNotice(
                     tone: .warning,
                     message: "Waiting for your approval in Login Items.",
@@ -92,6 +108,7 @@ struct GeneralSettingsView: View {
                 )
             }
         }
+        .refreshOnActivation(refreshLoginItemFromSystem)
 
         if let startupError = coordinator.startupError {
             SettingsCard(title: "Storage") {
@@ -110,6 +127,33 @@ struct GeneralSettingsView: View {
         isAccessibilityTrusted = AccessibilityPermission.isTrusted
     }
 
+    /// The path taken when a settings-style window comes forward: re-read, and
+    /// retire a failure message once the system's answer has actually moved.
+    ///
+    /// Without the retiring, an error outlives its own cause and keeps
+    /// suppressing the notice derived from `loginItem` — including the approval
+    /// prompt — so the card can show a failed-to-change error underneath a
+    /// switch reading on.
+    ///
+    /// Conditional on the status changing, because this fires when key comes
+    /// back *within* the process too: dismissing the picker hands key straight
+    /// back to the settings panel. Clearing unconditionally would delete the
+    /// message the user is in the middle of reading, having changed nothing.
+    private func refreshLoginItemFromSystem() {
+        let previous = loginItem
+        refreshLoginItem()
+        guard loginItem != previous else { return }
+        loginItemError = nil
+    }
+
+    /// Re-reads the status and nothing else. Kept separate from
+    /// ``refreshLoginItemFromSystem()`` because ``setLaunchAtLogin(_:)`` calls
+    /// it immediately after setting `loginItemError`, and retiring the message
+    /// there would erase the one thing the user needs to read.
+    private func refreshLoginItem() {
+        loginItem = LoginItem.state
+    }
+
     private func setPasteAutomatically(_ enabled: Bool) {
         preferences.pasteAutomatically = enabled
         guard enabled else { return }
@@ -119,11 +163,10 @@ struct GeneralSettingsView: View {
 
     private func setLaunchAtLogin(_ enabled: Bool) {
         loginItemError = LoginItem.setEnabled(enabled)
-        // Trust the system's answer over what the user just clicked — but
-        // `.requiresApproval` is a *successful* registration awaiting the user
-        // in Login Items, so treating it as "off" would snap the switch back
-        // and read as a failure.
-        preferences.launchAtLogin = LoginItem.isEnabled || LoginItem.requiresApproval
+        // Re-read rather than trust what the user just clicked: registering can
+        // fail, and it can succeed into `.requiresApproval` instead of
+        // `.enabled`. The system's answer is the only one worth showing.
+        refreshLoginItem()
     }
 }
 

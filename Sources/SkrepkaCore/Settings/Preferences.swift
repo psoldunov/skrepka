@@ -20,7 +20,6 @@ public final class Preferences {
         maximumItems = Self.limit(defaults.value(for: .maximumItems))
         maximumAgeDays = Self.limit(defaults.value(for: .maximumAgeDays))
         excludedBundleIDs = Set(defaults.value(for: .excludedBundleIDs))
-        launchAtLogin = defaults.value(for: .launchAtLogin)
         pasteAutomatically = defaults.value(for: .pasteAutomatically)
         hasCompletedFirstRun = defaults.value(for: .hasCompletedFirstRun)
         syncEnabled = defaults.value(for: .syncEnabled)
@@ -42,9 +41,12 @@ public final class Preferences {
         didSet { defaults.set(Array(excludedBundleIDs).sorted(), for: .excludedBundleIDs) }
     }
 
-    public var launchAtLogin: Bool {
-        didSet { defaults.set(launchAtLogin, for: .launchAtLogin) }
-    }
+    // Launch at login is deliberately absent. launchd owns that answer, and it
+    // changes without Skrepka running — in System Settings, or when the app is
+    // moved out of `/Applications`. A copy here would be a second source of
+    // truth that goes stale on disk and cannot be refreshed while the app is
+    // not running, so the switch reads `SMAppService` directly. See
+    // `LoginItem.state` and `GeneralSettingsView`.
 
     /// When off, selecting an entry only puts it on the pasteboard and the user
     /// pastes themselves — which needs no Accessibility permission.
@@ -99,9 +101,6 @@ struct PreferenceKey<Value: Sendable>: Sendable {
     }
     static var excludedBundleIDs: PreferenceKey<[String]> {
         .init(name: "excludedBundleIDs", defaultValue: [])
-    }
-    static var launchAtLogin: PreferenceKey<Bool> {
-        .init(name: "launchAtLogin", defaultValue: false)
     }
     static var pasteAutomatically: PreferenceKey<Bool> {
         .init(name: "pasteAutomatically", defaultValue: true)

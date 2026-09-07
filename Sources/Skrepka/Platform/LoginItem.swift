@@ -8,16 +8,19 @@ import os
 /// No helper bundle and no Info.plist key are needed for a plain app. launchd
 /// refuses apps in temporary locations, so this only works once Skrepka lives
 /// somewhere durable such as `/Applications`.
+///
+/// launchd owns this answer and Skrepka only ever asks. It is deliberately not
+/// mirrored into ``Preferences``: it changes while the app is not running, and
+/// `SMAppService.h` ships no notification for that — the header's own advice is
+/// to check the status at launch, which is what ``RefreshOnActivation`` does for
+/// the surfaces that show it.
 enum LoginItem {
-    static var isEnabled: Bool {
-        SMAppService.mainApp.status == .enabled
-    }
-
-    static var requiresApproval: Bool {
-        SMAppService.mainApp.status == .requiresApproval
-    }
-
-    /// The status, in the vocabulary the diagnostics report speaks.
+    /// The status, as one read.
+    ///
+    /// Everything asks through here rather than through a `status == .enabled`
+    /// convenience per question: two such properties are two polls at two
+    /// instants, and a caller that read both could show a switch and its notice
+    /// disagreeing with each other.
     static var state: DiagnosticsSnapshot.LoginItemState {
         switch SMAppService.mainApp.status {
         case .enabled: .enabled

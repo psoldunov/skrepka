@@ -78,6 +78,9 @@ struct PrivacySettingsView: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
         panel.prompt = "Exclude"
+        // Opened from inside the floating settings window, so the picker has to
+        // be lifted over it or it runs modal and invisible behind it.
+        AppModalWindow.liftAboveFloatingPanels(panel)
 
         guard panel.runModal() == .OK else { return }
         let added = panel.urls.compactMap { Bundle(url: $0)?.bundleIdentifier }
