@@ -48,6 +48,14 @@ public struct DiagnosticsSnapshot: Sendable, Hashable {
     public let loginItem: LoginItemState
     public let storage: Storage
     public let itemCount: Int
+    /// What the Linux clipboard session cannot do, or nil where the question
+    /// does not arise.
+    ///
+    /// Nil on macOS, and nil on a Linux session that captures fine — the type
+    /// only has cases for the two states the user has to act on. Last in the
+    /// initialiser and defaulted, because every macOS construction site
+    /// predates it and has nothing to say about it.
+    public let clipboardSession: DiagnosticsProblem.SessionProblem?
 
     public init(
         appVersion: String,
@@ -60,7 +68,8 @@ public struct DiagnosticsSnapshot: Sendable, Hashable {
         pasteAutomatically: Bool,
         loginItem: LoginItemState,
         storage: Storage,
-        itemCount: Int
+        itemCount: Int,
+        clipboardSession: DiagnosticsProblem.SessionProblem? = nil
     ) {
         self.appVersion = appVersion
         self.systemVersion = systemVersion
@@ -73,6 +82,7 @@ public struct DiagnosticsSnapshot: Sendable, Hashable {
         self.loginItem = loginItem
         self.storage = storage
         self.itemCount = itemCount
+        self.clipboardSession = clipboardSession
     }
 
     /// Whether Skrepka can actually read the clipboard.
@@ -103,7 +113,8 @@ public struct DiagnosticsSnapshot: Sendable, Hashable {
         DiagnosticsProblem.ranked(
             storage: storage,
             clipboardStatus: clipboardStatus,
-            pasteBack: pasteBackStatus
+            pasteBack: pasteBackStatus,
+            session: clipboardSession
         )
     }
 }

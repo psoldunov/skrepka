@@ -42,48 +42,61 @@ extension DataControlSession {
         guard let pending = pendingCapture else { return }
         pendingCapture = nil
 
-        // Ranked rather than in the order the owner advertised, so the pipes
-        // are opened richest-first and a clipboard offering more targets than
-        // Skrepka reads costs nothing for the ones it does not want.
-        var wanted = LinuxRepresentationMap.interestingTargets.filter(pending.targets.contains)
-        // The privacy hint is not a representation and is not in that list, but
-        // it decides whether any of the others may be stored — so it is asked
-        // for whenever it is offered.
-        if pending.targets.contains(PrivacyMarkers.kdePasswordManagerHint) {
-            wanted.insert(PrivacyMarkers.kdePasswordManagerHint, at: 0)
-        }
-
+        let wanted = targetsWorthReading(offered: pending.targets)
         guard !wanted.isEmpty else {
-            // Nothing Skrepka can read. Published as an empty snapshot carrying
-            // the targets that were on offer, which is what lets
-            // `CaptureRules.emptyReason(declaredTypes:)` call it empty rather
-            // than unreadable.
-            publish(
-                .contents(
-                    LinuxSnapshotBuilder.snapshot(
-                        offeredTargets: pending.targets,
-                        payloads: [:],
-                        concealedHintSecret: false
-                    )
-                )
-            )
+            publishNothingReadable(offeredTargets: pending.targets)
             return
         }
 
         captureTargets = pending.targets
         isCapturing = true
-        for target in wanted {
-            guard let readEnd = openTransferPipe(offer: pending.offer, target: target) else {
-                continue
-            }
-            inbound.append(InboundTransfer(target: target, fileDescriptor: readEnd))
-        }
+        openTransfers(for: wanted, from: pending.offer)
+
         // Every pipe failed to open — a file-descriptor exhaustion, not an
         // empty clipboard. Reported as unreadable so it does not read as a user
         // with nothing on their clipboard.
         if inbound.isEmpty {
             isCapturing = false
             publish(.unreadable)
+        }
+    }
+
+    /// Ranked rather than in the order the owner advertised, so the pipes are
+    /// opened richest-first and a clipboard offering more targets than Skrepka
+    /// reads costs nothing for the ones it does not want.
+    private func targetsWorthReading(offered targets: [String]) -> [String] {
+        var wanted = LinuxRepresentationMap.interestingTargets.filter(targets.contains)
+        // The privacy hint is not a representation and is not in that list, but
+        // it decides whether any of the others may be stored — so it is asked
+        // for whenever it is offered.
+        if targets.contains(PrivacyMarkers.kdePasswordManagerHint) {
+            wanted.insert(PrivacyMarkers.kdePasswordManagerHint, at: 0)
+        }
+        return wanted
+    }
+
+    /// Nothing Skrepka can read. Published as an empty snapshot carrying the
+    /// targets that were on offer, which is what lets
+    /// `CaptureRules.emptyReason(declaredTypes:)` call it empty rather than
+    /// unreadable.
+    private func publishNothingReadable(offeredTargets targets: [String]) {
+        publish(
+            .contents(
+                LinuxSnapshotBuilder.snapshot(
+                    offeredTargets: targets,
+                    payloads: [:],
+                    concealedHintSecret: false
+                )
+            )
+        )
+    }
+
+    /// Opens one pipe per target and records the read ends. A target whose pipe
+    /// cannot be opened is skipped rather than failing the whole capture.
+    private func openTransfers(for targets: [String], from offer: OpaquePointer) {
+        for target in targets {
+            guard let readEnd = openTransferPipe(offer: offer, target: target) else { continue }
+            inbound.append(InboundTransfer(target: target, fileDescriptor: readEnd))
         }
     }
 

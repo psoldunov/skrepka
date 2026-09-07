@@ -36,14 +36,26 @@ echo
 echo "built ${IMAGE}:"
 # Every line here is a thing the gate needs and would otherwise discover as a
 # link failure halfway through a build.
+# The host's `set -euo pipefail` does not cross into `bash -lc`, so the block
+# sets its own: without it only the last command decides the container's exit
+# status, and a missing wayland-client would print an empty version and let the
+# build report success. Every tool's status is tested by capturing its output
+# into a variable rather than piping it, because `set -e` ignores a failure on
+# the left of a pipe and `pipefail` would turn `head`'s early exit into one.
 docker run --rm "${IMAGE}" bash -lc '
-	swift --version | head -1
-	swiftlint version | sed "s/^/swiftlint /"
+	set -euo pipefail
+	swift_version=$(swift --version 2>&1)
+	printf "%s\n" "${swift_version}" | sed -n "1p"
+	swiftlint_version=$(swiftlint version)
+	printf "swiftlint %s\n" "${swiftlint_version}"
 	for lib in sqlite3 wayland-client x11 xfixes; do
-		printf "%s %s\n" "${lib}" "$(pkg-config --modversion "${lib}")"
+		version=$(pkg-config --print-errors --modversion "${lib}")
+		printf "%s %s\n" "${lib}" "${version}"
 	done
-	wayland-scanner --version 2>&1 | sed "s/^/scanner /"
-	sway --version | sed "s/^/headless /"
+	scanner_version=$(wayland-scanner --version 2>&1)
+	printf "scanner %s\n" "${scanner_version}"
+	sway_version=$(sway --version)
+	printf "headless %s\n" "${sway_version}"
 	# Xvfb has no --version; it prints usage and exits non-zero for anything it
 	# does not recognise, so the package database is what can answer.
 	dpkg-query -W -f "headless Xvfb \${Version}\n" xvfb'

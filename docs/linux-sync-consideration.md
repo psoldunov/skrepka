@@ -681,9 +681,14 @@ The capture and paste half, headless. No GUI yet.
 
 New target `SkrepkaLinuxPlatform`:
 
-- **`ExtDataControlReader`** — `ext-data-control-v1`. Covers KDE Plasma 6.6+,
-  Sway, Hyprland, niri, COSMIC. Falls back to `wlr-data-control` v2 where only
-  that is offered (Wayfire, river).
+- **`DataControlReader`** — one reader over both Wayland data-control
+  protocols, which differ only in their C symbol names;
+  `ExtDataControlBinding` and `WlrDataControlBinding` are what select between
+  them. `ext-data-control-v1` covers KDE Plasma 6.4+, Sway, Hyprland, niri and
+  COSMIC; it falls back to `wlr-data-control` v2 where only that is offered
+  (Wayfire, river). Plasma 6.4 advertises **both** globals from one
+  implementation, so the probe prefers `ext` and ignores `wlr` when it sees
+  both — binding the first recognised global would record every copy twice.
 - **`XFixesReader`** — `XFixesSelectSelectionInput` on X11 and XWayland.
   **Event-driven, so no polling** — better than the macOS side, which has no
   choice.

@@ -1,4 +1,4 @@
-import CXFixesShim
+import CX11
 import Foundation
 
 /// Reading and writing X11 window properties, with the unit conversions in one

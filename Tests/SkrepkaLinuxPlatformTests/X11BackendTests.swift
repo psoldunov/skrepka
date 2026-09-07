@@ -18,18 +18,39 @@ import Testing
 /// explicit display name instead of setting `DISPLAY` in this process.
 @Suite("X11 XFIXES", .serialized, .enabled(if: HeadlessSession.isAvailable(.xvfb)))
 struct X11BackendTests {
+    /// Gives a backend an X server, and takes both away afterwards — reader
+    /// first, and *awaited*, before the server goes.
+    ///
+    /// Not `defer`, on either half. `defer` cannot `await`, so the only shape
+    /// it allows is `defer { Task { await reader.stop() } }`, which merely
+    /// spawns the teardown and returns: Xvfb is then killed while the reader
+    /// still has a live connection to it. ``XFixesReader/stop()`` waits rather
+    /// than signals for exactly that reason.
     private func withSession<T>(
         _ label: String,
         _ body: (HeadlessSession, XFixesReader) async throws -> T
     ) async throws -> T {
         let session = try HeadlessSession(.xvfb, label: label)
         try session.start()
-        defer { session.stop() }
 
         let reader = XFixesReader(displayName: session.x11Display)
-        try await reader.start()
-        defer { Task { await reader.stop() } }
-        return try await body(session, reader)
+        do {
+            try await reader.start()
+        } catch {
+            session.stop()
+            throw error
+        }
+
+        do {
+            let value = try await body(session, reader)
+            await reader.stop()
+            session.stop()
+            return value
+        } catch {
+            await reader.stop()
+            session.stop()
+            throw error
+        }
     }
 
     private func waitForChange(

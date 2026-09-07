@@ -34,19 +34,32 @@ final class HeadlessSession {
         case xvfb
     }
 
+    /// The outside tools a session of this kind cannot run without.
+    static func requiredTools(_ kind: Kind) -> [String] {
+        switch kind {
+        case .sway: ["sway", "wl-copy", "wl-paste"]
+        case .xvfb: ["Xvfb", "xclip"]
+        }
+    }
+
+    /// Which of them are not on `PATH`.
+    ///
+    /// Named rather than counted, because this is what
+    /// ``HeadlessToolRequirementTests`` puts in its failure message: "sway is
+    /// missing" is diagnosable and "the tools are missing" is not.
+    static func missingTools(_ kind: Kind) -> [String] {
+        requiredTools(kind).filter { which($0) == nil }
+    }
+
     /// Whether the tools this needs are installed.
     ///
     /// `docker/Dockerfile.linux` carries them, so the containerised gate always
     /// has them. A native Linux checkout might not, and a missing compositor
     /// should skip these tests rather than fail them — the unit tests still
-    /// cover the pure half.
+    /// cover the pure half. ``HeadlessToolRequirementTests`` is what stops that
+    /// skip from being silent where the tools are supposed to be there.
     static func isAvailable(_ kind: Kind) -> Bool {
-        let names: [String]
-        switch kind {
-        case .sway: names = ["sway", "wl-copy", "wl-paste"]
-        case .xvfb: names = ["Xvfb", "xclip"]
-        }
-        return names.allSatisfy { which($0) != nil }
+        missingTools(kind).isEmpty
     }
 
     private let kind: Kind
@@ -107,8 +120,13 @@ final class HeadlessSession {
         // Per-instance, because two suites running back to back must not find
         // each other's sockets — and because a leftover one from a crashed run
         // would make a compositor that never started look like one that did.
+        //
+        // The serial number is what makes it per-instance rather than per
+        // label. Labels repeat across suites, suites run concurrently, and
+        // `stop()` deletes this directory — see ``nextSessionNumber()``.
+        let serial = Self.nextSessionNumber()
         runtimeDirectory = URL(fileURLWithPath: "/tmp")
-            .appendingPathComponent("skrepka-headless-\(label)-\(getpid())")
+            .appendingPathComponent("skrepka-headless-\(label)-\(getpid())-\(serial)")
         try FileManager.default.createDirectory(
             at: runtimeDirectory,
             withIntermediateDirectories: true,

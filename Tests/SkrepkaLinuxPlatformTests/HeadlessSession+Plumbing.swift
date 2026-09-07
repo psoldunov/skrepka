@@ -32,6 +32,27 @@ extension HeadlessSession {
         }
     }
 
+    /// Distinguishes two sessions that would otherwise name the same directory.
+    ///
+    /// The label alone is not unique. `WaylandBackendTests` and
+    /// `X11BackendTests` are separate suites, so Swift Testing runs them
+    /// concurrently, and six of their labels are the same word — `probe`,
+    /// `html`, `notify`, `self`, `text`, `write`. Two sessions sharing a run
+    /// directory is not a near-miss: ``HeadlessSession/stop()`` removes that
+    /// directory, so the suite that finished first deleted the other's
+    /// `XDG_RUNTIME_DIR` out from under a live compositor — which showed up as
+    /// sway running happily for its full thirty-second timeout without ever
+    /// producing a socket, and a failure message reading `(no log)` because
+    /// sway's stderr file had gone with it.
+    static let sessionCounter = Mutex(0)
+
+    static func nextSessionNumber() -> Int {
+        sessionCounter.withLock {
+            $0 += 1
+            return $0
+        }
+    }
+
     static func which(_ tool: String) -> String? {
         let search = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
         for directory in search.split(separator: ":") {

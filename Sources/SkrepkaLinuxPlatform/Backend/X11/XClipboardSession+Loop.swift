@@ -1,4 +1,4 @@
-import CXFixesShim
+import CX11
 import Foundation
 import SkrepkaCore
 
@@ -48,13 +48,29 @@ extension XClipboardSession {
         }
     }
 
+    /// Opens the display, claims a window, subscribes to selection changes and
+    /// asks for whatever is already on the clipboard.
+    ///
+    /// Each step that can fail records why in ``failure`` and returns false;
+    /// `run(commands:wakeup:)` publishes that and tears down what was built.
     private func connect() -> Bool {
+        guard let display = openDisplay(), selectXFixesExtension(on: display) else { return false }
+        guard let atoms = makeSelectionWindow(on: display) else { return false }
+        subscribeToSelectionChanges(on: display, atoms: atoms)
+        readInitialSelection(on: display, atoms: atoms)
+        return true
+    }
+
+    private func openDisplay() -> OpaquePointer? {
         guard let display = XOpenDisplay(displayName) else {
             failure = "No X11 display could be opened."
-            return false
+            return nil
         }
         self.display = display
+        return display
+    }
 
+    private func selectXFixesExtension(on display: OpaquePointer) -> Bool {
         var eventBase: Int32 = 0
         var errorBase: Int32 = 0
         guard XFixesQueryExtension(display, &eventBase, &errorBase) != 0 else {
@@ -62,17 +78,20 @@ extension XClipboardSession {
             return false
         }
         xfixesEventBase = eventBase
+        return true
+    }
 
+    /// An unmapped 1×1 window on the root. It is never drawn; it exists to own
+    /// the selection, to carry the properties replies land on, and to be the
+    /// window XFIXES reports changes to.
+    private func makeSelectionWindow(on display: OpaquePointer) -> XAtoms? {
         let atoms = XAtoms(display: display)
         self.atoms = atoms
 
-        // An unmapped 1×1 window on the root. It is never drawn; it exists to
-        // own the selection, to carry the properties replies land on, and to be
-        // the window XFIXES reports changes to.
         window = XCreateSimpleWindow(display, XDefaultRootWindow(display), 0, 0, 1, 1, 0, 0, 0)
         guard window != 0 else {
             failure = "The X server refused Skrepka a window."
-            return false
+            return nil
         }
         // Selected once, here, rather than when an INCR transfer starts: the
         // owner may begin appending the moment we delete the INCR property, and
@@ -80,10 +99,13 @@ extension XClipboardSession {
         XSelectInput(display, window, PropertyChangeMask)
 
         seedServerTime()
+        return atoms
+    }
 
-        // All three subtypes. `SetSelectionOwnerNotify` is the copy; the other
-        // two are the owner going away, which leaves the clipboard unowned and
-        // is worth knowing about.
+    /// All three subtypes. `SetSelectionOwnerNotify` is the copy; the other two
+    /// are the owner going away, which leaves the clipboard unowned and is
+    /// worth knowing about.
+    private func subscribeToSelectionChanges(on display: OpaquePointer, atoms: XAtoms) {
         let subtypes = UInt(
             XFixesSetSelectionOwnerNotifyMask
                 | XFixesSelectionWindowDestroyNotifyMask
@@ -91,16 +113,17 @@ extension XClipboardSession {
         )
         XFixesSelectSelectionInput(display, window, atoms.clipboard, subtypes)
         XFlush(display)
+    }
 
-        // XFIXES only reports changes from here on, so whatever is already on
-        // the clipboard has to be asked for explicitly — otherwise the first
-        // copy after launch would be the first thing Skrepka ever saw.
+    /// XFIXES only reports changes from here on, so whatever is already on the
+    /// clipboard has to be asked for explicitly — otherwise the first copy
+    /// after launch would be the first thing Skrepka ever saw.
+    private func readInitialSelection(on display: OpaquePointer, atoms: XAtoms) {
         if XGetSelectionOwner(display, atoms.clipboard) != X11.none {
             beginRead(at: lastServerTime)
         } else {
             publish(.contents(PasteboardSnapshot(representations: [:], declaredTypes: [])))
         }
-        return true
     }
 
     /// Reads a valid server timestamp off a `PropertyNotify` we provoke.

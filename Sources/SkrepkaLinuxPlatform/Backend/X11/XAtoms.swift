@@ -1,4 +1,4 @@
-import CXFixesShim
+import CX11
 import Foundation
 
 /// X11 constants Swift imports at the wrong width.

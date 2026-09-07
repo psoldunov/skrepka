@@ -1,6 +1,8 @@
 import Foundation
 import SkrepkaCore
 
+extension XClipboardSession.Command: LinuxSessionCommand {}
+
 /// A ``SkrepkaCore/ClipboardSource`` over Xlib and the XFIXES extension.
 ///
 /// The one backend that is strictly better than the macOS one.
@@ -14,19 +16,14 @@ import SkrepkaCore
 /// path — it sees only what XWayland clients put on the clipboard, and a native
 /// Wayland application's copy is invisible to it — which is what
 /// ``SessionProbe/Report/isXWaylandFallback`` exists to report.
+///
+/// The thread, the wakeup pipe and the baseline wait are
+/// ``LinuxSessionRunner``'s, shared with ``DataControlReader``.
 public actor XFixesReader: ClipboardSource {
-    public enum StartError: Error, Equatable {
-        case outOfFileDescriptors
-        case sessionFailed(String)
-        case timedOut
-    }
+    public typealias StartError = LinuxSessionStartError
 
     private let displayName: String?
-    private let state = LinuxClipboardState()
-    private let commands = CommandQueue<XClipboardSession.Command>()
-    private var wakeup: WakePipe?
-    private var thread: Thread?
-    private var notifications: AsyncStream<Void>?
+    private let runner = LinuxSessionRunner<XClipboardSession.Command>()
 
     /// - Parameter displayName: which X server to connect to, or nil to let
     ///   Xlib read `DISPLAY`.
@@ -43,55 +40,20 @@ public actor XFixesReader: ClipboardSource {
     /// baselines on the first change count it reads, so starting it before that
     /// answer lands turns the user's existing clipboard into a fresh capture.
     public func start() async throws {
-        guard thread == nil else { return }
-        guard let wakeup = WakePipe() else { throw StartError.outOfFileDescriptors }
-        self.wakeup = wakeup
-
-        let (stream, continuation) = AsyncStream<Void>.makeStream()
-        notifications = stream
-
-        let state = self.state
-        let commands = self.commands
         let displayName = self.displayName
-        let thread = Thread {
-            XClipboardSession(state: state, notify: continuation, displayName: displayName)
-                .run(commands: commands, wakeup: wakeup)
+        try await runner.start(threadNamed: "dev.soldunov.skrepka.x11-clipboard") { context in
+            XClipboardSession(
+                state: context.state, notify: context.notify, displayName: displayName
+            )
+            .run(commands: context.commands, wakeup: context.wakeup)
         }
-        thread.name = "dev.soldunov.skrepka.x11-clipboard"
-        self.thread = thread
-        thread.start()
-
-        try await waitForBaseline()
-    }
-
-    private func waitForBaseline() async throws {
-        let deadline = ContinuousClock.now.advanced(by: DataControlReader.startupTimeout)
-        while ContinuousClock.now < deadline {
-            let contents = state.contents
-            if contents.hasBaseline { return }
-            if let failure = contents.failure { throw StartError.sessionFailed(failure) }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        if let failure = state.contents.failure { throw StartError.sessionFailed(failure) }
-        throw StartError.timedOut
     }
 
     /// Stops the session and waits for its thread to unwind, so the X
     /// connection and the selection ownership are both gone before this
     /// returns.
     public func stop() async {
-        guard thread != nil else { return }
-        commands.append(.stop)
-        wakeup?.signal()
-
-        let deadline = ContinuousClock.now.advanced(by: DataControlReader.startupTimeout)
-        while state.contents.isRunning, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        thread = nil
-        wakeup?.close()
-        wakeup = nil
-        notifications = nil
+        await runner.stop()
     }
 
     /// Takes ownership of `CLIPBOARD` and serves these bytes, keyed by target
@@ -103,19 +65,18 @@ public actor XFixesReader: ClipboardSource {
     /// Skrepka exits, unless a clipboard manager saved them, and Skrepka is not
     /// yet acting as one on Linux.
     public func setSelection(_ payload: [String: Data]?) {
-        commands.append(.setSelection(payload))
-        wakeup?.signal()
+        runner.setSelection(payload)
     }
 
-    public var failure: String? { state.contents.failure }
+    public var failure: String? { runner.failure }
 
     // MARK: - ClipboardSource
 
-    public func changeCount() -> Int { state.contents.changeCount }
+    public func changeCount() -> Int { runner.state.contents.changeCount }
 
     /// - Parameter sourceBundleID: ignored, for the reason design §8 gives:
     ///   there is no Linux analogue.
-    public func read(sourceBundleID: String?) -> PasteboardRead { state.contents.read }
+    public func read(sourceBundleID: String?) -> PasteboardRead { runner.state.contents.read }
 
-    public func changeNotifications() -> AsyncStream<Void>? { notifications }
+    public func changeNotifications() -> AsyncStream<Void>? { runner.notifications }
 }

@@ -15,12 +15,24 @@ public enum DiagnosticsReport {
             "System: \(snapshot.systemVersion)",
             "",
             "Clipboard access: \(snapshot.pasteboardAccess.summary)",
+        ]
+
+        // Beside the access line rather than below the storage block, because
+        // it answers the same question the reader is asking there. Omitted
+        // entirely when there is nothing to say: on macOS this is always nil,
+        // and a row reading "n/a" in every report ever pasted teaches the
+        // reader to skip it in the one where it fires.
+        if let session = snapshot.clipboardSession {
+            lines.append("Clipboard session: \(session.problem.headline)")
+        }
+
+        lines.append(contentsOf: [
             "Capturing: \(snapshot.isCaptureBlocked ? "blocked" : "yes")",
             "Last capture: \(lastCapture(snapshot.lastCapturedAt))",
             "Accessibility: \(snapshot.isAccessibilityTrusted ? "granted" : "not granted")",
             "Paste automatically: \(snapshot.pasteAutomatically ? "on" : "off")",
             "Launch at login: \(snapshot.loginItem.rawValue)",
-        ]
+        ])
 
         switch snapshot.storage {
         case .onDisk(let path):

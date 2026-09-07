@@ -31,7 +31,7 @@ it got two, inside the build image: a headless **Sway 1.9** advertising
 `zwlr_data_control_manager_v1`, and an **Xvfb** carrying XFIXES. So two of its
 three backends are integration-tested against live protocol traffic rather than
 demonstrated — 17 tests, with `wl-copy`, `wl-paste` and `xclip` as the other
-end. `ExtDataControlReader` has no compositor anywhere on this project and stays
+end. `ExtDataControlBinding` has no compositor anywhere on this project and stays
 unit-tested only; the Steam Deck is the first thing to run it against.
 
 Next is [Phase 6](phase-6-linux-daemon.md) — the Linux daemon, and the point at
@@ -252,15 +252,15 @@ says so), so a clipboard manager has nothing to observe there, and no phase
 should spend a line on it.
 
 **Which clipboard backend the rig exercises — corrected 2026-09-07.** This
-table used to say the installed channel exercised `WlrDataControlReader`, on the
+table used to say the installed channel exercised the `wlr` binding, on the
 belief that KWin's port landed in Plasma 6.6. It landed in Plasma **6.4** (merge
 request !6606, merged 2025-04-12), and 6.4 advertises **both** globals from one
 implementation; 6.5 dropped the legacy one.
 
-| Channel | Plasma | Globals advertised | Reader under test |
+| Channel | Plasma | Globals advertised | Binding under test |
 |---|---|---|---|
-| SteamOS 3.8 stable — **what is installed today** | 6.4.3 | **both** | `ExtDataControlReader` |
-| SteamOS 3.9 preview | 6.7.3 | ext only | `ExtDataControlReader` |
+| SteamOS 3.8 stable — **what is installed today** | 6.4.3 | **both** | `ExtDataControlBinding` |
+| SteamOS 3.9 preview | 6.7.3 | ext only | `ExtDataControlBinding` |
 | Either, X11 session | — | — | `XFixesReader` |
 
 So switching the Deck's channel exercises **one** Wayland reader, not two, and

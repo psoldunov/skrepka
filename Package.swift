@@ -236,27 +236,29 @@ let package = Package(
         // Xlib and XFIXES. One target rather than two because Xfixes.h is
         // meaningless without Xlib.h and two module maps covering the same
         // headers collide. -lX11 is not in `pkg-config --libs xfixes` — see
-        // Sources/CXFixesShim/shim.h — so SkrepkaLinuxPlatform links it
+        // Sources/CX11/shim.h — so SkrepkaLinuxPlatform links it
         // explicitly below.
         .systemLibrary(
-            name: "CXFixesShim",
+            name: "CX11",
             pkgConfig: "xfixes",
             providers: [
                 .apt(["libx11-dev", "libxfixes-dev"]),
                 .yum(["libX11-devel", "libXfixes-devel"]),
             ]
         ),
-        // Phase 5: the three `ClipboardSource` conformances Linux has, the
-        // probe that decides between them, and the representation mapping and
-        // diagnostics that go with them.
+        // Phase 5: the two `ClipboardSource` conformances Linux has —
+        // `DataControlReader` for Wayland, driving both data-control protocols
+        // behind one engine, and `XFixesReader` for X11 — the probe that
+        // decides between them, and the representation mapping and diagnostics
+        // that go with them.
         .target(
             name: "SkrepkaLinuxPlatform",
-            dependencies: ["SkrepkaCore", "SkrepkaSync", "CWaylandClient", "CWaylandProtocols", "CXFixesShim"],
+            dependencies: ["SkrepkaCore", "SkrepkaSync", "CWaylandClient", "CWaylandProtocols", "CX11"],
             swiftSettings: sharedSwiftSettings,
             // xfixes.pc lists x11 under `Requires.private`, which pkg-config
-            // expands only for `--static`, so the CXFixesShim target
-            // contributes -lXfixes and nothing else. Without this every Xlib
-            // symbol is an undefined reference at link time.
+            // expands only for `--static`, so the CX11 target contributes
+            // -lXfixes and nothing else. Without this every Xlib symbol is an
+            // undefined reference at link time.
             linkerSettings: [.linkedLibrary("X11")]
         ),
         // The headless proof. Logs every clipboard change and can write a
@@ -270,7 +272,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SkrepkaLinuxPlatformTests",
-            dependencies: ["SkrepkaLinuxPlatform", "SkrepkaCore", "SkrepkaSync"],
+            dependencies: ["SkrepkaLinuxPlatform", "SkrepkaCore", "SkrepkaSync", "CX11"],
             swiftSettings: sharedSwiftSettings
         ),
     ])

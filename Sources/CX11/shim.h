@@ -1,5 +1,10 @@
 // Xlib and the XFIXES extension, behind one header a module map can name.
 //
+// The module is `CX11` rather than anything narrower: XFIXES is the smallest
+// of the three headers below and the least of what this carries, and a name
+// promising only the extension would send the next reader looking for a
+// separate Xlib module that does not exist.
+//
 // Three headers rather than one because the X11 clipboard needs all three and
 // none of them includes the others:
 //

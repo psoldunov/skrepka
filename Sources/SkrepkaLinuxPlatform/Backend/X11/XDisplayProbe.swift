@@ -1,4 +1,4 @@
-import CXFixesShim
+import CX11
 import Foundation
 
 /// Whether an X11 display will actually accept a connection, and whether it

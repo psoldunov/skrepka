@@ -1,9 +1,10 @@
-// Xlib plus the XFIXES extension, as a Swift module.
+// Xlib plus the XFIXES extension, as a Swift module. Named for Xlib, which is
+// the bulk of what it carries — see shim.h.
 //
 // [system] suppresses warnings from headers this repository does not own, which
 // otherwise fail the build outright: every target here is compiled with
 // `.treatAllWarnings(as: .error)`. Xlib.h in particular is full of them.
-module CXFixesShim [system] {
+module CX11 [system] {
     header "shim.h"
     export *
 }

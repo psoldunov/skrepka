@@ -30,8 +30,19 @@ package enum PrivacyMarkers {
     /// **Value-sensitive, unlike every other entry here.** Only the payload
     /// `secret` counts; Klipper stores an entry hinted `public` normally. A set
     /// of type names cannot express that, so the Linux reader resolves the
-    /// value and declares this type only when it resolved to a rejection — see
-    /// `LinuxRepresentationMap` in `SkrepkaLinuxPlatform`.
+    /// value and declares this type only when it resolved to a rejection.
+    ///
+    /// That resolution is a precondition of putting this string anywhere near a
+    /// `declaredTypes` set, not a nicety. ``rejected`` holds this name and
+    /// ``isRejected(types:)`` matches on the name alone, so anything that puts
+    /// it into a set of declared types without having first read the payload
+    /// and found `secret` silently drops every clip a KDE application labelled
+    /// `public` — a whole desktop's worth of history, lost with no error
+    /// anywhere. `LinuxRepresentationMap.declaredTypes(forOfferedTargets:`
+    /// `concealedHintResolvedSecret:)` in `SkrepkaLinuxPlatform` is the only
+    /// sanctioned producer: it strips the name when the value did not resolve
+    /// to `secret`. New code that needs declared types from offered targets
+    /// calls that function rather than assembling the set itself.
     package static let kdePasswordManagerHint = "x-kde-passwordManagerHint"
 
     /// The payload that makes ``kdePasswordManagerHint`` mean "do not store".
