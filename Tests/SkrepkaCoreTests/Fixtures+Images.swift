@@ -58,6 +58,29 @@
             return url
         }
 
+        /// A one-page PDF with something drawn on it, at a media box of exactly
+        /// `width` × `height` points.
+        ///
+        /// The representation that measures differently from every other picture
+        /// here: `NSImage` decodes it to an `NSPDFImageRep`, which reports
+        /// `pixelsWide` and `pixelsHigh` as `0` however large the page is — see
+        /// ``ThumbnailMaker/pixelSize(of:)``, which is written around exactly
+        /// that.
+        static func pdf(width: Int, height: Int) throws -> Data {
+            let data = NSMutableData()
+            let consumer = try #require(CGDataConsumer(data: data))
+            var box = CGRect(x: 0, y: 0, width: width, height: height)
+            let context = try #require(CGContext(consumer: consumer, mediaBox: &box, nil))
+            context.beginPDFPage(nil)
+            // Something visible on the page: an empty one is the degenerate case
+            // ThumbnailMakerTests builds for itself, and is not what this is for.
+            context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+            context.fill(box.insetBy(dx: box.width / 4, dy: box.height / 4))
+            context.endPDFPage()
+            context.closePDF()
+            return data as Data
+        }
+
         private static func bitmap(width: Int, height: Int, hasAlpha: Bool) -> NSBitmapImageRep? {
             NSBitmapImageRep(
                 bitmapDataPlanes: nil,

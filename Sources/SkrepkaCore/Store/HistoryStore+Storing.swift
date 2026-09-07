@@ -62,7 +62,45 @@
         /// Writes no tombstone and applies no retention — the same division
         /// `applyRemote(_:)` keeps. Eviction is a local policy decision and does
         /// not belong on the path that learns something.
-        public func capture(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) throws {
+        ///
+        /// **Draws the row's picture out of the arriving bytes**, because nothing
+        /// else will: no thumbnail crosses the wire — see
+        /// `SkrepkaSync.SyncClipMeta`, and `SyncMetaMapping.makeRecord` leaving
+        /// ``ClipRecord/thumbnailData`` nil — and the local detail pass never sees
+        /// content a peer sent. Without this a synced screenshot draws as a kind
+        /// symbol on a text-height row, because the picker asks
+        /// ``ClipSummary/hasThumbnail`` before it asks for anything to draw. The
+        /// user cannot tell what they are about to paste.
+        ///
+        /// Rendering from the *arriving* representations rather than from the
+        /// merged row is what covers a fetch that splits across rounds — see
+        /// ``fillPayload(of:with:)``: whichever round carries the image bytes is
+        /// the round that draws them.
+        ///
+        /// **A row that synced before this shipped stays a symbol.** It already
+        /// holds every representation it will ever be offered, so
+        /// `SyncExchange.fetchPayloads` finds nothing missing and never calls this
+        /// again. Only content arriving from here on gains a picture; correcting
+        /// the rows already stored needs a backfill pass this does not have.
+        ///
+        /// Asynchronous for the reason ``capture(_:)`` is: decoding a picture and
+        /// re-encoding it belongs off this actor, and a sync round spends up to
+        /// `PeerLink.payloadBudgetPerSync` on payloads, so a first sync against a
+        /// picture-heavy peer is several of them back to back.
+        ///
+        /// **The lookup below, the insert and the save are contiguous and sit
+        /// after the last suspension**, and that is the whole of what stops two
+        /// peer links learning the same content from both inserting a row for
+        /// it. Anything added between them has to be synchronous.
+        ///
+        /// ``preview(for:from:)`` reads the store as well, before it awaits the
+        /// renderer, and that read is advisory: it decides only whether starting
+        /// a render is worth it. **Its result must never be carried across the
+        /// await and written.** Hoisting it up here to spare the second fetch is
+        /// the edit that puts the double insert back, because the row it saw may
+        /// have been inserted, filled or deleted by the other link while this one
+        /// was decoding.
+        public func capture(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async throws {
             guard !meta.isConcealed else {
                 SkrepkaLog.store.error(
                     "Refused a concealed item offered by a peer; concealed content does not sync."
@@ -70,8 +108,13 @@
                 return
             }
             let representations = RepresentationKeyMap.utiKeyed(payloads)
+            // Rendered before the context is written to, so no store mutation
+            // spans the suspension. The lookup this makes on the way is advisory
+            // only — see the note above on what must not be hoisted out of it.
+            let preview = try await preview(for: meta, from: representations)
+
             if let existing = try recordMatching(contentHash: meta.contentHash) {
-                try fillPayload(of: existing, with: representations)
+                try fillPayload(of: existing, with: representations, preview: preview)
                 return
             }
 
@@ -81,9 +124,52 @@
                     ClipPayload(representations: representations)
                 )
             }
+            backfillPreview(preview, into: record)
             context.insert(record)
             try context.save()
             project(upserts: [record])
+        }
+
+        /// The picture this offer should draw, or nil when it should draw none.
+        ///
+        /// Three ways to answer without decoding anything, and each is a real cost
+        /// avoided rather than a shortcut.
+        ///
+        /// **No bytes arrived**, which is the common offer: metadata is eager and
+        /// payload is lazy (design §7), so most of what this path sees is an index
+        /// the transport has not fetched against yet.
+        ///
+        /// **The kind cannot be previewed.** ``ThumbnailRenderer/details(for:)``
+        /// gates the local pass on ``ClipKind/canPreview`` and this has to gate on
+        /// the same thing, or the two machines draw one clip differently. The case
+        /// is ordinary rather than contrived: ``PasteboardType/readOrder`` ranks
+        /// `rtf`, `html` and `url` above the image types, `CaptureRules.kind(for:)`
+        /// takes the first of them present, and `PasteboardReader` stores every
+        /// flavour it finds — so a rich-text or link clipping may perfectly well
+        /// carry a PNG. Locally it draws no picture; without this guard the peer's
+        /// copy of it would, and would take `imageRowHeight` and a `1402 × 578`
+        /// subtitle with it.
+        ///
+        /// Reading the kind off the *offer* is safe because ``ClipKind/hashDomain``
+        /// is part of `contentHash`: a row found under this hash cannot be of a
+        /// kind that disagrees, except within the file-system group, whose members
+        /// carry a `public.file-url` and no image bytes to draw from anyway.
+        ///
+        /// **The row already has a picture.** A peer re-offering content this
+        /// machine drew for itself would otherwise decode and re-encode up to
+        /// ``SyncLimits/maximumPayloadBytes`` to produce something
+        /// ``backfillPreview(_:into:)`` throws away.
+        private func preview(
+            for meta: SyncClipMeta,
+            from representations: [String: Data]
+        ) async throws -> ThumbnailMaker.Preview? {
+            guard !representations.isEmpty,
+                ClipKind(rawValue: meta.kind)?.canPreview == true,
+                try recordMatching(contentHash: meta.contentHash)?.thumbnailData == nil
+            else { return nil }
+            return await thumbnailRenderer.preview(
+                fromImageBytesIn: ClipPayload(representations: representations)
+            )
         }
 
         /// Writes payload bytes into a row that was learned from a peer without
@@ -116,7 +202,16 @@
         /// is per representation — and the two disagreeing is the more serious
         /// half: `HistoryStoringContractTests` exists so that the answer to a
         /// question like this is the same on both engines.
-        private func fillPayload(of record: ClipRecord, with representations: [String: Data]) throws {
+        ///
+        /// `preview` is whatever picture the arriving bytes held, drawn before the
+        /// context was touched. It lands under the same rule the local capture
+        /// path uses — see ``backfillPreview(_:into:)`` — and only where bytes did:
+        /// a round that brought nothing new leaves the row exactly as it was.
+        private func fillPayload(
+            of record: ClipRecord,
+            with representations: [String: Data],
+            preview: ThumbnailMaker.Preview?
+        ) throws {
             guard !representations.isEmpty else { return }
             var held: [String: Data] = [:]
             if !record.payloadData.isEmpty {
@@ -130,6 +225,7 @@
 
             let payload = ClipPayload(representations: merged)
             record.payloadData = try ClipRecordMapping.encode(payload)
+            backfillPreview(preview, into: record)
             // Merged into the stored index rather than replacing it: a fetch that
             // brought one of two representations must not retract the peer's claim
             // about the other, and what did arrive is measured here rather than

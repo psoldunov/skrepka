@@ -120,6 +120,86 @@
 
             #expect(maker.makePreview(from: Fixtures.fileURLPayload(directory)) == nil)
         }
+
+        // MARK: - Bytes only
+
+        /// The whole reason ``ThumbnailMaker/makePreview(fromImageBytesIn:)``
+        /// exists: content learned from a peer carries a `public.file-url` naming
+        /// a path on the machine that made the copy, and this machine may well
+        /// have an unrelated file sitting at it. Drawing that file as the row's
+        /// picture is the failure being prevented, so the same payload has to
+        /// answer differently through the two entry points.
+        @Test("A payload naming a file is previewed by one entry point and not the other")
+        func drawsNothingFromAFileThePayloadOnlyNames() throws {
+            let url = try Fixtures.writePNG(width: 640, height: 480, named: "peer.png")
+            defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+            let payload = Fixtures.fileURLPayload(url)
+
+            #expect(maker.makePreview(fromImageBytesIn: payload) == nil)
+            #expect(maker.makePreview(from: payload) != nil)
+        }
+
+        @Test("Image bytes are previewed without the file fallback")
+        func drawsImageBytes() throws {
+            let payload = ClipPayload(representations: [
+                PasteboardType.png: try Fixtures.png(width: 400, height: 200)
+            ])
+
+            let preview = try #require(maker.makePreview(fromImageBytesIn: payload))
+            #expect(preview.pixelSize == ClipItem.ImageSize(width: 400, height: 200))
+        }
+
+        /// A type that decodes and will not scale must not hide the one behind
+        /// it. The loop used to leave on the first such failure, so an image
+        /// `NSImage` accepts and cannot draw suppressed a perfectly good one
+        /// ranked below it.
+        ///
+        /// The payload is deliberately mislabelled, because that is the only way
+        /// to reach the case: the types are tried in a fixed order — png, tiff,
+        /// pdf — and nothing `Fixtures` can write under the first of them decodes
+        /// without also drawing. `NSImage(data:)` sniffs the bytes rather than
+        /// trusting the pasteboard type, so an empty-canvas PDF filed under
+        /// `public.png` stands in for exactly what this guards: the earlier type
+        /// decoded, produced nothing drawable, and must hand on rather than end
+        /// the search.
+        @Test("A type that will not scale does not hide the one behind it")
+        func fallsThroughToTheNextImageType() throws {
+            let payload = ClipPayload(representations: [
+                PasteboardType.png: Self.emptyPDF,
+                PasteboardType.tiff: try Fixtures.png(width: 40, height: 20),
+            ])
+            // The stand-in has to decode *and* refuse to scale, or this proves
+            // nothing. Both are asserted, because only the first is anything the
+            // fixture controls: it will not scale because a zero media box gives
+            // `NSImage` a zero size, which is Core Graphics behaviour rather than
+            // a documented promise. Should CG ever give that page a default size
+            // instead, this fails as the dead fixture it has become rather than
+            // as a regression in the loop below.
+            #expect(NSImage(data: Self.emptyPDF) != nil)
+            #expect(
+                maker.makePreview(
+                    from: ClipPayload(representations: [PasteboardType.png: Self.emptyPDF])
+                ) == nil
+            )
+
+            let preview = try #require(maker.makePreview(fromImageBytesIn: payload))
+            #expect(preview.pixelSize == ClipItem.ImageSize(width: 40, height: 20))
+        }
+
+        /// A one-page PDF whose media box is empty, written by hand because no
+        /// fixture makes one: `CGPDFContext` refuses a zero-sized page.
+        private static let emptyPDF: Data = {
+            let data = NSMutableData()
+            guard let consumer = CGDataConsumer(data: data) else { return Data() }
+            var box = CGRect.zero
+            guard let context = CGContext(consumer: consumer, mediaBox: &box, nil) else {
+                return Data()
+            }
+            context.beginPDFPage(nil)
+            context.endPDFPage()
+            context.closePDF()
+            return data as Data
+        }()
     }
 
 #endif

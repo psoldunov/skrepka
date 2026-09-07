@@ -135,15 +135,30 @@
         ///
         /// An entry stored before `.file` earned previews has no thumbnail, and so
         /// does one whose file was unreadable at the time. Without this those rows
-        /// keep a generic document icon for good.
+        /// keep a generic document icon for good. A row learned from a peer is the
+        /// third case and reaches this from `HistoryStore+Storing.swift`: no
+        /// thumbnail crosses the wire, so the only chance one exists is when the
+        /// bytes arrive.
         ///
         /// An existing thumbnail is left alone. The row is a snapshot of the copy
         /// that made it, and replacing it would silently rewrite history.
-        private func backfillPreview(_ preview: ThumbnailMaker.Preview?, into record: ClipRecord) {
+        ///
+        /// **The dimensions coalesce rather than overwrite.** A render can produce
+        /// a thumbnail and no pixel size at all — a PDF is the case that reaches
+        /// here, see ``ThumbnailMaker/pixelSize(of:)`` — and the row may already
+        /// know them from somewhere this pass cannot see. A synced row is told
+        /// them by the peer before any bytes arrive, so assigning would blank a
+        /// `2560 × 1440` subtitle the moment the picture it describes landed.
+        ///
+        /// Coalescing answers only a *missing* measurement, never a wrong one,
+        /// which is why that method has to report an unmeasurable picture as nil
+        /// rather than as zero. It did the latter until this change, and `?? ` is
+        /// powerless against a non-nil `0`.
+        func backfillPreview(_ preview: ThumbnailMaker.Preview?, into record: ClipRecord) {
             guard record.thumbnailData == nil, let preview else { return }
             record.thumbnailData = preview.thumbnail
-            record.imageWidth = preview.pixelSize?.width
-            record.imageHeight = preview.pixelSize?.height
+            record.imageWidth = preview.pixelSize?.width ?? record.imageWidth
+            record.imageHeight = preview.pixelSize?.height ?? record.imageHeight
         }
     }
 
