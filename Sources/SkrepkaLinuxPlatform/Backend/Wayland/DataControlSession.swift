@@ -77,6 +77,15 @@ final class DataControlSession: DataControlSessionEvents {
     /// last one's.
     var offeredTargets: [OpaquePointer: [String]] = [:]
     var currentOffer: OpaquePointer?
+    /// The live primary-selection offer, tracked only so it can be destroyed.
+    ///
+    /// Skrepka records no primary-selection history — see
+    /// ``didReceivePrimarySelection(_:)`` — but declining to record one is not
+    /// the same as declining to own it. The compositor introduces a primary
+    /// offer through the same `data_offer` event as a clipboard one, so it
+    /// lands in ``offeredTargets`` either way, and the protocol requires the
+    /// previous one to be destroyed when the next arrives.
+    var currentPrimaryOffer: OpaquePointer?
 
     // MARK: Capture in flight
 
@@ -161,6 +170,33 @@ final class DataControlSession: DataControlSessionEvents {
         }
 
         beginCapture(from: offer, targets: targets)
+    }
+
+    /// A new primary selection, which Skrepka declines to record but must still
+    /// dispose of.
+    ///
+    /// The middle-click selection changes on every drag through a text field,
+    /// and recording it would fill history with fragments the user never asked
+    /// to keep. That decision stands. What does not follow from it is ignoring
+    /// the event: `ext_data_control_device_v1.data_offer` fires for a primary
+    /// offer exactly as it does for a clipboard one, so ``didIntroduceOffer(_:)``
+    /// has already allocated a proxy and an ``offeredTargets`` entry by the time
+    /// this arrives, and the protocol is explicit — "the client must destroy the
+    /// previous primary selection offer, if any, upon receiving this event".
+    /// Doing nothing leaked one proxy and one dictionary entry per drag.
+    ///
+    /// Reached on `ext-data-control-v1` only. There the event carries no
+    /// `since`, so it is part of version 1 and every compositor sends it; in
+    /// `zwlr-data-control-unstable-v1` it is `since="2"` and
+    /// ``WlrDataControlBinding`` binds version 1, so that path never sees one.
+    /// Both bindings route it here regardless, so binding version 2 later needs
+    /// no second fix.
+    func didReceivePrimarySelection(_ offer: OpaquePointer?) {
+        if let previous = currentPrimaryOffer, previous != offer {
+            offeredTargets[previous] = nil
+            binding.destroyOffer(previous)
+        }
+        currentPrimaryOffer = offer
     }
 
     /// The compositor has retired this data device — the protocol says the

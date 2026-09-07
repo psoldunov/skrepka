@@ -123,7 +123,19 @@ final class LinuxSessionRunner<Command: LinuxSessionCommand>: Sendable {
         thread.name = name
         thread.start()
 
-        try await waitForBaseline()
+        do {
+            try await waitForBaseline()
+        } catch {
+            // The thread slot was claimed before the thread was started, so
+            // every way out of the wait has to give it back. Otherwise a
+            // timeout, a cancellation, or a session that failed on connect all
+            // leave `isThreadLive` true, and the next `start()` returns at the
+            // guard above without starting anything — a reader that reports no
+            // failure and never captures. The pipe and the stream would be
+            // retained for the life of the process besides.
+            await release()
+            throw error
+        }
     }
 
     /// Stops the session and waits for its thread to unwind.
@@ -133,10 +145,26 @@ final class LinuxSessionRunner<Command: LinuxSessionCommand>: Sendable {
     /// reader while the first was still tearing down would have two clients
     /// bound to one seat's selection.
     func stop() async {
+        await release()
+    }
+
+    /// Tells the loop to stop, waits for it, and gives back everything
+    /// ``start(threadNamed:body:)`` took.
+    ///
+    /// The wait runs inside an unstructured `Task` so that cancellation cannot
+    /// skip it. `Task {}` inherits actor context and priority but not
+    /// cancellation, and that difference is load-bearing here: the failure path
+    /// above is reached *by* cancellation, and cutting the wait short would
+    /// close the wakeup pipe while the loop is still polling that descriptor —
+    /// closing a file descriptor out from under a blocked `poll` in another
+    /// thread, which is the one thing this ordering exists to prevent. Waiting
+    /// is bounded by ``LinuxSessionTiming/startupTimeout`` either way, so a
+    /// wedged loop cannot hold the caller indefinitely.
+    private func release() async {
         guard let wakeup = storage.withLock({ $0.isThreadLive ? $0.wakeup : nil }) else { return }
         commands.append(.stop)
         wakeup.signal()
-        await waitUntilStopped()
+        await Task { await self.waitUntilStopped() }.value
         storage.withLock {
             $0.wakeup?.close()
             $0.wakeup = nil
@@ -188,11 +216,16 @@ final class LinuxSessionRunner<Command: LinuxSessionCommand>: Sendable {
 
     /// Waits for the loop to report that it has unwound, or gives up.
     ///
-    /// Cancellation stops the waiting but not the teardown: whoever cancelled
-    /// still needs the pipe closed and the stream released, so the sleep failing
-    /// breaks the loop rather than propagating. Giving up on the deadline is the
-    /// same path — a loop wedged in `poll` is not made better by blocking its
-    /// caller forever.
+    /// Called only from ``release()``, which runs it inside an unstructured
+    /// `Task` precisely so the caller's cancellation cannot reach it — the pipe
+    /// must not be closed while the loop is still polling it. The `catch` is
+    /// therefore a backstop rather than a live path: `Task.sleep` throws only on
+    /// cancellation, and breaking is still the right answer if some future
+    /// caller does reach here cancelled, because a half-finished teardown is
+    /// worse than a slightly early one.
+    ///
+    /// Giving up on the deadline is deliberate too: a loop wedged in `poll` is
+    /// not made better by blocking its caller forever.
     private func waitUntilStopped() async {
         let deadline = ContinuousClock.now.advanced(by: LinuxSessionTiming.startupTimeout)
         while state.contents.isRunning, ContinuousClock.now < deadline {

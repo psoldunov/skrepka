@@ -174,4 +174,32 @@ public enum LinuxRepresentationMap {
             return data
         }
     }
+
+    /// The bytes to serve under this target, or nil when the text is not
+    /// representable in the encoding the target promises.
+    ///
+    /// The mirror of ``decoded(_:forTarget:)``, and it exists because the two
+    /// directions have to agree. `STRING` is ICCCM Latin-1: `decoded`
+    /// transcodes it on the way in, so anything writing UTF-8 bytes under it on
+    /// the way out hands an X11 client mojibake for every character above 0x7F.
+    /// Every other target ``targets(forPasteboardType:)`` advertises for text —
+    /// `text/plain`, `text/plain;charset=utf-8`, `UTF8_STRING` — is UTF-8, which
+    /// is what `decoded` passes through untouched.
+    ///
+    /// Nil is a decision, not a gap: a string holding one character Latin-1
+    /// cannot spell is a string `STRING` cannot carry, and the caller's job is
+    /// to drop that target from the payload rather than to serve bytes that
+    /// decode to something else. Dropping it costs an X11 client that knows
+    /// only `STRING` the clip; serving it costs every such client a corrupt one.
+    public static func encoded(_ text: String, forTarget target: String) -> Data? {
+        switch target {
+        case "STRING":
+            // `allowLossyConversion` defaults to false, so this is nil for
+            // exactly the strings Latin-1 would otherwise mangle rather than a
+            // best effort with the accents stripped.
+            return text.data(using: .isoLatin1)
+        default:
+            return Data(text.utf8)
+        }
+    }
 }

@@ -169,6 +169,12 @@ extension DataControlSession {
     private func pollOnce(display: OpaquePointer, wakeup: WakePipe) -> Bool {
         var descriptors = pollDescriptors(display: display, wakeup: wakeup)
         let ready = poll(&descriptors, nfds_t(descriptors.count), pollTimeoutMilliseconds())
+        // Taken here because it belongs to `poll` and to nothing else. Both
+        // `wl_display_read_events` and `wl_display_cancel_read` run before the
+        // check below, and either can set `errno` on its own path — so reading
+        // it there can turn a benign `EINTR` into "the Wayland connection
+        // failed" and end a session that was never in trouble.
+        let pollErrno = errno
         // Snapshotted here, before anything can dispatch. `service` runs after
         // `wl_display_dispatch_pending`, and a callback firing in between can
         // both empty `inbound` — a newer selection abandons the capture in
@@ -184,8 +190,8 @@ extension DataControlSession {
         } else {
             wl_display_cancel_read(display)
         }
-        guard ready >= 0 || errno == EINTR else {
-            failure = "The Wayland connection failed: \(String(cString: strerror(errno)))."
+        guard ready >= 0 || pollErrno == EINTR else {
+            failure = "The Wayland connection failed: \(String(cString: strerror(pollErrno)))."
             return false
         }
         wl_display_dispatch_pending(display)
@@ -207,7 +213,18 @@ extension DataControlSession {
             pollfd(fd: wl_display_get_fd(display), events: Int16(POLLIN), revents: 0),
             pollfd(fd: wakeup.readEnd, events: Int16(POLLIN), revents: 0),
         ]
-        descriptors += inbound.map {
+        // Finished inbound transfers are skipped, not merely uninteresting.
+        // `InboundTransfer.finish` closes the descriptor, but the transfer
+        // stays in `inbound` until every one of them is done, because
+        // `finishCaptureIfComplete` reads the captured bytes back out of it.
+        // Polling a closed descriptor is not just a wasted `POLLNVAL`: the
+        // number is free for the kernel to hand to the next pipe, and an
+        // outbound transfer given it would appear twice in this set — where
+        // the readiness dictionary keeps the first entry, which is the stale
+        // inbound one. `service` would then never see `POLLOUT` for a live
+        // paste, and the requesting application would get whatever the
+        // five-second deadline had truncated it to.
+        descriptors += inbound.filter { !$0.isFinished }.map {
             pollfd(fd: $0.fileDescriptor, events: Int16(POLLIN), revents: 0)
         }
         descriptors += outbound.map {

@@ -81,9 +81,13 @@ final class WlrDataControlBinding: DataControlProtocolBinding {
                 // Skrepka has no primary-selection history: the middle-click
                 // selection changes on every drag through a text field, and
                 // recording it would fill history with fragments the user never
-                // asked to keep. The callback is required by the struct and
-                // deliberately does nothing.
-                primary_selection: { _, _, _ in }
+                // asked to keep. Routed to the session anyway so it destroys
+                // the offer rather than leaking it — unreachable today, because
+                // this event is `since="2"` and this binding takes version 1,
+                // but correct the day that changes.
+                primary_selection: { data, _, offer in
+                    dataControlSession(from: data)?.didReceivePrimarySelection(offer)
+                }
             )
         )
         return listener

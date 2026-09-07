@@ -81,6 +81,7 @@ protocol DataControlSessionEvents: AnyObject {
     func didIntroduceOffer(_ offer: OpaquePointer)
     func offer(_ offer: OpaquePointer, advertises mimeType: String)
     func didReceiveSelection(_ offer: OpaquePointer?)
+    func didReceivePrimarySelection(_ offer: OpaquePointer?)
     func didFinish()
     func sourceWasAskedToSend(mimeType: String, fileDescriptor: Int32)
     func sourceWasCancelled()

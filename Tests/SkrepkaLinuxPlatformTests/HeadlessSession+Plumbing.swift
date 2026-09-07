@@ -53,6 +53,34 @@ extension HeadlessSession {
         }
     }
 
+    /// Whether `SIGPIPE` has already been turned off for this process.
+    ///
+    /// A `Mutex` rather than a lazy `static let` for the same reason the
+    /// counters above are one: every test in both integration suites can reach
+    /// this concurrently, and one flag guarded the same way as everything else
+    /// in this file is easier to read than two synchronisation stories.
+    private static let sigpipeIgnored = Mutex(false)
+
+    /// Ignores `SIGPIPE`, once, from whichever test arrives first.
+    ///
+    /// ``Subprocess/spawn(_:arguments:environment:stdin:stdout:stderrPath:)``
+    /// leaves the parent's signal disposition alone, so a clipboard tool that
+    /// has already exited turns the write below into a `SIGPIPE` — whose
+    /// default action kills the whole test runner rather than the write.
+    ///
+    /// The backends do set this themselves, but not soon enough to help here:
+    /// ``SkrepkaLinuxPlatform/DataControlSession`` sets it only once a Wayland
+    /// session has started, and the X11 session never sets it at all. This
+    /// fixture writes to a child before either, and in tests that start
+    /// neither, so it has to hold the disposition down itself.
+    static func ignoreSIGPIPE() {
+        sigpipeIgnored.withLock { alreadyIgnored in
+            guard !alreadyIgnored else { return }
+            signal(SIGPIPE, SIG_IGN)
+            alreadyIgnored = true
+        }
+    }
+
     static func which(_ tool: String) -> String? {
         let search = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
         for directory in search.split(separator: ":") {
@@ -75,10 +103,12 @@ extension HeadlessSession {
         else { return false }
 
         if let input, let descriptor = spawned.stdin {
+            Self.ignoreSIGPIPE()
             // In a loop, because a pipe takes 64 KiB at a time and the case
             // this fixture exists to cover is the megabyte one.
             let bytes = Array(input.utf8)
             var offset = 0
+            var wroteEverything = true
             while offset < bytes.count {
                 let written = bytes[offset...].withUnsafeBytes { buffer in
                     write(descriptor, buffer.baseAddress, buffer.count)
@@ -86,10 +116,24 @@ extension HeadlessSession {
                 if written > 0 {
                     offset += written
                 } else if errno != EINTR {
+                    // `EPIPE` above all: the tool exited before it had the
+                    // whole clipping, so what it put on the clipboard — if
+                    // anything — is not what this call was asked to copy.
+                    // Reporting success would leave the test asserting against
+                    // the previous clipping and calling that a pass.
+                    wroteEverything = false
                     break
                 }
             }
             close(descriptor)
+            guard wroteEverything else {
+                // Reaped rather than left: `terminate()` kills a tool still
+                // waiting on input it will never get, and collects one that has
+                // already died, so neither becomes a zombie for the rest of the
+                // run.
+                spawned.process.terminate()
+                return false
+            }
         }
         // `wl-copy` and `xclip` both fork a server that holds the selection, so
         // the foreground process exits immediately, and waiting for that exit

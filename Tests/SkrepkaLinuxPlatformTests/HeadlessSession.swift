@@ -134,10 +134,32 @@ final class HeadlessSession {
         )
     }
 
+    /// Brings the session up, leaving nothing behind if it cannot.
+    ///
+    /// No caller cleans up after a failed start: `WaylandBackendTests`,
+    /// `X11BackendTests` and `X11MultipleTests` all let the error straight out
+    /// of the test that made the session. So a compositor that spawned and then
+    /// failed its readiness check would keep running for the rest of the suite,
+    /// with its run directory under `/tmp` still there. A leaked Xvfb is worse
+    /// than untidy — it holds `/tmp/.X<n>-lock`, which is the lock race that
+    /// ``startXvfb()`` numbers displays to avoid.
+    ///
+    /// The ordering is the whole trick. ``stop()`` deletes the run directory,
+    /// and the child's stderr log that a failure message quotes sits inside it;
+    /// the message survives only because it is a string built at the `throw`
+    /// site, evaluated in full when the error is constructed, before this
+    /// `catch` runs. Do not make one of those messages lazy, and do not move
+    /// the cleanup up to a `throw` site without building the message first:
+    /// either turns every failure here into `(no log)`.
     func start() throws {
-        switch kind {
-        case .sway: try startSway()
-        case .xvfb: try startXvfb()
+        do {
+            switch kind {
+            case .sway: try startSway()
+            case .xvfb: try startXvfb()
+            }
+        } catch {
+            stop()
+            throw error
         }
     }
 
@@ -164,6 +186,8 @@ final class HeadlessSession {
         process = sway
 
         guard let socket = waitForSocket(named: "wayland-", startedBy: sway, log: log) else {
+            // The tail is read here, while the log still exists: ``start()``
+            // catches this, and its cleanup deletes the directory holding it.
             throw Failure.didNotStart("sway produced no Wayland socket\n\(Self.tail(of: log))")
         }
         waylandSocketPath = runtimeDirectory.appendingPathComponent(socket).path
@@ -204,6 +228,8 @@ final class HeadlessSession {
         // Xvfb writes no ready marker, so readiness is "a client can connect",
         // asked by name rather than through `DISPLAY`.
         guard waitUntil({ XDisplayProbe.canConnect(display) }) else {
+            // ``start()`` kills the server this leaves behind. Nothing else
+            // does, and an Xvfb that outlives the run keeps its lock file.
             throw Failure.didNotStart("Xvfb never accepted a connection on \(display)")
         }
     }

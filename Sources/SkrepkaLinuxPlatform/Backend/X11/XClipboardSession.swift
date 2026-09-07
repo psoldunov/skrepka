@@ -75,6 +75,13 @@ final class XClipboardSession {
         case data(Atom)
         /// Draining an `INCR` transfer for one target.
         case incremental(Atom)
+        /// Draining an `INCR` transfer whose bytes are being thrown away.
+        ///
+        /// ICCCM §2.7.2 gives the requestor no way to walk out of a transfer:
+        /// the property must keep being deleted until the owner writes a
+        /// zero-length one. A target that blew past the size ceiling is read to
+        /// its terminator in this phase and stored nowhere.
+        case discarding
     }
 
     var phase: ReadPhase = .idle

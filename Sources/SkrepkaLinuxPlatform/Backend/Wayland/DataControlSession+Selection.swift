@@ -65,9 +65,13 @@ extension DataControlSession {
         outbound.removeAll()
         closeQueuedWriteEnds()
 
+        // Both selections' offers live in `offeredTargets`, so destroying its
+        // keys covers the primary one too; the two handles are cleared so
+        // neither is left pointing at a proxy this loop has just freed.
         for offer in offeredTargets.keys { binding.destroyOffer(offer) }
         offeredTargets.removeAll()
         currentOffer = nil
+        currentPrimaryOffer = nil
 
         releaseOwnedSource()
         if let device { binding.destroyDevice(device) }

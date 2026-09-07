@@ -74,9 +74,12 @@ final class ExtDataControlBinding: DataControlProtocolBinding {
                 // Skrepka has no primary-selection history: the middle-click
                 // selection changes on every drag through a text field, and
                 // recording it would fill history with fragments the user never
-                // asked to keep. The callback is required by the struct and
-                // deliberately does nothing.
-                primary_selection: { _, _, _ in }
+                // asked to keep. The session still has to destroy the offer —
+                // this event carries no `since`, so every ext compositor sends
+                // it, and `data_offer` has already introduced a proxy by now.
+                primary_selection: { data, _, offer in
+                    dataControlSession(from: data)?.didReceivePrimarySelection(offer)
+                }
             )
         )
         return listener

@@ -10,8 +10,8 @@ turned out to work, on both halves. `docker/Dockerfile.linux` now carries a
 headless **Sway 1.9** (wlroots 0.17, advertising
 `zwlr_data_control_manager_v1` v2) and **Xvfb** with XFIXES, and 17 tests drive
 the real protocols with `wl-copy`, `wl-paste` and `xclip` as the other end.
-The `ext` binding has no compositor to test against anywhere on this project and
-remains unverified live — see *Done when*.
+The `ext` binding has no automated live coverage and remains unverified live —
+see *Done when*.
 
 **A week and a half. The least familiar territory on the roadmap.**
 

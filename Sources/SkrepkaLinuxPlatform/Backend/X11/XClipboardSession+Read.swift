@@ -54,7 +54,7 @@ extension XClipboardSession {
             planTargets(from: value)
         case .data(let target):
             readOneTarget(target)
-        case .idle, .incremental:
+        case .idle, .incremental, .discarding:
             // A reply to a conversion that has already been abandoned — a
             // newer selection arrived while this one was in flight. Dropped
             // rather than merged: its bytes belong to a clipboard that is gone.
@@ -140,13 +140,25 @@ extension XClipboardSession {
     /// One chunk of an `INCR` transfer, or its zero-length terminator.
     func handle(propertyNotify event: XPropertyEvent) {
         note(time: event.time)
-        guard let display, let atoms else { return }
-        guard case .incremental(let target) = phase,
-            event.window == window,
+        guard let atoms else { return }
+        guard event.window == window,
             event.atom == atoms.transferProperty,
             event.state == PropertyNewValue
         else { return }
 
+        switch phase {
+        case .incremental(let target):
+            accumulateChunk(for: target)
+        case .discarding:
+            discardChunk()
+        case .idle, .targets, .data:
+            break
+        }
+    }
+
+    /// Appends one `INCR` chunk, or completes the transfer on the terminator.
+    private func accumulateChunk(for target: Atom) {
+        guard let display, let atoms else { return }
         guard
             let value = XProperty.read(
                 display: display, window: window, property: atoms.transferProperty, delete: true
@@ -166,14 +178,42 @@ extension XClipboardSession {
         }
 
         incrementalBytes.append(value.bytes)
-        guard incrementalBytes.count <= LinuxClipboardLimits.maximumRepresentationBytes else {
-            // Over the ceiling. The partial bytes go rather than being stored
-            // truncated — half an image is not a smaller image — and the rest
-            // of the targets are still worth fetching.
-            incrementalBytes = Data()
+        guard incrementalBytes.count > LinuxClipboardLimits.maximumRepresentationBytes else {
+            return
+        }
+
+        // Over the ceiling. The partial bytes go rather than being stored
+        // truncated — half an image is not a smaller image — which leaves this
+        // target unread, exactly as one the owner refused to convert: absent
+        // from `payloads`, still listed in `advertisedNames`.
+        //
+        // Converting the next target here would be an ICCCM violation as well
+        // as a race: the owner is still appending chunks to
+        // `atoms.transferProperty`, so a chunk written after the next
+        // `XConvertSelection` would either be read as that target's reply or
+        // clobber it. Drain to the terminator first.
+        incrementalBytes = Data()
+        phase = .discarding
+    }
+
+    /// Reads and drops one chunk of a transfer this session has given up on.
+    ///
+    /// The read deletes the property, which is the owner's cue to append the
+    /// next chunk, so the transfer keeps moving without anything being kept.
+    /// Nothing accumulates; the zero-length terminator ends it and frees the
+    /// property for the next target.
+    private func discardChunk() {
+        guard let display, let atoms else { return }
+        guard
+            let value = XProperty.read(
+                display: display, window: window, property: atoms.transferProperty, delete: true
+            )
+        else {
             fetchNextTarget()
             return
         }
+        guard value.bytes.isEmpty else { return }
+        fetchNextTarget()
     }
 
     private func store(bytes: Data, for target: Atom) {
@@ -196,6 +236,11 @@ extension XClipboardSession {
             finishRead()
         case .data, .incremental:
             fetchNextTarget()
+        case .discarding:
+            // A refusal for a conversion that is already over. Moving on now
+            // would abandon the drain mid-transfer, which is the thing the
+            // discard phase exists to prevent.
+            break
         }
     }
 

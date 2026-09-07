@@ -119,6 +119,55 @@ struct LinuxRepresentationMapTests {
         #expect(decoded.map { String(bytes: $0, encoding: .utf8) } == "file:///tmp/a.txt")
     }
 
+    // MARK: - Encoding
+
+    /// The other half of the `STRING` story. `decoded` transcodes Latin-1 in;
+    /// nothing transcoded back, so every caller building a payload from
+    /// ``LinuxRepresentationMap/targets(forPasteboardType:)`` served UTF-8
+    /// bytes under an atom that promises Latin-1.
+    @Test("ASCII round-trips through STRING")
+    func asciiRoundTripsThroughSTRING() throws {
+        let bytes = try #require(LinuxRepresentationMap.encoded("hello", forTarget: "STRING"))
+        #expect(bytes == Data("hello".utf8))
+        let decoded = LinuxRepresentationMap.decoded(bytes, forTarget: "STRING")
+        #expect(decoded.map { String(bytes: $0, encoding: .utf8) } == "hello")
+    }
+
+    @Test("a Latin-1 character is written as one Latin-1 byte, not two UTF-8 ones")
+    func encodesLatin1() throws {
+        let bytes = try #require(LinuxRepresentationMap.encoded("café", forTarget: "STRING"))
+        #expect(bytes == Data([0x63, 0x61, 0x66, 0xE9]))
+        let decoded = LinuxRepresentationMap.decoded(bytes, forTarget: "STRING")
+        #expect(decoded.map { String(bytes: $0, encoding: .utf8) } == "café")
+    }
+
+    /// Nil is the point rather than a gap: the caller drops `STRING` from the
+    /// payload, because bytes that decode to something else are worse than a
+    /// target an X11 client has to ask for another way.
+    @Test(
+        "text Latin-1 cannot spell yields no STRING bytes, and UTF-8 bytes everywhere else",
+        arguments: ["🎈", "日本語"]
+    )
+    func refusesUnrepresentableSTRING(text: String) {
+        #expect(LinuxRepresentationMap.encoded(text, forTarget: "STRING") == nil)
+        for target in ["text/plain", "text/plain;charset=utf-8", "UTF8_STRING"] {
+            #expect(LinuxRepresentationMap.encoded(text, forTarget: target) == Data(text.utf8))
+        }
+    }
+
+    /// What a caller relies on when `STRING` drops out: the clip is still
+    /// offered, in the spellings every modern toolkit asks for first.
+    @Test("dropping STRING still leaves the UTF-8 targets to advertise")
+    func utf8TargetsSurviveDroppingSTRING() {
+        let text = "🎈"
+        let served = LinuxRepresentationMap.targets(forPasteboardType: PasteboardType.string)
+            .filter { LinuxRepresentationMap.encoded(text, forTarget: $0) != nil }
+        #expect(!served.contains("STRING"))
+        #expect(served.contains("UTF8_STRING"))
+        #expect(served.contains("text/plain;charset=utf-8"))
+        #expect(served.contains("text/plain"))
+    }
+
     // MARK: - Declared types
 
     @Test("declared types carry both vocabularies")

@@ -112,13 +112,24 @@ enum ClipProbe {
             return "· \(decision.rejectionLogMessage ?? "no decision")"
         }
         let types = item.payload.representations.keys.sorted().joined(separator: ", ")
-        let preview = item.text
-            .replacingOccurrences(of: "\n", with: "⏎")
-            .prefix(60)
+        // Defensive, and unreachable on Linux today: `PrivacyMarkers.isConcealed`
+        // matches `org.nspasteboard.ConcealedType` and
+        // `com.agilebits.onepassword`, which no Linux clipboard produces, and
+        // KDE's hint is a *rejection* — a clip carrying it never becomes a
+        // `ClipItem` at all. Kept because `describe` is generic, and because
+        // this is the binary a user is told to run when reporting a bug, so a
+        // secret reaching stdout is the failure this whole feature exists to
+        // avoid.
+        let preview = item.isConcealed ? "<redacted>" : previewText(of: item.text)
         return """
             ✓ \(item.kind.rawValue)\(item.isConcealed ? " (concealed)" : "") \
             \(item.payload.byteCount)B [\(types)] \(preview)
             """
+    }
+
+    /// One loggable line of a clip's text.
+    private static func previewText(of text: String) -> String {
+        String(text.replacingOccurrences(of: "\n", with: "⏎").prefix(60))
     }
 
     // MARK: - copy
@@ -132,7 +143,16 @@ enum ClipProbe {
             let running = try await ClipboardBackend.start()
             var payload: [String: Data] = [:]
             for target in LinuxRepresentationMap.targets(forPasteboardType: PasteboardType.string) {
-                payload[target] = Data(text.utf8)
+                // A target whose encoding cannot spell this text is left out of
+                // the payload rather than served UTF-8 bytes: `STRING` is ICCCM
+                // Latin-1, and a client reading UTF-8 under it gets mojibake.
+                // The UTF-8 targets carry every string, so what drops out here
+                // is one spelling and never the whole clipboard.
+                guard let bytes = LinuxRepresentationMap.encoded(text, forTarget: target) else {
+                    print("omitting \(target): its encoding cannot carry this text")
+                    continue
+                }
+                payload[target] = bytes
             }
             await running.setSelection(payload)
             print("serving \(payload.count) targets — ^C to release the selection")
