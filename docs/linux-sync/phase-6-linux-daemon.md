@@ -2,6 +2,82 @@
 
 **A week and a half. This is the milestone the whole idea is for.**
 
+**Status, 2026-09-08: built, and its hardware verification is deferred by
+decision rather than blocked.** `AvahiDiscovery`, `skrepkad`, `skrepka`, the
+D-Bus interface and the systemd user unit all exist and both quality gates are
+green over them — `scripts/doctor.sh` at 538 tests / 71 suites,
+`scripts/doctor-linux.sh` at 572 tests / 75 suites. What has *not* happened is
+the twelve-step runbook against a real second machine, which is what the "done
+when" below is written as: **the owner decided on 2026-09-08 that the Steam Deck
+is not worth setting up until Phase 7's GUI exists**, so those steps wait for
+that rather than for this phase. Nothing here is blocked on them; Phase 7 can
+start.
+
+Two things in the deliverables below were **not** built, both deliberately and
+both recorded here rather than quietly dropped:
+
+- **`EmbeddedMDNSDiscovery` and `Sources/CmDNS/`.** The vendored responder is
+  this plan's own last resort — work item 1 says the ordering "is not a
+  preference, it is forced", and every distribution the project targets
+  (Ubuntu, Fedora, SteamOS) ships `avahi-daemon`. It would be dead code
+  everywhere it can currently run, with a real hazard attached: `mdns.h` sets
+  `SO_REUSEADDR` and `SO_REUSEPORT` so co-binding works for *multicast*, while
+  only one process receives **unicast** replies on 5353, so an embedded
+  responder started beside a live avahi breaks discovery for both. What exists
+  instead is the seam: `AvahiDiscovery.probe()` answers
+  `DiscoveryError.responderUnavailable` with a reason, the daemon steps over it
+  rather than refusing to start, and `skrepka doctor` reports
+  `network.responder: none` with that reason. A second conformance drops in
+  behind `PeerDiscovery` without a redesign, and
+  `AvahiDiscoveryTests.exactlyOneResponderExists` is the assertion whoever adds
+  it has to change deliberately.
+- **The clock-skew check the Risks section asks for**, in the form it asks for
+  it. "Reporting the offset against a paired peer" needs a timestamp on the
+  wire, and there is none: `PeerIdentity`'s `hello` carries a device
+  identifier, a name, a platform and a protocol version. A `clockOffsetSeconds`
+  field was written, found to be structurally always nil, and removed — a field
+  that reads as "no skew" when it means "never measured" is worse than an
+  absent one. What replaced it is `ClockCheck`, which asks
+  `org.freedesktop.timedate1` whether *this* machine's clock has been set by a
+  time server and puts the answer in `skrepka doctor`'s problems. That covers
+  the case the risk names — "a Linux box that has not run NTP" — and does not
+  cover a peer that is wrong. Closing the rest needs a protocol change, and
+  belongs to whichever phase next opens the wire.
+
+Two gaps found in review and shipped deliberately, both recorded where the code
+is as well as here:
+
+- **`BusSession` does not notice a bus connection that has died.** An
+  `avahi-daemon` restart *is* handled — `AvahiDiscovery+Reconnect.swift` watches
+  `Server.StateChanged`, and that is the common case — but a `dbus-daemon`
+  restart is not, so `skrepkad` would stay running with a bus name nothing can
+  reach until it is restarted. The obvious mechanism does not work and this is
+  worth writing down so it is not tried again: `DBusClient.withConnection` runs
+  its reply loop in a *separate* task and awaits the handler beside it
+  (`DBusClient.swift:398-431`), and the body runs under
+  `asyncChannel.executeThenClose`, which does not cancel the body when the
+  channel closes — so the parked task never unwinds on transport death, and the
+  signal-stream route fails identically because those streams end only in
+  `Connection.deinit` and two live references keep it alive. What would work is
+  invalidating the session when a *call* fails in a transport-shaped way, which
+  the now-wired `callTimeout` and `probeTimeout` already surface. That touches
+  error handling across three modules and was judged too wide to take at the
+  end of this phase. The consequence is bounded: a `dbus-daemon` restart ends
+  the graphical session on every platform this targets, and the workaround is
+  `systemctl --user restart skrepkad`.
+- **`HistorySchema` has three concurrency windows, and they are Phase 4's rather
+  than this phase's.** Found while checking that two daemons racing one database
+  is safe. `installedVersion` is read outside the `BEGIN IMMEDIATE`, so two
+  processes upgrading one file both compute from a stale version and the loser
+  re-runs `ALTER TABLE`; the four `CREATE` scripts run autocommitted, so a
+  concurrent reader can see `clip` present and `paired_device` absent; and
+  `journal_mode = WAL` is set before `busy_timeout` in the same pragma string,
+  so the one statement needing an exclusive lock runs with no busy timeout.
+  **None is reachable in production as this phase leaves it**, because
+  `DaemonRunner` claims the D-Bus name before anything opens the store, so a
+  second `skrepkad` exits before it touches a file. Reported rather than fixed:
+  the fix belongs beside the schema, not in a Phase 6 diff.
+
 ## Goal
 
 A Mac and a Linux box pair over the LAN and share history both ways, with live
@@ -29,6 +105,8 @@ to be useful.
 
 ## Deliverables
 
+Planned:
+
 ```
 Sources/SkrepkaSync/Discovery/
   AvahiDiscovery.swift              # D-Bus path
@@ -47,6 +125,57 @@ Sources/skrepka/                    # the CLI
 
 packaging/systemd/skrepkad.service  # user unit
 ```
+
+Built, 2026-09-08:
+
+```
+Sources/SkrepkaIPC/                 # the D-Bus layer: interface, documents, client
+Sources/SkrepkaLinuxPlatform/Discovery/
+  AvahiDiscovery{,+Advertising,+Browsing,+Resolution}.swift
+  AvahiNames.swift AvahiSignals.swift
+Sources/SkrepkaLinuxPlatform/Diagnostics/ClockCheck.swift
+Sources/SkrepkaDaemon/              # the daemon, as a library so it can be tested
+Sources/skrepkad/main.swift
+Sources/SkrepkaCLI/                 # the CLI, likewise
+Sources/skrepka-cli/main.swift
+packaging/systemd/skrepkad.service  scripts/install.sh
+```
+
+Four differences from the plan, each with a reason:
+
+- **`AvahiDiscovery` is in `SkrepkaLinuxPlatform`, not `SkrepkaSync`.** The
+  `wendylabsinc/dbus` package resolves on macOS perfectly well, so leaving the
+  dependency unconditional would pull D-Bus, swift-nio-extras and
+  swift-algorithms into the Mac app's graph to compile nothing — the Linux tax
+  [D-9](open-questions.md#d-9) exists to refuse. `SkrepkaLinuxPlatform` is
+  already Linux-only and already depends on `SkrepkaSync`.
+- **Hand-written D-Bus proxies, not the `DBusCodegenPlugin`**, which
+  [OQ-10](open-questions.md#oq-10) recommends. The surface needed is eight
+  method calls and six signals; written by hand it is ~150 lines that sit under
+  this repository's own quality bar, and the decoding splits into
+  `AvahiSignals` — pure functions over a `[DBusValue]` body, which is exactly
+  what makes `AvahiSignalsTests` able to drive captured payloads with no live
+  daemon, as the Tests table asks. Generated proxies would have had to live in
+  a target with `treatAllWarnings(as: .error)` relaxed. Every signature was
+  confirmed against avahi 0.8's own interface XML rather than written from
+  memory.
+- **The daemon and the CLI are each a library plus a thin executable**, the
+  split `SkrepkaProbe`/`skrepka-sync-probe` already makes: `swift test` cannot
+  import an executable target, and a composition root with no tests is where a
+  wiring mistake hides longest. The CLI's entry point is at
+  `Sources/skrepka-cli/` rather than `Sources/skrepka/` because macOS
+  filesystems are case-insensitive and `Sources/Skrepka/` is the app target —
+  the two are one directory there. The target is still named `skrepka`, via an
+  explicit `path:`.
+- **`skrepka doctor` reads a `DiagnosticsDocument`, not `DiagnosticsSnapshot`.**
+  Work item 3 asks for the shared shape so the CLI and the Phase 7 GUI cannot
+  drift, and that is what this is — one document, both readers. It is not
+  `DiagnosticsSnapshot` because that type answers macOS questions (a login-item
+  approval state, an accessibility grant) and carries none of the Linux ones
+  the same work item asks `doctor` to report plainly: which backend was chosen,
+  whether the GNOME extension is needed and missing, whether a responder is
+  running. Filling the macOS fields with constants would have been inventing
+  facts.
 
 ## Work
 

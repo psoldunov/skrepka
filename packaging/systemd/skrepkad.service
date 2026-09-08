@@ -1,0 +1,162 @@
+# Skrepka's clipboard daemon, as a systemd USER unit.
+#
+# Installed by scripts/install.sh into $XDG_CONFIG_HOME/systemd/user (which is
+# ~/.config/systemd/user unless XDG_CONFIG_HOME says otherwise), enabled with
+# `systemctl --user enable --now skrepkad.service`.
+#
+# A user unit rather than a system one, and that is load-bearing rather than a
+# preference: the daemon talks to the session D-Bus and to the compositor
+# through $WAYLAND_DISPLAY or $DISPLAY. A system unit has none of those — it
+# runs before any session exists, as a different user, on a different bus — so
+# it would come up and find no clipboard to watch. It also means no root is
+# needed to install, which is the whole point on SteamOS, where / is read-only
+# and `steamos-readonly disable` is undone by the next atomic OS update.
+#
+# Every directive here was checked against the systemd 255 manual pages
+# (freedesktop.org/software/systemd/man/255/ — systemd.unit(5),
+# systemd.service(5), systemd.exec(5), systemd.special(7)) on 2026-09-08.
+# 255 is what Ubuntu 24.04 ships and is the OLDEST of the three targets —
+# Fedora 42+ and SteamOS 3.8 are both newer — so nothing here is younger than
+# the floor. `systemd-analyze verify` was run against this file; see
+# packaging/README.md.
+
+[Unit]
+Description=Skrepka clipboard history daemon
+Documentation=https://github.com/psoldunov/skrepka
+
+# graphical-session.target is a PASSIVE target: systemd.special(7) says it "is
+# active whenever any graphical session is running", that session targets start
+# and stop it with BindsTo=, and that services scoped to a graphical session
+# "should have PartOf=graphical-session.target in their [Unit] section".
+#
+# PartOf= propagates stop and restart only — never start — so this pair says
+# "if there is a graphical session, come up after it, and go down with it", and
+# says nothing when the session never reaches that target.
+#
+# That last case is why [Install] below is WantedBy=default.target and not
+# WantedBy=graphical-session.target, which is the more obvious choice: whether
+# graphical-session.target is ever reached is up to the session, and a
+# gamescope or bare-compositor session that never pulls it in would leave a
+# unit installed there enabled and never started, with no error anywhere. Hung
+# off default.target it always starts at login; After= still orders it behind
+# the compositor whenever both are in the same start transaction, and when the
+# compositor arrives later the daemon's own bounded re-probe below bridges
+# the gap.
+#
+# The pair below reads as a mismatch — PartOf= naming a target that no
+# WantedBy= names — and it is deliberate rather than an oversight. PartOf=
+# needs no matching WantedBy= to do its job: it propagates stop and restart and
+# nothing else, so it says "go down with the graphical session" and says
+# nothing at all about coming up. WantedBy=default.target is the whole of what
+# brings this unit up, and it is chosen over WantedBy=graphical-session.target
+# because a headless machine with lingering enabled never reaches that target
+# and the daemon is genuinely useful there: it still syncs with a paired Mac
+# and still answers `skrepka list`. Hanging it off graphical-session.target
+# would leave that install enabled and never started, with no error anywhere.
+#
+# The cost, accepted knowingly: a graphical session ending stops the daemon,
+# and it comes back when the next login starts a fresh user manager. Within one
+# user-manager lifetime — a session target stopped and restarted without
+# logging out — the daemon stays stopped until that login. That is the
+# behaviour we want; capture belongs to a session, and a daemon left recording
+# across the end of one is the worse failure.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+# Start rate limiting lives in [Unit], not [Service] — systemd.unit(5).
+# Twenty starts per five minutes, against RestartSec=5s below, is ~100 seconds
+# of patience: long enough to cover a compositor that comes up after the user
+# manager does, short enough that a daemon which genuinely cannot start stops
+# instead of spinning. Past the limit systemd stops retrying and the unit sits
+# in failed with the reason in the journal; `systemctl --user reset-failed
+# skrepkad` clears the counter.
+StartLimitIntervalSec=300
+StartLimitBurst=20
+
+[Service]
+# Type=exec, not the default simple: with simple, systemd reports success as
+# soon as it has forked, "even if the service's binary cannot be invoked
+# successfully" (systemd.service(5)). exec waits for the execve, so a missing
+# or non-executable ~/.local/bin/skrepkad is a start failure the user sees
+# rather than a unit that reports active and is not running.
+Type=exec
+
+# There is deliberately NO ExecStartPre guard on WAYLAND_DISPLAY / DISPLAY here,
+# and an earlier draft of this unit had one. It was wrong in a way worth
+# recording so it is not re-added:
+#
+#   - The daemon is useful without a display. It still syncs history with a
+#     paired Mac, and `skrepka list` still answers, so a headless box with
+#     lingering enabled is a legitimate deployment — and a guard that exits 1
+#     turns that into a unit which retries twenty times and then gives up.
+#   - The decision about what a session offers already exists, in one place,
+#     with a decision table and a set of remedies: SessionProbe, in
+#     Sources/SkrepkaLinuxPlatform/Backend/SessionProbe.swift. A shell test on
+#     two environment variables is a second, worse copy of it — it cannot tell
+#     a Wayland session with no data-control global from one with, and it
+#     cannot tell GNOME (where the answer is the Shell extension) from Weston
+#     (where there is no answer at all).
+#
+# So the daemon starts, works out what it can watch, and says so — in the
+# journal on the way up, and in `skrepka doctor` whenever asked. That includes
+# the case this guard was written for: when neither variable is set but the
+# session is graphical, it names `systemctl --user import-environment` as the
+# fix, because a compositor that did not export its variables to the user
+# manager is the usual cause.
+
+ExecStart=%h/.local/bin/skrepkad
+
+# %h is the home directory of the user running the service manager
+# (systemd.unit(5), Table 5). scripts/install.sh rewrites this line only when
+# $XDG_BIN_HOME points somewhere other than ~/.local/bin.
+
+# on-failure is the documented recommendation for long-running services. It
+# covers a crash and a failed ExecStartPre — systemd.service(5) is explicit
+# that the restarted process "may also be one of the processes specified with
+# ExecStartPre=" — and deliberately does not cover a clean exit, so a daemon
+# that decides to shut down stays down.
+Restart=on-failure
+
+# RestartSec defaults to 100ms, which is a hot loop against a compositor that
+# is not up yet. Five seconds, paired with the start limit above.
+RestartSec=5
+
+# The daemon owns an SQLite database; give it room to close cleanly before
+# SIGKILL rather than the 90s default spent waiting on a process that is not
+# going to answer.
+TimeoutStopSec=10
+
+# Journal, so `journalctl --user -u skrepkad` and `journalctl --user -t
+# skrepkad` both find it. SyslogIdentifier only matters because the tag would
+# otherwise be the process name, which is the same string today but need not
+# stay that way.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=skrepkad
+
+# Hardening, restricted on purpose to directives that need no mount namespace.
+#
+# systemd.exec(5) states plainly that "some sandboxing functionality is
+# generally not available in user services … the various settings requiring
+# file system namespacing support (such as ProtectSystem=) are not available,
+# as the underlying kernel functionality is only accessible to privileged
+# processes". So ProtectSystem=, ProtectHome=, PrivateTmp= and PrivateDevices=
+# are omitted: in a user unit they are at best inert and at worst a start
+# failure (EXIT_NAMESPACE, 226) on a host that restricts unprivileged user
+# namespaces — Ubuntu 24.04 does. ProtectHome= would be wrong here anyway, the
+# history database lives under $XDG_DATA_HOME.
+#
+# Also deliberately absent, and this is the "leave it out rather than guess"
+# case: SystemCallFilter=@system-service. It is plausible for this daemon and
+# unverified against what the Swift runtime, swift-nio and libdbus actually
+# call. A wrong syscall filter kills the process at runtime rather than at
+# start, which is the worst failure mode to ship untested.
+NoNewPrivileges=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+# See the note under [Unit]. default.target is "the main target of the user
+# session, started by default" (systemd.special(7)).
+WantedBy=default.target

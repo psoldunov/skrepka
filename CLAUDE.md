@@ -13,7 +13,25 @@ scripts/notarize.sh   # build, sign, notarize, staple — for builds you send ou
 scripts/doctor.sh     # the quality gate — run after every change
 scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
 scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols from its XML
+scripts/install.sh    # install skrepkad and skrepka into ~/.local — Linux only
 ```
+
+The Linux side has its own gate and its own entry points, and neither is
+reachable from a Mac without the container:
+
+```
+scripts/linux.sh <command>   # run anything inside the Linux build image
+scripts/doctor-linux.sh      # the Linux quality gate
+```
+
+`scripts/install.sh` is the no-root install path for the Linux daemon
+(`skrepkad`) and its CLI (`skrepka`): binaries into `~/.local/bin`, a systemd
+**user** unit into `~/.config/systemd/user`. A user unit rather than a system
+one because the daemon needs the session bus and the Wayland or X11 display,
+and a system unit has neither. `--uninstall` reverses it and deliberately
+leaves the history database and the device key alone — deleting the key
+un-pairs the machine from every peer, which is not something an uninstall
+should do silently.
 
 `scripts/bundle.sh` signs without a secure timestamp, which is fine locally and
 fatal for distribution: the notary service rejects it, and the signature dies
