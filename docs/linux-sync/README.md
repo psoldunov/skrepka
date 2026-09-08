@@ -58,8 +58,8 @@ What exists today, and both quality gates are green over it:
 
 | | |
 |---|---|
-| `Sources/SkrepkaSync/` | Phase 1 complete — 29 files, model, canonical-CBOR wire codec (canonical on decode as well as encode: non-shortest heads and out-of-order map keys are refused), merge engine. No networking, no `SkrepkaCore` dependency, green on Linux |
-| `Sources/SkrepkaCore/` | compiles on Linux: 24 of 34 files. `ClipboardSource`, the `PasteboardAccess` split, the CryptoKit and logging shims, file-scope guards on the ten that cannot |
+| `Sources/SkrepkaSync/` | Phase 1 complete — 96 files, model, canonical-CBOR wire codec (canonical on decode as well as encode: non-shortest heads and out-of-order map keys are refused), merge engine. No networking, no `SkrepkaCore` dependency, green on Linux |
+| `Sources/SkrepkaCore/` | compiles on Linux: 71 of 79 files. `ClipboardSource`, the `PasteboardAccess` split, the CryptoKit and logging shims, whole-file guards on the eight that cannot — `PasteboardAccess` is not among them, since only its AppKit initialiser is fenced and the enum itself ports |
 | `scripts/linux.sh` | runs any command inside the Linux image — Swift 6.3.3 aarch64, the same version the macOS toolchain ships |
 | `scripts/doctor-linux.sh` | the Linux quality gate, Phase 4's step 8, delivered early because everything after Phase 1 needs it |
 | `Sources/SkrepkaSync/Pairing/` + `Transport/` + `Discovery/` | Phase 2 — self-signed P-256 identity, the short authentication string, pinned-certificate TLS 1.3 over swift-nio, and Bonjour discovery. `LoopbackSyncTests` pairs, exchanges indexes and fetches a payload on **both** platforms |
