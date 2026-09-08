@@ -30,7 +30,14 @@ let appSwiftSettings: [SwiftSetting] = sharedSwiftSettings + [
 /// this product and nothing else, so a platform target left out of it is a
 /// target the Linux gate never compiles.
 #if os(Linux)
-    let linuxProductTargets = ["SkrepkaCore", "SkrepkaSync", "SkrepkaLinuxPlatform"]
+    let linuxProductTargets = [
+        "SkrepkaCore", "SkrepkaSync", "SkrepkaLinuxPlatform",
+        // Phase 6. Libraries rather than the two executables on purpose: a
+        // `.executableTarget` cannot be a member of a library product, and the
+        // gate needs to compile the daemon and the CLI rather than only the
+        // twenty lines of `main.swift` that call into them.
+        "SkrepkaIPC", "SkrepkaDaemon", "SkrepkaCLI",
+    ]
 #else
     let linuxProductTargets = ["SkrepkaCore", "SkrepkaSync"]
 #endif
@@ -208,7 +215,45 @@ let package = Package(
 // right question — `Package.swift` is Swift evaluated on the build host.
 #if os(Linux)
 
+    // A pure-Swift NIO implementation of the D-Bus wire protocol, needing
+    // neither `libdbus-1` nor a system-library target. Two things in Phase 6
+    // speak D-Bus and both are Linux-only: `AvahiDiscovery` calls
+    // `org.freedesktop.Avahi` on the system bus, and the daemon exports
+    // `dev.soldunov.Skrepka1` on the session bus — the same connection type
+    // serves both, since `DBusClient.Connection` conforms to
+    // `DBusServerConnection`.
+    //
+    // Appended here rather than in the shared `dependencies:` list, and that is
+    // the D-9 rule rather than tidiness: the package resolves on macOS
+    // perfectly well, so leaving it unconditional would pull D-Bus,
+    // swift-nio-extras and swift-algorithms into the Mac app's dependency graph
+    // to compile nothing. A Linux-only dependency is one `Package.resolved`
+    // never carries on macOS — which `doctor-linux.sh` already handles, since it
+    // saves and restores that file around every containerised run.
+    //
+    // The product is spelled `DBUS`; asking for `DBus` fails resolution with
+    // "product 'DBus' … not found in package 'dbus'". The package identity is
+    // the URL's last component, `dbus`.
+    //
+    // `.upToNextMinor` rather than `from:`, and the reason is the save/restore
+    // above rather than caution. `from: "0.4.1"` means `0.4.1 ..< 1.0.0` —
+    // SwiftPM does not give a 0.x major the narrower reading some other package
+    // managers do, confirmed by dumping a manifest rather than from memory. A
+    // Linux-only dependency can never appear in the checked-in
+    // `Package.resolved`, which is resolved on macOS, and `doctor-linux.sh`
+    // restores that file around every containerised run — so nothing anywhere
+    // in the repository records which version of this package ever worked, and
+    // every Linux build re-resolves to the newest tag in range. A pre-1.0
+    // package promises nothing across a minor, and this one is load-bearing for
+    // both peer discovery and the whole IPC surface, so the range is the only
+    // place that pin can live.
+    package.dependencies.append(
+        .package(url: "https://github.com/wendylabsinc/dbus.git", .upToNextMinor(from: "0.4.1"))
+    )
+
     package.products.append(.executable(name: "skrepka-clip-probe", targets: ["skrepka-clip-probe"]))
+    package.products.append(.executable(name: "skrepkad", targets: ["skrepkad"]))
+    package.products.append(.executable(name: "skrepka", targets: ["skrepka"]))
     package.targets.append(contentsOf: [
         // libwayland-client itself. `providers:` is what turns a missing
         // package into a message naming it rather than a link failure;
@@ -251,9 +296,21 @@ let package = Package(
         // behind one engine, and `XFixesReader` for X11 — the probe that
         // decides between them, and the representation mapping and diagnostics
         // that go with them.
+        //
+        // Phase 6 added `Discovery/`: the `PeerDiscovery` conformance that talks
+        // to `org.freedesktop.Avahi`. It lives here rather than beside
+        // `BonjourDiscovery` in `SkrepkaSync` because the dependency, not the
+        // code, is the problem — see the `dbus` dependency above.
         .target(
             name: "SkrepkaLinuxPlatform",
-            dependencies: ["SkrepkaCore", "SkrepkaSync", "CWaylandClient", "CWaylandProtocols", "CX11"],
+            dependencies: [
+                "SkrepkaCore", "SkrepkaSync", "CWaylandClient", "CWaylandProtocols", "CX11",
+                // For `BusSession` alone — the parked-connection plumbing every
+                // Skrepka process that holds a bus connection needs, and which
+                // would otherwise be written twice.
+                "SkrepkaIPC",
+                .product(name: "DBUS", package: "dbus"),
+            ],
             swiftSettings: sharedSwiftSettings,
             // xfixes.pc lists x11 under `Requires.private`, which pkg-config
             // expands only for `--static`, so the CX11 target contributes
@@ -273,6 +330,75 @@ let package = Package(
         .testTarget(
             name: "SkrepkaLinuxPlatformTests",
             dependencies: ["SkrepkaLinuxPlatform", "SkrepkaCore", "SkrepkaSync", "CX11"],
+            swiftSettings: sharedSwiftSettings
+        ),
+        // Phase 6: the daemon's D-Bus surface, and nothing else.
+        //
+        // Its own target because it has two consumers that must not link each
+        // other. `skrepkad` exports the interface and `skrepka` calls it, and
+        // folding the shared half into the daemon would have every CLI
+        // invocation link SQLite, libwayland and Xlib to print a list. It is
+        // also the half a third client reimplements: the Phase 8 GNOME Shell
+        // extension is JavaScript and mirrors exactly what is declared here.
+        .target(
+            name: "SkrepkaIPC",
+            dependencies: [.product(name: "DBUS", package: "dbus")],
+            swiftSettings: sharedSwiftSettings
+        ),
+        // Phase 6: the daemon, as a library so it can be tested.
+        //
+        // The split `SkrepkaProbe`/`skrepka-sync-probe` already makes: `swift
+        // test` cannot import an executable target, and everything worth
+        // asserting about a composition root is inside it.
+        .target(
+            name: "SkrepkaDaemon",
+            dependencies: [
+                "SkrepkaCore", "SkrepkaSync", "SkrepkaLinuxPlatform", "SkrepkaIPC",
+                .product(name: "DBUS", package: "dbus"),
+                .product(name: "Logging", package: "swift-log"),
+            ],
+            swiftSettings: sharedSwiftSettings
+        ),
+        // Phase 6: the CLI, split from its executable for the same reason.
+        //
+        // Depends on `SkrepkaIPC` and not on `SkrepkaDaemon`: the CLI is a D-Bus
+        // client of a daemon in another process, and a CLI that could reach the
+        // daemon's types directly would eventually reach its database too.
+        .target(
+            name: "SkrepkaCLI",
+            dependencies: ["SkrepkaIPC", .product(name: "DBUS", package: "dbus")],
+            swiftSettings: sharedSwiftSettings
+        ),
+        .executableTarget(
+            name: "skrepkad",
+            dependencies: ["SkrepkaDaemon"],
+            swiftSettings: sharedSwiftSettings
+        ),
+        // The CLI's entry point, and the one target in this package that needs
+        // an explicit `path:`.
+        //
+        // Its sources cannot live in `Sources/skrepka`, because the app target
+        // already owns `Sources/Skrepka` and macOS filesystems are
+        // case-insensitive by default — the two are one directory there, so
+        // `main.swift` lands inside the app target and SwiftPM reports it as an
+        // unhandled file. The *target* is still called `skrepka`, because that
+        // is what the built binary is named and what the user types.
+        //
+        // No collision in the manifest itself: `Skrepka` exists only on macOS
+        // and `skrepka` only on Linux, so the two names are never resolved
+        // together.
+        .executableTarget(
+            name: "skrepka",
+            dependencies: ["SkrepkaCLI"],
+            path: "Sources/skrepka-cli",
+            swiftSettings: sharedSwiftSettings
+        ),
+        .testTarget(
+            name: "SkrepkaDaemonTests",
+            dependencies: [
+                "SkrepkaDaemon", "SkrepkaIPC", "SkrepkaCLI",
+                "SkrepkaCore", "SkrepkaSync", "SkrepkaLinuxPlatform",
+            ],
             swiftSettings: sharedSwiftSettings
         ),
     ])
