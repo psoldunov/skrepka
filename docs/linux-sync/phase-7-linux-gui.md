@@ -12,9 +12,12 @@ Hotkey → picker → select → pasted, on KDE and on Sway, with a working tray
 - Phase 6 done and the daemon useful on its own. That is what makes this phase
   optional rather than load-bearing, and it is worth having that safety net
   before starting the most uncertain work on the list.
-- [D-4](open-questions.md#d-4) is settled: **three days for the bake-off, and if
-  both toolkits fail, the project stops at Phase 6.** Not Qt, not XWayland-only.
-  Step 1 below is how the decision gets made with code rather than on paper.
+- [D-4](open-questions.md#d-4)'s three-day budget and stop rule remain in force,
+  but its toolkit outcome and exit status are provisional pending the required
+  Steam Deck/KDE validation: **if both toolkits fail, the project stops at
+  Phase 6.** Not Qt, not XWayland-only. Step 1 below is how the decision gets
+  made with code rather than on paper; its current raw GTK4 direction is not a
+  final toolkit selection.
 - [OQ-12](open-questions.md#oq-12) answered, because the mark has to render.
 - **A KDE session to build against: the Steam Deck, in Desktop Mode**
   ([D-10](open-questions.md#d-10)). It supplies `xdg-desktop-portal-kde` for the
@@ -66,9 +69,11 @@ prototypes/                     # step 1, kept or deleted deliberately
 
 ### What has landed, 2026-09-08
 
-Step 1 of the "Work" list is done; step 2 has its foundation and not its rows;
-the portable branding work is preparatory for step 4; thumbnails (step 6) remain
-unstarted; steps 3, 4 and 5 are otherwise untouched.
+Step 1 of the "Work" list has a Sway prototype; its toolkit direction and
+D-4 status remain provisional pending the required Steam Deck/KDE validation.
+Step 2 has its foundation and not its rows; the portable branding work is
+preparatory for step 4; thumbnails (step 6) remain unstarted; steps 3, 4 and 5
+are otherwise untouched.
 
 ```
 Sources/CGtk4/{shim.h,module.modulemap}          GTK4 + gtk4-layer-shell, one module
@@ -152,18 +157,20 @@ re-run the bake-off.
 
 <a id="the-outcome-of-step-1"></a>
 
-### The outcome of step 1
+### The current direction from step 1
 
-**Decided 2026-09-08: raw GTK4 through C interop, with no third-party Swift GUI
-framework. `Sources/CGtk4/` is the module map; `Sources/SkrepkaLinuxUI/` is the
-GUI.** D-4's exit condition is not triggered — the palette can be expressed, and
-was, inside the budget.
+**Provisional 2026-09-08: raw GTK4 through C interop, with no third-party Swift
+GUI framework, is the current implementation direction pending the required
+Steam Deck/KDE validation. `Sources/CGtk4/` is the module map;
+`Sources/SkrepkaLinuxUI/` is the GUI.** D-4's exit condition remains provisional:
+the palette can be expressed under Sway inside the budget, but the required KDE
+validation has not happened.
 
 The prototype is kept at [`prototypes/palette-bakeoff/`](../../prototypes/palette-bakeoff/)
-with the harness that produced these results and a screenshot of the palette
+with the harness that produced the Sway results and a screenshot of the palette
 over the app underneath, on a 1280×800 output.
 
-**The fact that decided it, and it is the same fact for all four candidates:**
+**The fact behind the current direction, and it is the same fact for all four candidates:**
 *none of them ships a `gtk4-layer-shell` binding, and none ships a
 StatusNotifierItem.* Grepped, at the version named, for `layer_shell`,
 `gtk_layer_`, `LayerShell`, `StatusNotifier`, `AppIndicator`: zero hits in every
@@ -182,7 +189,7 @@ README:
 | **`AparokshaUI/adwaita-swift` (Codeberg, `main`)** | **Not archived — it moved.** Active, commit 2026-09-04. The strongest wrapper on paper: a declarative keyboard-shortcut API, a public `UnsafeMutablePointer<AdwApplicationWindow>?` escape hatch, and the only one that requires Swift 6.3. | **Does not compile against GTK 4.14.5**, which is what Ubuntu 24.04 ships: its `adwshim.c` uses `GtkInterfaceColorScheme`, absent from those headers. That is partly an artefact of the build image — Arch, which SteamOS derives from, has a newer GTK — so this is a "not today", not a "never". Set against it anyway: it is libadwaita, GNOME's design language, and the test rig is KDE; it declares `swift-tools-version: 6.3;(experimentalCGen)`, an experimental interop flag; and it pulls three further packages from a single-maintainer forge. |
 | **Qt through C++ interop, XWayland-only** | — | Rejected by [D-4](open-questions.md#d-4), not reopened. |
 
-**Why raw interop wins rather than merely ties.** This repository already has
+**Why raw interop is the current direction rather than merely tying.** This repository already has
 two hand-written system-library targets — `CWaylandClient` and `CX11` — with
 module maps, `static inline` shims and explicit `.linkedLibrary` settings.
 `CGtk4` is the third of exactly the same shape, so it is the idiom the codebase
@@ -216,7 +223,9 @@ where this makes none.
 Under a headless sway 1.9 on a 1280×800 output, with real key events through
 `zwp_virtual_keyboard_manager_v1` and a screenshot through `grim`:
 
-- the palette maps as an overlay layer surface, undecorated and centred;
+- the palette maps as an overlay layer surface, undecorated and centred on the
+  single output used by the harness; active-output placement remains
+  unverified;
 - the app underneath keeps its text and its selection, and **gets keyboard focus
   back the moment the palette closes** — confirmed from sway's own tree;
 - typing filters, Down navigates, Return selects.

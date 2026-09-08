@@ -114,12 +114,12 @@ swaymsg -t get_tree | grep -c '"name": "victim"' || true
 echo "== 5. keys, through zwp_virtual_keyboard_manager_v1 =="
 # wtype is a second, independent client of the same protocol Skrepka would use
 # to paste — so this line is two tests at once.
-wtype "br" 2>&1 || echo "wtype failed: $?"
+wtype "br" 2>&1 || exit "$?"
 sleep 1.5
 grim "${OUT}/palette-typed.png" 2>&1 && echo "screenshot after typing ok"
-wtype -k Down 2>&1 || echo "wtype Down failed"
+wtype -k Down 2>&1 || exit "$?"
 sleep 1
-wtype -k Return 2>&1 || echo "wtype Return failed"
+wtype -k Return 2>&1 || exit "$?"
 sleep 2
 echo "--- palette said: ---"
 cat "${OUT}/palette.log"

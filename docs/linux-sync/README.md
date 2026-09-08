@@ -46,16 +46,17 @@ vendored `EmbeddedMDNSDiscovery` fallback, and the peer-clock-offset half of the
 skew check, which needs a timestamp the wire does not carry.
 
 [Phase 7](phase-7-linux-gui.md) — the Linux GUI, and the widest error bars on
-the list — is **under way, and its exit condition did not fire.**
-[D-4](open-questions.md#d-4) routed one failure mode back here: if neither Swift
-GUI toolkit could express the floating palette within a three-day budget, the
-work stopped at Phase 6. The palette can be expressed, was, and the answer is
-**raw GTK4 through C interop** rather than any of the three Swift wrappers —
-none of which ships the two things this phase actually needs, a `gtk4-layer-shell`
-binding and a StatusNotifierItem. The bake-off, the rejected options and the
-screenshot are in [that phase's document](phase-7-linux-gui.md#the-outcome-of-step-1).
+the list — is **under way. Its toolkit direction, Step 1 result and D-4 exit
+status are provisional pending the required Steam Deck/KDE validation.**
+[D-4](open-questions.md#d-4) keeps its three-day budget and stop rule: if neither
+Swift GUI toolkit can express the floating palette, the work stops at Phase 6.
+The palette can be expressed under Sway, and the current implementation
+direction is **raw GTK4 through C interop** rather than any of the three Swift
+wrappers — none of which ships the two things this phase actually needs, a
+`gtk4-layer-shell` binding and a StatusNotifierItem. The bake-off, the rejected
+options and the screenshot are in [that phase's document](phase-7-linux-gui.md#the-outcome-of-step-1).
 
-What has landed is step 1, the picker's palette and key map, and
+What has landed is the Sway prototype for step 1, the picker's palette and key map, and
 [OQ-12](open-questions.md#oq-12)'s portable path IR; what has not is the picker's
 rows, the hotkey, the tray and Settings. One new question came out of it —
 [OQ-16](open-questions.md#oq-16), how the picker pastes into the app underneath

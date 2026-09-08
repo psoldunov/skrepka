@@ -58,9 +58,9 @@ public enum MarkSegment: Equatable, Sendable {
     ///
     /// Flattening at construction time would make the IR lossy for the sake of
     /// one fewer case, and the end caps are exactly where a rounding difference
-    /// between two renderers would show. Both destinations draw arcs natively —
-    /// `CGMutablePath.addArc` and `cairo_arc` — so nothing is gained by
-    /// approximating one here.
+    /// between two renderers would show. The intended destinations can draw arcs
+    /// natively — `CGMutablePath.addArc` and, in a future Linux renderer,
+    /// `cairo_arc` — so nothing is gained by approximating one here.
     case arc(MarkArc)
     case close
 }
@@ -69,9 +69,9 @@ public enum MarkSegment: Equatable, Sendable {
 /// is drawn.
 ///
 /// The type OQ-12 asked for. `PaperclipPath` renders one to `CGPath` on Apple
-/// platforms; a Cairo renderer draws the same value on Linux. The coordinate
-/// table lives here, once, so the icon, the menu bar and the tray cannot drift
-/// apart across two platforms as well as across three surfaces.
+/// platforms; a future Cairo renderer can draw the same value on Linux. The
+/// coordinate table lives here, once, so the icon, the menu bar and the tray
+/// cannot drift apart across two platforms as well as across three surfaces.
 /// Its ``boundingBox`` lives in `MarkPath+Bounds.swift`, which is where the
 /// curve arithmetic that keeps it in step with `CGPath.boundingBoxOfPath` is.
 public struct MarkPath: Equatable, Sendable {

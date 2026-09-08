@@ -1067,7 +1067,7 @@ knowing:
   *different* approximation on each renderer, at exactly the place a difference
   would show. Both destinations draw arcs natively, so nothing is gained by
   approximating here.
-- **`scripts/make-icon.sh` now compiles three files, not one.** That was the
+- **`scripts/make-icon.sh` now compiles four branding source files, not one.** That was the
   price of the split and it is stated in the script; a missing file is an
   unresolved identifier at build time rather than a wrong icon, which is the
   failure mode to want.

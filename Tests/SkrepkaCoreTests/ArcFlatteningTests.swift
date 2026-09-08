@@ -45,6 +45,17 @@ struct ArcFlatteningTests {
         #expect(arcToCubicSegments(Self.arc(from: 0, to: 2 * .pi)).count == 4)
     }
 
+    @Test("Clockwise full turns keep four clockwise cubics", arguments: [-2 * Double.pi, 2 * Double.pi])
+    func clockwiseFullTurns(end: Double) throws {
+        let arc = Self.arc(from: 0, to: end, clockwise: true)
+        let curves = try #require(Self.replay(arcToCubicSegments(arc), from: arc))
+        #expect(curves.count == 4)
+        for (index, curve) in curves.enumerated() {
+            let angle = -Double(index + 1) * .pi / 2
+            #expect(Self.distance(curve.end, Self.point(at: angle)) < 1e-9)
+        }
+    }
+
     @Test("Turning nowhere is not turning all the way round")
     func aZeroSweepIsNotAFullCircle() {
         // The two are one keystroke apart and mean opposite things, which is

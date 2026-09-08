@@ -1,22 +1,23 @@
 # The Phase 7 toolkit bake-off
 
-This is the prototype that decided which toolkit the Linux GUI is built on. It
-is **a record, not a maintained artefact** — see "What this is not" below.
+This is the prototype that set the current toolkit direction for the Linux GUI.
+The direction remains provisional pending Steam Deck/KDE validation. It is **a
+record, not a maintained artefact** — see "What this is not" below.
 
-The decision itself, with the evidence and the rejected options, is written up
+The current direction, with the evidence and the rejected options, is written up
 in [`docs/linux-sync/phase-7-linux-gui.md`](../../docs/linux-sync/phase-7-linux-gui.md).
 This directory is the thing that produced it, kept so that nobody has to re-run
 a three-day bake-off to check the conclusion.
 
-## What it proved
+## What it demonstrated under Sway
 
-Run under a headless sway inside the Linux build image, on a 1280×800 output —
+Run under a headless sway inside the Linux build image, on a single 1280×800 output —
 the Steam Deck's panel, which is the screen Phase 7 is written against:
 
 | Step 1 requirement | Result |
 | --- | --- |
 | A window that takes keyboard input without the app underneath losing what it was doing | Yes. The app underneath keeps its text and selection, loses keyboard focus while the palette is up, and has it back the moment the palette closes. |
-| Placement centred on the active output, not output zero | Yes. An unanchored layer surface is placed by the compositor, and it places it on the output it assigned. |
+| Placement centred on the active output, not output zero | **Unverified.** The harness used one output, so it showed centring on that output but did not test active-output selection. |
 | Escape dismisses, arrows navigate, Return selects | Yes, all three, driven by real key events through `zwp_virtual_keyboard_manager_v1`. |
 | The first keystroke after the hotkey lands in the search field | Yes — but only with `keyboard_interactivity = exclusive`. See below. |
 | It works on Sway **and** on KDE | Sway: demonstrated. **KDE: not demonstrated** — no KDE session was available. KWin's registration of `zwlr_layer_shell_v1` was confirmed by reading its source, which is evidence and not a test. |
@@ -54,7 +55,7 @@ docker run --rm -u "$(id -u):$(id -g)" -e HOME=/home-mnt \
   skrepka-linux:6.3 bash -c 'swift build && bash harness.sh'
 ```
 
-`harness.sh` starts sway on the headless backend, opens a plain toplevel to be
+`harness.sh` starts sway on the headless backend with one output, opens a plain toplevel to be
 the app underneath, opens the palette over it, types at it with `wtype`, and
 prints what sway thinks is focused before, during and after.
 

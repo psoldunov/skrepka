@@ -60,6 +60,26 @@ static inline GtkWidget *skrepka_window_as_widget(GtkWindow *window) {
 	return GTK_WIDGET(window);
 }
 
+// MARK: - Main loop
+
+static inline gboolean skrepka_quit_main_loop_callback(gpointer data) {
+	g_main_loop_quit((GMainLoop *)data);
+	return G_SOURCE_REMOVE;
+}
+
+/// Queue a main-loop quit on the loop's own context.
+///
+/// Queuing rather than calling `g_main_loop_quit` directly matters when a
+/// caller stops the loop after it is published but before `g_main_loop_run`:
+/// the idle callback runs after `g_main_loop_run` marks the loop running, so
+/// the stop cannot be lost.
+static inline void skrepka_schedule_main_loop_quit(GMainLoop *loop) {
+	GSource *source = g_idle_source_new();
+	g_source_set_callback(source, skrepka_quit_main_loop_callback, loop, NULL);
+	g_source_attach(source, g_main_loop_get_context(loop));
+	g_source_unref(source);
+}
+
 // MARK: - Geometry
 
 /// The height, in pixels, of the shortest monitor GDK knows about — or 0 when

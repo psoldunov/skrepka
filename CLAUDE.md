@@ -69,7 +69,7 @@ app, and `notarize.sh` does for its inner `bundle.sh` call, because that `.app`
 has no ticket yet.
 
 The app icon, the menu bar mark and the in-app artwork are all one drawing,
-split across three files in `Sources/SkrepkaCore/Branding/`:
+split across four files in `Sources/SkrepkaCore/Branding/`:
 
 - `PaperclipMark.swift` — the artwork. The coordinate table, transcribed from
   `scripts/paperclip.svg`. **This is the file to edit to change the mark.**
@@ -79,7 +79,7 @@ split across three files in `Sources/SkrepkaCore/Branding/`:
 - `PaperclipPath.swift` — the Core Graphics renderer, and nothing else. Fenced
   with `#if canImport(CoreGraphics)`.
 
-`make-icon.sh` *compiles* `make-icon.swift` with all three linked in beside it,
+`make-icon.sh` *compiles* `make-icon.swift` with all four branding source files linked in beside it,
 so plain `swift scripts/make-icon.swift` no longer works — it takes one file.
 Change the mark in one place.
 

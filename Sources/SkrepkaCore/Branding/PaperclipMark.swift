@@ -11,9 +11,9 @@
 /// so the app, the menu bar and `AppIcon.icns` cannot drift apart.
 ///
 /// Platform-free: a ``MarkPath``, not a `CGPath`. `PaperclipPath` renders it
-/// with Core Graphics where that exists, and Linux draws the same value with
-/// Cairo — which is what makes "the two platforms show the same mark" a fact
-/// rather than an intention. OQ-12.
+/// with Core Graphics where that exists, and a future Linux Cairo renderer can
+/// draw the same value — which is what will make "the two platforms show the
+/// same mark" a fact rather than an intention. OQ-12.
 public enum PaperclipMark {
     /// The mark at design-box scale, top-left origin: the coordinate table in
     /// the order the SVG states it — the outer edge from the bottom-left U-turn

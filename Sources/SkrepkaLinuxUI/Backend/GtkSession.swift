@@ -53,13 +53,14 @@ public enum GtkSession {
     /// Runs GTK's main loop until ``stop()``. Returns when it does.
     ///
     /// The loop is never unreffed, and that is the fix for a race rather than
-    /// an oversight. ``stop()`` reads the address and then calls
-    /// `g_main_loop_quit` on it; if `run()` were to unref on the way out, a
-    /// `stop()` that had already read a live address and not yet made its call
-    /// would quit freed memory. Publishing the loop for the process's lifetime
-    /// closes that window completely. It costs one leaked `GMainLoop` at exit,
-    /// which the kernel reclaims with everything else — a process has one main
-    /// loop, so this does not grow.
+    /// an oversight. ``stop()`` atomically claims the published address and
+    /// queues an idle callback on the loop's context; if `run()` has not yet
+    /// entered `g_main_loop_run`, the callback runs after GLib marks the loop
+    /// running, so the stop cannot be lost. Keeping the loop reference for the
+    /// process's lifetime also closes the window where a concurrent stop could
+    /// quit freed memory. It costs one leaked `GMainLoop` at exit, which the
+    /// kernel reclaims with everything else — a process has one main loop, so
+    /// this does not grow.
     public static func run() {
         guard let loop = g_main_loop_new(nil, 0) else { return }
         current.store(UInt(bitPattern: loop), ordering: .releasing)
@@ -68,20 +69,20 @@ public enum GtkSession {
 
     /// Ends the loop ``run()`` is in, from another thread.
     ///
-    /// A no-op before `run()` has published a loop. After `run()` returns it
-    /// quits an already-stopped loop, which GLib defines as doing nothing.
+    /// A no-op before `run()` has published a loop or after another stop has
+    /// claimed it, including after that stop has made `run()` return.
     ///
-    /// **Not** for a POSIX signal handler. `g_main_loop_quit` is thread-safe —
-    /// it takes the loop's context mutex — and that is exactly what makes it
-    /// async-signal-unsafe: a handler that interrupts a thread already holding
-    /// that mutex deadlocks. A handler that wants to stop the daemon should
+    /// **Not** for a POSIX signal handler. The source scheduling here and
+    /// `g_main_loop_quit` are not async-signal-safe: the latter takes the
+    /// loop's context mutex, so a handler that interrupts a thread already
+    /// holding it can deadlock. A handler that wants to stop the daemon should
     /// write to a self-pipe, or the daemon should install its handler with
     /// `g_unix_signal_add`, which dispatches on the loop instead of on the
     /// signal stack.
     public static func stop() {
-        let address = current.load(ordering: .acquiring)
+        let address = current.exchange(0, ordering: .acquiringAndReleasing)
         guard address != 0, let loop = OpaquePointer(bitPattern: address) else { return }
-        g_main_loop_quit(loop)
+        skrepka_schedule_main_loop_quit(loop)
     }
 
     /// The running loop's address, so ``stop()`` has something to quit.
@@ -95,7 +96,9 @@ public enum GtkSession {
     ///
     /// Shared state at all because `stop()` is the one thing here a caller
     /// might reasonably reach from another thread — the daemon's shutdown path
-    /// — and `g_main_loop_quit` is documented as safe to call from any *thread*.
-    /// Zero means "not started". It is never set back to zero: see ``run()``.
+    /// — and the queued quit callback is dispatched by the loop's context.
+    /// Zero means "not published". A pre-publication stop leaves it zero and
+    /// does not become a sticky request for a later `run()`; a published loop is
+    /// exchanged back to zero by the stop that claims it.
     private static let current = Atomic<UInt>(0)
 }

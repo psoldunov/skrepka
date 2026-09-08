@@ -191,12 +191,7 @@ struct SVGPathParser {
 /// circle happening to land close together.
 func arcToCubicSegments(_ arc: MarkArc) -> [MarkSegment] {
     let (center, radius, startAngle) = (arc.center, arc.radius, arc.startAngle)
-    var sweep = arc.endAngle - arc.startAngle
-    if arc.clockwise {
-        while sweep > 0 { sweep -= 2 * .pi }
-    } else {
-        while sweep < 0 { sweep += 2 * .pi }
-    }
+    let sweep = arc.clockwise ? -arc.sweep : arc.sweep
 
     let pieces = max(1, Int((abs(sweep) / (.pi / 2)).rounded(.up)))
     let step = sweep / Double(pieces)
