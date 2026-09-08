@@ -3,10 +3,10 @@
 // of another.
 //
 // Built, not interpreted — scripts/make-icon.sh compiles this file together
-// with Sources/SkrepkaCore/Branding/PaperclipPath.swift so the icon, the menu
-// bar mark and the in-app artwork all come from one path. Run it through that
-// script rather than `swift scripts/make-icon.swift`, which cannot see the
-// second file.
+// with Sources/SkrepkaCore/Branding/MarkPath.swift, MarkPath+Bounds.swift,
+// PaperclipMark.swift and PaperclipPath.swift, so the icon, the menu bar mark
+// and the in-app artwork all come from one drawing. Run it through that script
+// rather than `swift scripts/make-icon.swift`, which takes one file.
 //
 //   make-icon <output.iconset> [variant]
 //   make-icon --preview <directory>

@@ -68,11 +68,20 @@ Set `SKREPKA_REVEAL=0` to suppress it — `run.sh` does, because it launches the
 app, and `notarize.sh` does for its inner `bundle.sh` call, because that `.app`
 has no ticket yet.
 
-The app icon, the menu bar mark and the in-app artwork are all one path:
-`PaperclipPath` in `Sources/SkrepkaCore/Branding/`, transcribed from
-`scripts/paperclip.svg`. `make-icon.sh` *compiles* `make-icon.swift` with that
-file linked in beside it, so plain `swift scripts/make-icon.swift` no longer
-works — it cannot see the second file. Change the mark in one place.
+The app icon, the menu bar mark and the in-app artwork are all one drawing,
+split across three files in `Sources/SkrepkaCore/Branding/`:
+
+- `PaperclipMark.swift` — the artwork. The coordinate table, transcribed from
+  `scripts/paperclip.svg`. **This is the file to edit to change the mark.**
+- `MarkPath.swift` — the portable path types the table is written in, plus
+  `MarkPath+Bounds.swift` for the bounding box both renderers fit against.
+  Platform-free, so Linux can draw the same mark with Cairo (OQ-12).
+- `PaperclipPath.swift` — the Core Graphics renderer, and nothing else. Fenced
+  with `#if canImport(CoreGraphics)`.
+
+`make-icon.sh` *compiles* `make-icon.swift` with all three linked in beside it,
+so plain `swift scripts/make-icon.swift` no longer works — it takes one file.
+Change the mark in one place.
 
 Every script pins `DEVELOPER_DIR` to `/Applications/Xcode.app/Contents/Developer`.
 Do not build with a bare `swift build`: `xcode-select -p` points at
