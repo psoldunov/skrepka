@@ -1,4 +1,4 @@
-# Skrepka
+# Skrepka (SKRYEP-kuh)
 
 A clipboard-history manager for macOS 26. Lives in the menu bar with no Dock
 icon; press ⌘⇧V anywhere and a Liquid Glass picker opens over whatever app you
