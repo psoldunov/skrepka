@@ -414,10 +414,15 @@ its answer, the date, and where it was verified.
 | [OQ-9](#oq-9) | Is adding properties to a populated `@Model` a lightweight migration? | **answered — yes.** No `SchemaMigrationPlan` | nothing — downgraded by [D-8](#d-8) |
 | [OQ-10](#oq-10) | Avahi service registration from Swift | **answered** — Swift talks to `org.freedesktop.Avahi` over D-Bus today; no shelling out needed | Phase 6, spike before Phase 4 |
 | [OQ-11](#oq-11) | `Observation` and `@MainActor` on Linux | **answered — works**, with two Linux-only gotchas | Phase 4 |
-| [OQ-12](#oq-12) | Are `CGPath` / `CGAffineTransform` available on Linux? | **answered — no**, and neither is the `CoreGraphics` module | Phase 4 exclusion, Phase 7 tray |
+| [OQ-12](#oq-12) | Are `CGPath` / `CGAffineTransform` available on Linux? | **answered — no**, and neither is the `CoreGraphics` module. **Resolved 2026-09-08**: the portable IR is `MarkPath` | Phase 4 exclusion, Phase 7 tray |
 | [OQ-13](#oq-13) | swift-format, SwiftLint, Periphery on Linux; SwiftPM multi-target build | **answered** — and `scripts/doctor-linux.sh` now exists | Phase 4's quality gate |
 | [OQ-14](#oq-14) | What do CrossPaste / ClipCascade / ClipSync actually do on the wire? | **answered** — only CrossPaste syncs history, and none of the three syncs deletion | nothing, but it was 20 minutes |
 | [OQ-15](#oq-15) | The pairing code lets whoever moves second choose its inputs | **mitigated 2026-09-06** — widened to 64 bits; commit-then-reveal still owed | a wire change to make before this ships |
+| [OQ-16](#oq-16) | How does the picker paste into the app underneath, on Wayland? | **open, raised 2026-09-08** — no mechanism works on both KWin and Sway | **Phase 7's "done when" #2**, and it has no plan behind it |
+
+**Amended 2026-09-08:** [OQ-16](#oq-16) joins them and is different in kind —
+it needs no hardware, it needs a decision, and unlike the other four it blocks
+something. It was found while building Phase 7 and is written up below.
 
 The four still open all need hardware this machine does not have:
 **[OQ-1](#oq-1)** and **[OQ-2](#oq-2)** need a second Apple device, and
@@ -1048,6 +1053,29 @@ work, not needed before then — nothing in Phases 4 through 6 draws the mark.
 `scripts/paperclip.svg` stays the design source and `scripts/make-icon.sh` keeps
 compiling one file, so the icon and the menu bar still cannot drift.
 
+**Done 2026-09-08.** `Sources/SkrepkaCore/Branding/MarkPath.swift` is the IR and
+`PaperclipMark.swift` is the coordinate table, both platform-free;
+`PaperclipPath.swift` keeps its public API and is now only the Core Graphics
+renderer, still fenced with `#if canImport(CoreGraphics)`.
+
+Two things came out differently from the sketch above, and both are worth
+knowing:
+
+- **The IR has an `arc` case, not just `move`/`line`/`curve`/`close`.** The two
+  end caps are circular arcs, and flattening them into cubics at construction
+  time would make the IR lossy for the sake of one fewer case — while putting a
+  *different* approximation on each renderer, at exactly the place a difference
+  would show. Both destinations draw arcs natively, so nothing is gained by
+  approximating here.
+- **`scripts/make-icon.sh` now compiles three files, not one.** That was the
+  price of the split and it is stated in the script; a missing file is an
+  unresolved identifier at build time rather than a wrong icon, which is the
+  failure mode to want.
+
+The Cairo renderer is deliberately *not* written yet: it has nothing to draw
+into until the tray exists, and a renderer with no caller is speculative surface
+in a repository that keeps a dead-code scan in its gate.
+
 <a id="oq-13"></a>
 ### OQ-13 — The Linux quality gate's tooling
 
@@ -1269,3 +1297,54 @@ than a wide code, so widening bought the room to do it deliberately.
 done **before this ships to anyone**, not after, because it is a wire change and
 `ProtocolVersion` would have to carry it — which is cheap while the installed
 base is one machine ([D-8](#d-8)) and expensive once it is not.
+
+<a id="oq-16"></a>
+### OQ-16 — How does the picker paste into the app underneath, on Wayland?
+
+**Raised 2026-09-08, while building Phase 7. Open, and it blocks a "done when"
+that has no plan behind it.**
+
+[Phase 7](phase-7-linux-gui.md) says the picker is done when "Return pastes into
+the app underneath". Nothing anywhere in this repository or these documents says
+*how*, and the answer is not the one the phase document assumes by silence. The
+macOS app synthesises ⌘V through the Accessibility API. Wayland has no
+equivalent, deliberately: a client cannot inject input into another client.
+
+**What exists, and which compositor implements it.** Verified by grepping the
+compositors' own source, not from documentation:
+
+| Mechanism | KWin (Plasma 6.4/6.5) | Sway (wlroots) |
+|---|---|---|
+| `zwp_virtual_keyboard_manager_v1` — what `wtype` uses | **Not implemented.** Zero occurrences of the interface anywhere in `KDE/kwin`. | Yes, `sway/server.c`, gated on the same unsandboxed-client check as layer-shell. |
+| `org.freedesktop.portal.RemoteDesktop` → `NotifyKeyboardKeycode` | Yes, `xdg-desktop-portal-kde/src/remotedesktop.cpp`. Also `ConnectToEIS`, forwarded to KWin. | **No backend at all.** `xdg-desktop-portal-wlr` declares only `Screenshot` and `ScreenCast`. |
+| `ydotool` / `uinput` | Works — it is a kernel device, not a Wayland protocol. | Works, same reason. |
+
+So **the two Wayland-native mechanisms are each single-compositor**, and they
+are single-compositor in opposite directions. There is no protocol that covers
+both target machines.
+
+**The three ways out, none free:**
+
+1. **`ydotool`/uinput.** The only mechanism that is genuinely
+   compositor-agnostic, because it is below the compositor. Costs a `/dev/uinput`
+   permission: root, or a udev rule the user installs, which `scripts/install.sh`
+   is explicitly a *no-root* installer and would have to stop being.
+2. **Two code paths** — `zwp_virtual_keyboard_manager_v1` on wlroots, the
+   RemoteDesktop portal on KWin. No root. Costs two implementations of the same
+   sentence, a one-time consent dialog on KWin (`persist_mode = 2` plus a stored
+   `restore_token` means once ever, not once per paste), and nothing at all on
+   GNOME, where [OQ-3](#oq-3) says the portal may show a permanent screen-sharing
+   badge.
+3. **Do not paste.** Put the clip on the clipboard and let the user press Ctrl+V
+   themselves. Costs one keystroke, needs no permission, works everywhere, and
+   is what several Linux clipboard managers already do. It also means Phase 7's
+   "done when" #2 is rewritten rather than met.
+
+**Recommendation, for whoever decides:** (3) for the first version and (2)
+behind a setting afterwards. Option 1 trades the project's no-root install — one
+of [D-10](#d-10)'s stated properties — for one keystroke, which is a bad trade
+for a clipboard manager. Option 3 ships, and it does not foreclose option 2.
+
+**What it blocks.** Phase 7's "done when" #2, as written. Everything else in
+Phase 7 — the palette, the picker, the hotkey, the tray, settings — is
+independent of it and none of it is waiting on the answer.

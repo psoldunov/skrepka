@@ -45,10 +45,22 @@ were deliberately not built and are recorded at the top of that document — the
 vendored `EmbeddedMDNSDiscovery` fallback, and the peer-clock-offset half of the
 skew check, which needs a timestamp the wire does not carry.
 
-Next is [Phase 7](phase-7-linux-gui.md) — the Linux GUI, and the widest error
-bars on the list. [D-4](open-questions.md#d-4) already routes one failure mode
-back here: if neither Swift GUI toolkit can express the floating palette within
-a three-day budget, the work stops at Phase 6 rather than escalating.
+[Phase 7](phase-7-linux-gui.md) — the Linux GUI, and the widest error bars on
+the list — is **under way, and its exit condition did not fire.**
+[D-4](open-questions.md#d-4) routed one failure mode back here: if neither Swift
+GUI toolkit could express the floating palette within a three-day budget, the
+work stopped at Phase 6. The palette can be expressed, was, and the answer is
+**raw GTK4 through C interop** rather than any of the three Swift wrappers —
+none of which ships the two things this phase actually needs, a `gtk4-layer-shell`
+binding and a StatusNotifierItem. The bake-off, the rejected options and the
+screenshot are in [that phase's document](phase-7-linux-gui.md#the-outcome-of-step-1).
+
+What has landed is step 1, the picker's palette and key map, and
+[OQ-12](open-questions.md#oq-12)'s portable path IR; what has not is the picker's
+rows, the hotkey, the tray and Settings. One new question came out of it —
+[OQ-16](open-questions.md#oq-16), how the picker pastes into the app underneath
+— and it is the first entry on this list that is blocking rather than merely
+open.
 
 What is left of [Phase 4](phase-4-core-on-linux.md) is small: its storage week is
 done and `scripts/doctor-linux.sh` exists, so only the tooling notes in its
@@ -78,8 +90,8 @@ What exists today, and both quality gates are green over it:
 | `Sources/SkrepkaDaemon/` | Phase 6 — the composition root, `FileTrustStore` (the `0600`-at-creation identity file), the session-loss rebuild, and the D-Bus service |
 | `Sources/SkrepkaCLI/` + `Sources/skrepka-cli/` | Phase 6 — `list`, `copy`, `pair`, `peers`, `doctor`, with `--json` from the start |
 | `packaging/systemd/` + `scripts/install.sh` | Phase 6 — the user unit and the no-root installer [D-10](open-questions.md#d-10) forces. Phase 8 hardens both rather than inventing a second layout |
-| `scripts/doctor.sh` | **538 tests / 71 suites green** |
-| `scripts/doctor-linux.sh` | **664 tests / 92 suites green, SwiftLint included** — 17 of them driving a headless Sway and an Xvfb started by the test |
+| `scripts/doctor.sh` | **555 tests / 74 suites green** |
+| `scripts/doctor-linux.sh` | **706 tests / 97 suites green, SwiftLint included** — 17 of them driving a headless Sway and an Xvfb started by the test |
 
 Two things the plan assumed and that turned out to be false, both recorded in
 [`open-questions.md`](open-questions.md): `SwiftCBOR` is unsuitable and the codec
