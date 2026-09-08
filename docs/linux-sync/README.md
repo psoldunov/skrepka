@@ -79,7 +79,7 @@ What exists today, and both quality gates are green over it:
 | `Sources/SkrepkaCLI/` + `Sources/skrepka-cli/` | Phase 6 — `list`, `copy`, `pair`, `peers`, `doctor`, with `--json` from the start |
 | `packaging/systemd/` + `scripts/install.sh` | Phase 6 — the user unit and the no-root installer [D-10](open-questions.md#d-10) forces. Phase 8 hardens both rather than inventing a second layout |
 | `scripts/doctor.sh` | **538 tests / 71 suites green** |
-| `scripts/doctor-linux.sh` | **659 tests / 90 suites green, SwiftLint included** — 17 of them driving a headless Sway and an Xvfb started by the test |
+| `scripts/doctor-linux.sh` | **664 tests / 92 suites green, SwiftLint included** — 17 of them driving a headless Sway and an Xvfb started by the test |
 
 Two things the plan assumed and that turned out to be false, both recorded in
 [`open-questions.md`](open-questions.md): `SwiftCBOR` is unsuitable and the codec

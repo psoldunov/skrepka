@@ -29,6 +29,14 @@ struct PendingPairing: Sendable {
     /// the moment the one it replaced timed out, and could never be answered.
     let id = UUID()
 
+    /// The peer exactly as the exchange proved it.
+    ///
+    /// Held whole, rather than only the fields the document shows, because the
+    /// side that *dialled* has to write the record itself when the answer is
+    /// yes — and it has to write it before it reports "paired". See
+    /// ``Daemon/answerPairing(deviceID:accept:)``.
+    let peer: PairedPeer
+
     let deviceID: SyncDeviceID
     let fingerprint: String
     let name: String?
@@ -46,6 +54,7 @@ struct PendingPairing: Sendable {
         expiresAt: Date,
         sink: AsyncStream<Bool>.Continuation
     ) {
+        peer = proposal.peer
         deviceID = proposal.peer.deviceID
         fingerprint = proposal.peer.deviceID.fingerprint
         // The dialling side records the fingerprint as a name, because a

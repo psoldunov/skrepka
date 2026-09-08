@@ -41,8 +41,10 @@ extension AvahiDiscovery {
             // streams ``advertisementFailures()`` handed out would tell every
             // listener the record is gone for good. A descriptor change is not
             // that. The same teardown `republish(_:)` uses, for the same
-            // reason.
-            dropAdvertisement()
+            // reason. Awaited: `publish` below runs `EntryGroupNew`, and
+            // starting that while avahi is still destroying the old group
+            // leaves this device advertising the service twice.
+            await dropAdvertisement()
             try await publish(descriptor)
         }
     }

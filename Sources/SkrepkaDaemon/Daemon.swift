@@ -125,9 +125,21 @@ public actor Daemon {
     /// ``syncAcceptTask``. ``publishAdvertisement()`` runs on every `.ready` and
     /// on every republish — a pairing window opening or closing is one — so the
     /// fire-and-forget version left one live watcher per successful publish, and
-    /// a single collision then called ``advertisementLost(_:)`` once for each of
-    /// them.
+    /// a single collision then called ``advertisementLost(_:generation:)`` once
+    /// for each of them.
     var advertisementFailureTask: Task<Void, Never>?
+
+    /// Which watcher the live one is.
+    ///
+    /// Cancelling the previous task does not stop a failure it has *already*
+    /// taken off the stream from landing, so a loss belonging to a replaced
+    /// watcher could clear ``isPublished`` and set ``responderProblem`` for the
+    /// advertisement that succeeded it — a healthy republish reported as broken
+    /// by `skrepka doctor` for as long as the daemon runs. Stamping the watcher
+    /// and comparing the stamp is how ``advertisementLost(_:generation:)``
+    /// tells the two apart, the same shape
+    /// `AvahiDiscovery.serverWatchGeneration` and `BusSession.epoch` use.
+    var advertisementGeneration = 0
     var isPublished = false
     var responderProblem: String?
 
@@ -176,11 +188,18 @@ public actor Daemon {
     var pairingObservers: [UUID: AsyncStream<PendingPairing>.Continuation] = [:]
     var isStopping = false
 
+    /// - Parameter peers: where paired-device records go. Nil means the SQLite
+    ///   store beside the history, which is the only thing production passes —
+    ///   the parameter exists so a test can hand over a store whose
+    ///   `savePairedPeer` throws, which is the difference between
+    ///   ``answerPairing(deviceID:accept:)`` reporting a pairing and lying
+    ///   about one, and cannot be induced on a real database.
     public init(
         options: DaemonOptions,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         logger: Logger = Logger(label: "skrepka.daemon"),
-        pairingAnswerTimeout: Duration = Daemon.defaultPairingAnswerTimeout
+        pairingAnswerTimeout: Duration = Daemon.defaultPairingAnswerTimeout,
+        peers: (any PairedDeviceStoring)? = nil
     ) throws {
         self.options = options
         self.environment = environment
@@ -192,7 +211,7 @@ public actor Daemon {
         store = try SQLiteHistoryStore(location: options.storeURL(environment: environment))
         trust = FileTrustStore(
             url: options.deviceKeyURL(environment: environment),
-            peers: store
+            peers: peers ?? store
         )
     }
 

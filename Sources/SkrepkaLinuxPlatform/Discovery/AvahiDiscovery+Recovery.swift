@@ -229,7 +229,9 @@ extension AvahiDiscovery {
     /// ``SkrepkaSync/AdvertisementChange/republish`` case — one narrow teardown
     /// for both of the ways an advertisement is replaced rather than ended.
     private func republish(_ descriptor: ServiceDescriptor) async {
-        dropAdvertisement()
+        // Awaited before `publish` creates the replacement group, so the two
+        // never exist at once — see ``dropAdvertisement()``.
+        await dropAdvertisement()
         do {
             try await publish(descriptor)
         } catch {

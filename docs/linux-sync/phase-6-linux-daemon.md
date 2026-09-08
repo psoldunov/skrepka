@@ -6,7 +6,7 @@
 decision rather than blocked.** `AvahiDiscovery`, `skrepkad`, `skrepka`, the
 D-Bus interface and the systemd user unit all exist and both quality gates are
 green over them — `scripts/doctor.sh` at 538 tests / 71 suites,
-`scripts/doctor-linux.sh` at 659 tests / 90 suites. What has *not* happened is
+`scripts/doctor-linux.sh` at 664 tests / 92 suites. What has *not* happened is
 the twelve-step runbook against a real second machine, which is what the "done
 when" below is written as: **the owner decided on 2026-09-08 that the Steam Deck
 is not worth setting up until Phase 7's GUI exists**, so those steps wait for
@@ -48,9 +48,23 @@ both recorded here rather than quietly dropped:
   cover a peer that is wrong. Closing the rest needs a protocol change, and
   belongs to whichever phase next opens the wire.
 
-One gap found in review and shipped deliberately, recorded where the code is as
-well as here:
+Two things found in review and recorded where the code is as well as here — one
+a limitation, one a gap:
 
+- **Transport-loss recovery ships, and half of it is unverified.** A call that
+  fails in a transport-shaped way — a throw, a timeout, a reply that never came
+  — now invalidates the `BusSession`, so the next call opens a fresh connection
+  and `AvahiDiscovery` rebuilds the browse and the advertisement through the
+  same `recover()` an `avahi-daemon` restart uses. An error *reply* does not
+  invalidate: that is the bus alive and answering. What is **not** verified is
+  the resubscribe half. `invalidate()` releases both references that were
+  keeping the dead `Connection` alive, so `Connection.deinit` should now finish
+  the signal streams and the server watch should re-subscribe to the
+  replacement — but that is a claim about the DBUS package's retain graph under
+  a real bus, and it cannot be settled without one. If it never fires, what is
+  lost is narrower than the original gap: the browse and the advertisement are
+  back on a live connection either way, and only a *later* `avahi-daemon`
+  restart would go unnoticed.
 - **`HistorySchema` has three concurrency windows, and they are Phase 4's rather
   than this phase's.** Found while checking that two daemons racing one database
   is safe. `installedVersion` is read outside the `BEGIN IMMEDIATE`, so two
@@ -174,13 +188,32 @@ one process receives **unicast** replies on port 5353 — the documented conflic
 with Avahi and `systemd-resolved`. Running the embedded responder alongside a
 live `avahi-daemon` breaks discovery for both.
 
-KDE Connect does this from C++ over the same bus API, so it is clearly possible;
-what is unverified is doing it from Swift, whose D-Bus bindings are thin. The
-fallbacks, in order, are: generate proxies from
-`busctl introspect org.freedesktop.Avahi`, or shell out to `avahi-publish` and
-`avahi-browse` and parse them. Shelling out is ugly and it works, and a working
-ugly path beats a blocked elegant one — but decide deliberately and write down
-why.
+**Shipped, 2026-09-08: hand-written proxies over `wendylabsinc/dbus`.** KDE
+Connect does this from C++ over the same bus API; doing it from Swift was the
+part this plan called unverified, and it is now verified by the code. Every
+method name, object path, interface and argument signature is confirmed against
+avahi 0.8's own interface XML rather than inferred — including the `i`/`i`
+interface and protocol flags at `-1`, the `u` flags word, the `q` port, and
+`aay` rather than `as` for the TXT record. The signals the three object
+interfaces emit are directed at the client's unique name, so they need no
+`AddMatch`; `Server.StateChanged` is broadcast and does need one, which is the
+kind of asymmetry that only turns up by reading the daemon's own source.
+
+The two fallbacks are recorded as **alternatives not taken**, not as future
+work:
+
+- **Generating proxies from `busctl introspect org.freedesktop.Avahi`**, which
+  [OQ-10](open-questions.md#oq-10) recommended. Rejected for the reason given
+  under the deliverables above: the surface needed is small enough that
+  hand-writing it is ~150 lines, and hand-writing it is what let the decoding
+  split into `AvahiSignals` — pure functions over a `[DBusValue]` body, which is
+  what makes those tests drivable from captured payloads with no live daemon.
+- **Shelling out to `avahi-publish` and `avahi-browse` and parsing them.** The
+  reasoning for why this would have been acceptable is worth keeping rather than
+  re-deriving: it is ugly and it works, and a working ugly path beats a blocked
+  elegant one. It was never reached because the D-Bus path was not blocked. It
+  remains the answer if a future distribution ships an avahi whose D-Bus
+  interface has moved but whose command-line tools have not.
 
 Advertise `_skrepka._tcp` with the same TXT record the Mac side publishes, minus
 the `fp=` key Phase 1 folded into `id=`.

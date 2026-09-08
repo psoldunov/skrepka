@@ -180,22 +180,61 @@ extension Daemon {
     /// serves `skrepka`, the Phase 8 GNOME extension and anything else on the
     /// session bus, and each of them would otherwise have to know the
     /// asymmetry — see ``PairError/oneSidedWarning``.
-    public func answerPairing(deviceID: SyncDeviceID, accept: Bool) -> ActionDocument {
+    ///
+    /// **Accepting an outgoing proposal records the peer before it answers.**
+    /// The dialling side has already finished its exchange by the time a human
+    /// reads the short authentication string, so this side writes the record
+    /// here or nowhere — and answering first meant a `savePairedPeer` that
+    /// threw left the client having printed "paired" for a pairing this device
+    /// did not record while the far side did. That is the one-sided state
+    /// ``PairError/oneSidedWarning`` exists to report, reached from the other
+    /// direction, so the failure says the same sentence.
+    public func answerPairing(deviceID: SyncDeviceID, accept: Bool) async -> ActionDocument {
         guard let pairing = pending[deviceID] else {
             return .refused("no pairing is waiting for that device", subject: deviceID.hex)
         }
-        pairing.answer(accept)
-        guard !accept else { return .succeeded("paired", subject: deviceID.hex) }
+        guard accept else {
+            pairing.answer(false)
+            return Self.refusal(direction: pairing.direction, subject: deviceID.hex)
+        }
         guard pairing.direction == PairingDirection.outgoing else {
+            // Inbound: `SyncResponder` writes the record itself once the
+            // proposal it is parked on answers yes, so there is nothing to save
+            // here — see ``confirmPairing(_:direction:)``, which is what it is
+            // parked on.
+            pairing.answer(true)
+            return .succeeded("paired", subject: deviceID.hex)
+        }
+        do {
+            try await trust.savePairedPeer(pairing.peer)
+        } catch {
+            logger.error(
+                "could not record a paired device",
+                metadata: ["error": .string(String(describing: error))]
+            )
+            pairing.answer(false)
+            return .refused(
+                "this device could not be recorded as paired. \(PairError.oneSidedWarning)",
+                subject: deviceID.hex
+            )
+        }
+        pairing.answer(true)
+        await pairedSetMayHaveChanged()
+        return .succeeded("paired", subject: deviceID.hex)
+    }
+
+    /// What a refusal says, which depends on which way the proposal ran.
+    private static func refusal(direction: String, subject: String) -> ActionDocument {
+        guard direction == PairingDirection.outgoing else {
             // Inbound: the far side is still inside its own dial and this
             // refusal is the answer it gets, so neither machine records the
             // other. Nothing to warn about.
-            return .succeeded("refused", subject: deviceID.hex)
+            return .succeeded("refused", subject: subject)
         }
         // The journal entry is written by ``completeOutgoing(_:proposalID:accepted:)``,
         // which is also where an outgoing proposal nobody answered at all ends
         // up — one line for both, rather than one here and none for the timeout.
-        return .succeeded("refused. \(PairError.oneSidedWarning)", subject: deviceID.hex)
+        return .succeeded("refused. \(PairError.oneSidedWarning)", subject: subject)
     }
 
     /// Every proposal that arrives from now on.

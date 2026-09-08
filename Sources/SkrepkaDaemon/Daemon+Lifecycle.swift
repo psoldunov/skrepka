@@ -17,7 +17,28 @@ extension Daemon {
     /// stepped over rather than fatal. The reverse is not true: sync that
     /// cannot start leaves a working local clipboard manager, which is the
     /// product Phase 4 already shipped.
+    ///
+    /// Queued, for the reason ``Daemon/openPairing(for:)`` is. This suspends
+    /// inside ``startClipboard()`` and again inside ``startSync()``, and
+    /// ``stop()`` is queued — so a shutdown that began during either
+    /// suspension ran ``performStop()`` to completion, clearing the runtime and
+    /// stopping the listeners, and then bring-up resumed and started discovery
+    /// *after* `stop()` had returned. The daemon was left holding a listener
+    /// and a published record that nothing would ever tear down. Both halves on
+    /// one queue makes the order total whichever arrives first, and it is the
+    /// answer rather than re-reading ``isStopping`` after each `await`: a
+    /// re-check has to be remembered at every suspension point added from now
+    /// on, and the queue cannot be forgotten.
     public func start() async throws {
+        try await enqueueAnswering { try await $0.performStart() }.value
+    }
+
+    func performStart() async throws {
+        // Not a re-check after a suspension: this is the first statement, and
+        // it means a `stop()` that was queued ahead of this one has already
+        // finished. Bringing a stopped daemon up behind its own shutdown is
+        // the other half of the bug the queue closes.
+        guard !isStopping else { return }
         try await startClipboard()
         guard options.syncEnabled else {
             logger.notice("sync is off; watching the clipboard only")

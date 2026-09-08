@@ -190,14 +190,18 @@ extension Daemon {
         }
     }
 
-    /// Saves the peer if the answer was yes, and forgets the proposal either
-    /// way.
+    /// Forgets the proposal once it has been answered, and says so in the
+    /// journal when nothing was recorded.
     ///
     /// Separate from the inbound path because the two record the pairing at
     /// different moments: `SyncResponder` writes the peer itself once its
     /// `confirmPairing` returns true, and the dialling side has already
     /// finished its exchange by the time a human looks at the words — so this
-    /// side has to write the record here or nowhere.
+    /// side has to write the record from the answer itself. It writes it in
+    /// ``answerPairing(deviceID:accept:)`` rather than here, because a save
+    /// that throws has to reach the client that asked; what is left for this is
+    /// the outcome no caller is waiting on, which is an outgoing proposal that
+    /// expired with nobody answering it.
     private func watchOutgoingAnswer(
         _ answers: AsyncStream<Bool>,
         proposal: PairingProposal,
@@ -229,32 +233,30 @@ extension Daemon {
         }
     }
 
+    /// Forgets the proposal, and puts an outgoing pairing that ended
+    /// unaccepted into the journal.
+    ///
+    /// `async` with nothing left to await, deliberately: the save it used to
+    /// wait on has moved to ``answerPairing(deviceID:accept:)``, and its one
+    /// caller is an unstructured task that reaches this across the actor.
     func completeOutgoing(
         _ proposal: PairingProposal,
         proposalID: UUID,
         accepted: Bool
     ) async {
         forget(proposal.peer.deviceID, proposalID: proposalID)
-        guard accepted else {
-            // Refused here, or unanswered until the deadline. Either way the
-            // far side has already run its own `confirmPairing` and may have
-            // saved this device, so the asymmetry goes in the journal as well
-            // as in the answer the client gets — see ``PairError/oneSidedWarning``.
-            logger.notice(
-                "an outgoing pairing ended unaccepted here; \(PairError.oneSidedWarning)",
-                metadata: ["peer": .string(proposal.peer.deviceID.fingerprint)]
-            )
-            return
-        }
-        do {
-            try await trust.savePairedPeer(proposal.peer)
-            await pairedSetMayHaveChanged()
-        } catch {
-            logger.error(
-                "could not record a paired device",
-                metadata: ["error": .string(String(describing: error))]
-            )
-        }
+        // An accepted proposal has already been saved and reported by
+        // ``answerPairing(deviceID:accept:)``, which is the only thing that can
+        // answer yes — so all that is left here is dropping the entry.
+        guard !accepted else { return }
+        // Refused here, or unanswered until the deadline. Either way the far
+        // side has already run its own `confirmPairing` and may have saved this
+        // device, so the asymmetry goes in the journal as well as in the answer
+        // the client gets — see ``PairError/oneSidedWarning``.
+        logger.notice(
+            "an outgoing pairing ended unaccepted here; \(PairError.oneSidedWarning)",
+            metadata: ["peer": .string(proposal.peer.deviceID.fingerprint)]
+        )
     }
 
 }
