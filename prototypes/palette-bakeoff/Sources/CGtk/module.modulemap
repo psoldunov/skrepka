@@ -1,0 +1,10 @@
+// GTK4 plus gtk4-layer-shell, as a Swift module.
+//
+// [system] suppresses warnings from headers this repository does not own, which
+// otherwise fail the build outright — every target here is compiled with
+// `.treatAllWarnings(as: .error)`, and GTK's headers are full of deprecation
+// attributes that trip it.
+module CGtk [system] {
+    header "shim.h"
+    export *
+}

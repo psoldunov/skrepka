@@ -36,7 +36,7 @@ let appSwiftSettings: [SwiftSetting] = sharedSwiftSettings + [
         // `.executableTarget` cannot be a member of a library product, and the
         // gate needs to compile the daemon and the CLI rather than only the
         // twenty lines of `main.swift` that call into them.
-        "SkrepkaIPC", "SkrepkaDaemon", "SkrepkaCLI",
+        "SkrepkaIPC", "SkrepkaDaemon", "SkrepkaCLI", "SkrepkaLinuxUI",
     ]
 #else
     let linuxProductTargets = ["SkrepkaCore", "SkrepkaSync"]
@@ -291,6 +291,19 @@ let package = Package(
                 .yum(["libX11-devel", "libXfixes-devel"]),
             ]
         ),
+        // GTK4 and gtk4-layer-shell behind the one C module Phase 7's picker
+        // imports. `pkgConfig` names the layer-shell package because that is
+        // the dependency a normal desktop may lack; GTK itself is a transitive
+        // cflags requirement of its .pc file. Noble has no development package
+        // for it, so docker/Dockerfile.linux builds it from source instead.
+        .systemLibrary(
+            name: "CGtk4",
+            pkgConfig: "gtk4-layer-shell-0",
+            providers: [
+                .apt(["libgtk4-layer-shell-dev"]),
+                .yum(["gtk4-layer-shell-devel"]),
+            ]
+        ),
         // Phase 5: the two `ClipboardSource` conformances Linux has —
         // `DataControlReader` for Wayland, driving both data-control protocols
         // behind one engine, and `XFixesReader` for X11 — the probe that
@@ -330,6 +343,27 @@ let package = Package(
         .testTarget(
             name: "SkrepkaLinuxPlatformTests",
             dependencies: ["SkrepkaLinuxPlatform", "SkrepkaCore", "SkrepkaSync", "CX11"],
+            swiftSettings: sharedSwiftSettings
+        ),
+        // Phase 7: the Linux view layer. `gtk4-layer-shell-0.pc` lists GTK and
+        // Wayland under Requires.private, which pkg-config expands for
+        // `--cflags` but for `--libs` only under `--static`, so CGtk4
+        // contributes -lgtk4-layer-shell and nothing else. Link the GTK/GLib
+        // symbols used by the Swift and inline-C code explicitly.
+        .target(
+            name: "SkrepkaLinuxUI",
+            dependencies: ["SkrepkaCore", "CGtk4"],
+            swiftSettings: sharedSwiftSettings,
+            linkerSettings: [
+                .linkedLibrary("gtk-4"),
+                .linkedLibrary("gio-2.0"),
+                .linkedLibrary("gobject-2.0"),
+                .linkedLibrary("glib-2.0"),
+            ]
+        ),
+        .testTarget(
+            name: "SkrepkaLinuxUITests",
+            dependencies: ["SkrepkaLinuxUI", "SkrepkaCore"],
             swiftSettings: sharedSwiftSettings
         ),
         // Phase 6: the daemon's D-Bus surface, and nothing else.
