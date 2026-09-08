@@ -11,6 +11,11 @@
     /// surfaces all share, and none of those can tell you it went wrong: a mirrored
     /// or off-centre clip renders happily and inks exactly as many pixels as a
     /// correct one. So the arithmetic is pinned here.
+    ///
+    /// The artwork itself — whether the outline still matches
+    /// `scripts/paperclip.svg` — is pinned platform-free in
+    /// ``PaperclipMarkTests``. What is left here needs Core Graphics: fitting a
+    /// `CGPath` into a box, and the flip.
     @Suite("Paperclip path")
     struct PaperclipPathTests {
         private static let box = CGRect(x: 37, y: 11, width: 240, height: 160)
@@ -70,42 +75,68 @@
             #expect(zip(byHand, byHelper).allSatisfy { $0.x == $1.x && $0.y == $1.y })
         }
 
-        // MARK: - The design source
-
-        @Test("The path still draws what scripts/paperclip.svg draws")
-        func matchesTheDesignSource() throws {
+        @Test("Core Graphics sweeps the end caps the way the SVG does")
+        func coreGraphicsArcsMatchTheSource() throws {
+            // The one thing ``PaperclipMarkTests`` cannot see, and the reason it
+            // cannot: that suite expands both sides through the *same* arc
+            // flattening, which is right for asking "is the table still the
+            // artwork" and blind to what happens when ``MarkSegment/arc``
+            // reaches `CGMutablePath.addArc` on this platform. A cap swept the
+            // wrong way, or an angle measured from the wrong axis, passes every
+            // other test in this repository and ships a paperclip with two
+            // bulges pointing inward.
+            //
+            // Compared as geometry rather than segment for segment, because the
+            // two sides legitimately disagree about *decomposition*: the parser
+            // splits the SVG's `A` command into 90° cubics, Core Graphics
+            // splits `addArc` its own undocumented way, and neither is wrong.
+            // The bounding box is what a reversed cap actually moves — the
+            // bulge stops sticking out past the wire — so it is what to assert
+            // on.
             let svg = try String(contentsOf: Self.designSource, encoding: .utf8)
-            let source = try SVGPathParser.path(from: Self.pathData(in: svg))
-            let transcribed = PaperclipPath.outline()
+            let stated = PaperclipPath.render(try SVGPathParser.path(from: Self.pathData(in: svg)))
+                .boundingBoxOfPath
+            let drawn = PaperclipPath.outline().boundingBoxOfPath
 
-            // Segment for segment, control points included — comparing what the two
-            // draw is not enough, because a mistyped control point moves the curve
-            // by a third of its own error and hides inside antialiasing.
-            #expect(Self.commands(of: source) == Self.commands(of: transcribed))
-
-            let stated = Self.points(of: source)
-            let written = Self.points(of: transcribed)
-            #expect(stated.count == written.count)
-            let drift =
-                zip(stated, written)
-                .map { max(abs($0.x - $1.x), abs($0.y - $1.y)) }
-                .max() ?? .greatestFiniteMagnitude
-            // Everything agrees exactly except across the two end caps, where the
-            // SVG states a radius rounded to three places (57.907) and the Swift
-            // derives it from the chord it spans (57.9065). That walks the
-            // reconstructed arc by 0.26 units in a 1200-unit box, and that is the
-            // floor: this catches a dropped segment, a reversed cap and a digit
-            // gone astray in the units or tenths place, and cannot see a change too
-            // small to draw differently.
-            #expect(drift < 0.4)
+            // One unit in a 1200-unit box. The floor is the same rounding
+            // ``PaperclipMarkTests`` documents — the SVG states the cap radius
+            // as 57.907 where the Swift derives 57.9065 from the chord — plus
+            // the control-point hull the two decompositions do not share. A
+            // reversed cap moves an edge by a whole radius, which is fifty
+            // times this.
+            #expect(abs(stated.minX - drawn.minX) < 1)
+            #expect(abs(stated.minY - drawn.minY) < 1)
+            #expect(abs(stated.maxX - drawn.maxX) < 1)
+            #expect(abs(stated.maxY - drawn.maxY) < 1)
         }
 
-        @Test("A path command the parser cannot read fails loudly")
-        func unreadableSourceThrows() {
-            // Guards the test above from passing because the SVG stopped parsing.
-            #expect(throws: SVGPathParser.Failure.self) {
-                try SVGPathParser.path(from: "M0,0 Q10,10 20,0")
-            }
+        @Test("The portable bounding box is the one Core Graphics fits against")
+        func portableBoundsMatchCoreGraphics() throws {
+            // Load-bearing rather than tidy. Both renderers place the mark by
+            // dividing a destination rectangle by this box — Core Graphics
+            // through `transform(fitting:in:)` above, Cairo through the same
+            // arithmetic on `MarkPath.boundingBox`. A box that is looser on one
+            // side does not draw a looser mark, it draws a smaller one, offset,
+            // on that platform only. Nothing else in the repository can see
+            // that: every other test measures one platform against itself.
+            //
+            // The box this replaced was the control hull, which came out
+            // 1103.692 × 1203.635 against Core Graphics' 1084.554 × 1200.000 —
+            // 1.77% wide and 0.30% tall. That is the regression this asserts is
+            // gone.
+            let portable = try #require(PaperclipMark.outline().boundingBox)
+            let coreGraphics = PaperclipPath.outline().boundingBoxOfPath
+
+            // Measured agreement is 2.6e-5, and the floor under it is real:
+            // Core Graphics flattens `addArc` into cubics before measuring,
+            // and the standard quarter-circle approximation falls inside the
+            // true circle by ~2.7e-4 of the radius — 0.016 units on these
+            // 57.9-unit caps. A thousandth of a unit is forty times the
+            // observed drift and twenty thousand times smaller than the hull.
+            #expect(abs(portable.origin.x - coreGraphics.minX) < 0.001)
+            #expect(abs(portable.origin.y - coreGraphics.minY) < 0.001)
+            #expect(abs(portable.width - coreGraphics.width) < 0.001)
+            #expect(abs(portable.height - coreGraphics.height) < 0.001)
         }
 
         // MARK: - Support
@@ -125,12 +156,6 @@
             let rest = svg[opening.upperBound...]
             let closing = try #require(rest.firstIndex(of: "\""))
             return String(rest[..<closing])
-        }
-
-        private static func commands(of path: CGPath) -> [CGPathElementType] {
-            var commands: [CGPathElementType] = []
-            path.applyWithBlock { commands.append($0.pointee.type) }
-            return commands
         }
 
         /// Every coordinate the path carries, control points included, in the order

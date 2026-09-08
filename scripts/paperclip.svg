@@ -5,9 +5,11 @@
   Repo, with the two square-cut free ends replaced by semicircular caps so the
   wire terminates the way a real one does.
 
-  This file is the design source. Sources/SkrepkaCore/Branding/PaperclipPath.swift
-  carries the same outline as a CGPath and is what the app, the menu bar and the
-  icon renderer actually draw; keep the two in step.
+  This file is the design source. Sources/SkrepkaCore/Branding/PaperclipMark.swift
+  carries the same outline as a MarkPath, which PaperclipPath.swift renders with
+  Core Graphics for the app, the menu bar and the icon renderer; keep the two in
+  step. Tests/SkrepkaCoreTests/PaperclipMarkTests.swift parses this file and
+  fails if they drift.
 
   Design box: 1200 x 1200, top-left origin. Wire width 115.81, so each cap is a
   semicircle of radius 57.907.

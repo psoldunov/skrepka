@@ -5,10 +5,6 @@ import Testing
 
 @testable import SkrepkaDaemon
 
-#if canImport(Glibc)
-    import Glibc
-#endif
-
 /// The device identity file.
 ///
 /// Two properties, and both are the kind that pass by accident and fail
@@ -23,10 +19,18 @@ struct FileTrustStoreTests {
         return url
     }
 
-    static func mode(of url: URL) -> mode_t? {
-        var status = stat()
-        guard stat(url.path, &status) == 0 else { return nil }
-        return status.st_mode & 0o777
+    /// The file's permission bits, through Foundation rather than `stat`.
+    ///
+    /// `stat()` is the obvious spelling and does not survive Swift 6's
+    /// MemberImportVisibility on Linux: the `stat` *struct* is re-exported by
+    /// several modules, the compiler names whichever one it wants today, and
+    /// naming that module gets a different demand tomorrow — it asked for
+    /// `CoreFoundation`, then for `CDispatch`, on the same file. Foundation
+    /// declares `.posixPermissions` itself, so there is no re-export to chase.
+    static func mode(of url: URL) -> Int? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        guard let bits = (attributes?[.posixPermissions] as? NSNumber)?.intValue else { return nil }
+        return bits & 0o777
     }
 
     /// **At creation, not after.**

@@ -246,12 +246,6 @@ enum SelectionSource {
     case pointer
 }
 
-/// Whether a chosen entry pastes with its formatting or as plain text.
-enum PasteStyle: Sendable {
-    case rich
-    case plainText
-}
-
 extension Comparable {
     func clamped(to range: ClosedRange<Self>) -> Self {
         min(max(self, range.lowerBound), range.upperBound)

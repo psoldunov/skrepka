@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-06T16:42:39.138Z",
+	"generatedAt": "2026-09-08T12:25:01.516Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -83,6 +83,14 @@
 					"app-diagnostics",
 					"core-diagnostics"
 				]
+			},
+			{
+				"kind": "region",
+				"label": "Linux GUI foundation",
+				"wraps": [
+					"linux-picker",
+					"gtk-session"
+				]
 			}
 		],
 		"components": [
@@ -132,6 +140,31 @@
 				],
 				"sublabel": "non-activating NSPanel + SwiftUI list",
 				"type": "frontend"
+			},
+			{
+				"id": "linux-picker",
+				"label": "Linux picker",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaLinuxUI/Picker"
+					}
+				],
+				"sublabel": "GTK4 + layer-shell palette foundation",
+				"type": "frontend"
+			},
+			{
+				"id": "gtk-session",
+				"label": "GTK session & C bridge",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaLinuxUI/Backend"
+					},
+					{
+						"path": "Sources/CGtk4"
+					}
+				],
+				"sublabel": "main loop/layer-shell probe and C shim",
+				"type": "backend"
 			},
 			{
 				"id": "settings-ui",
@@ -309,7 +342,7 @@
 						"path": "Sources/SkrepkaCore/Store/HistoryStore+Projection.swift"
 					}
 				],
-				"sublabel": "SwiftData; retention; file icons, kind, size \u0026 preview off-actor",
+				"sublabel": "SwiftData; retention; file icons, kind, size & preview off-actor",
 				"type": "database"
 			},
 			{
@@ -346,9 +379,12 @@
 				"sources": [
 					{
 						"path": "Sources/SkrepkaCore/Models"
+					},
+					{
+						"path": "Sources/SkrepkaCore/Picker"
 					}
 				],
-				"sublabel": "item, summary, payload, kind, file list",
+				"sublabel": "item, summary, payload, kind, file list; shared PasteStyle",
 				"type": "backend"
 			},
 			{
@@ -389,7 +425,7 @@
 				"label": "Paperclip mark",
 				"sources": [
 					{
-						"path": "Sources/SkrepkaCore/Branding/PaperclipPath.swift"
+						"path": "Sources/SkrepkaCore/Branding"
 					},
 					{
 						"path": "Sources/SkrepkaCore/MenuBar/StatusItemIcon.swift"
@@ -398,7 +434,7 @@
 						"path": "Sources/Skrepka/Branding/PaperclipMark.swift"
 					}
 				],
-				"sublabel": "one path: app icon, menu bar, in-app",
+				"sublabel": "portable MarkPath/PaperclipMark plus Core Graphics renderer",
 				"type": "frontend"
 			},
 			{
@@ -501,9 +537,12 @@
 					},
 					{
 						"path": "Tests/SkrepkaSyncTests"
+					},
+					{
+						"path": "Tests/SkrepkaLinuxUITests"
 					}
 				],
-				"sublabel": "Swift Testing; one HistoryStoring suite across every conformance",
+				"sublabel": "Swift Testing; one HistoryStoring suite across every conformance; Linux picker key/metric coverage",
 				"type": "backend"
 			},
 			{
@@ -528,7 +567,7 @@
 						"path": "scripts/linux-image.sh"
 					}
 				],
-				"sublabel": "Swift 6.3.3, SwiftLint, libsqlite3 — required, not optional",
+				"sublabel": "Swift 6.3.3, SwiftLint, libsqlite3, GTK4/gtk4-layer-shell — required, not optional",
 				"type": "backend"
 			},
 			{
@@ -1048,6 +1087,32 @@
 				"id": "e-tests-synctransport",
 				"label": "loopback pair → index → fetch → live push",
 				"to": "sync-transport",
+				"variant": "dashed"
+			},
+			{
+				"from": "linux-picker",
+				"id": "e-linuxpicker-gtksession",
+				"label": "widgets / layer shell",
+				"to": "gtk-session"
+			},
+			{
+				"from": "linux-picker",
+				"id": "e-linuxpicker-models",
+				"label": "ClipSummary / PasteStyle",
+				"to": "models"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-linuxpicker",
+				"label": "key map + metrics",
+				"to": "linux-picker",
+				"variant": "dashed"
+			},
+			{
+				"from": "linux-image",
+				"id": "e-linuximage-gtksession",
+				"label": "system libraries",
+				"to": "gtk-session",
 				"variant": "dashed"
 			},
 			{

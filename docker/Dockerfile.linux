@@ -18,6 +18,9 @@
 #                   The build itself never needs it — the generated C is checked
 #                   in — but regenerating is a container job because macOS has
 #                   no scanner.
+#   libgtk-4-dev    Phase 7's GUI is raw GTK4 through C interop (Sources/CGtk4),
+#                   so the Linux gate needs GTK's headers and its .pc file to
+#                   compile SkrepkaLinuxUI at all.
 #
 # And three that exist purely so the Linux gate can *test* the clipboard
 # backends rather than merely compile them, which is the difference Phase 5
@@ -34,11 +37,23 @@
 #   wl-clipboard    a second, independent clipboard client on each side, so a
 #   xclip           test asserts interoperability rather than Skrepka agreeing
 #                   with itself.
+#   wtype           types through zwp_virtual_keyboard_manager_v1, which sway
+#                   implements — the only way to deliver a real key event to a
+#                   layer surface with no keyboard attached. It is also a second
+#                   client of the protocol Phase 7 would paste through on sway,
+#                   so a test that uses it exercises both.
+#   grim            screenshots through wlr-screencopy. The only check that says
+#                   the picker *rendered* rather than merely mapped.
 #
-# Deliberately NOT here: wayland-protocols. The two data-control descriptions
-# are vendored under Sources/CWaylandProtocols/protocol-xml/ instead — one of
-# them (wlr) is packaged by no distribution at all, and the other is absent from
-# every LTS older than noble. See scripts/regenerate-wayland-protocols.sh.
+#   wayland-protocols  a build dependency of gtk4-layer-shell, whose meson.build
+#                   declares `dependency('wayland-protocols', version: '>=1.16',
+#                   required: true)`. Present for that reason alone.
+#
+# It is NOT here for the two data-control descriptions, which stay vendored
+# under Sources/CWaylandProtocols/protocol-xml/ — one of them (wlr) is packaged
+# by no distribution at all, and the other is absent from every LTS older than
+# noble, so the package could not supply them even now that it is installed. See
+# scripts/regenerate-wayland-protocols.sh.
 #
 # Deliberately NOT here: periphery. It ships no Linux binary — the 3.8.0
 # artifactbundle declares only macOS slices — and a from-source build would add
@@ -59,18 +74,53 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		ca-certificates \
 		curl \
+		git \
+		grim \
+		libgtk-4-dev \
 		libsqlite3-dev \
 		libwayland-bin \
 		libwayland-dev \
 		libx11-dev \
 		libxfixes-dev \
+		meson \
+		ninja-build \
 		pkg-config \
 		sway \
 		unzip \
+		wayland-protocols \
 		wl-clipboard \
+		wtype \
 		xclip \
 		xvfb \
 	&& rm -rf /var/lib/apt/lists/*
+
+# gtk4-layer-shell, from source, because *noble* does not package it: it ships
+# only the GTK3 one, libgtk-layer-shell-dev 0.8.2, which GTK4 cannot use, and
+# `apt-cache policy libgtk4-layer-shell-dev` reports no candidate here. Newer
+# Ubuntu does have it — questing 25.10 ships 1.0.4, resolute 26.04 ships 1.3.0 —
+# so this step goes away when the image's base moves. Arch packages it too
+# (`extra/gtk4-layer-shell`), so the Deck needs no such step; this is the
+# container catching up with the target, not a workaround.
+#
+# It is not optional decoration. `zwlr_layer_shell_v1` is the only Wayland
+# mechanism that gives a surface keyboard input over the frontmost app — there
+# is no plain-`xdg_toplevel` equivalent — so without this the picker cannot
+# exist at all. See docs/linux-sync/phase-7-linux-gui.md.
+#
+# -Dintrospection=false -Dvapi=false: the GIR and Vala bindings are for other
+# languages and `vapigen` is not installed, which is a hard meson error rather
+# than a skipped target.
+ARG GTK4_LAYER_SHELL_VERSION=v1.3.0
+RUN set -eux; \
+	git clone --depth 1 --branch "${GTK4_LAYER_SHELL_VERSION}" \
+		https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell; \
+	meson setup -Dexamples=false -Ddocs=false -Dtests=false \
+		-Dintrospection=false -Dvapi=false \
+		--prefix /usr /tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell; \
+	ninja -C /tmp/gtk4-layer-shell/build; \
+	ninja -C /tmp/gtk4-layer-shell/build install; \
+	rm -rf /tmp/gtk4-layer-shell; \
+	pkg-config --modversion gtk4-layer-shell-0
 
 # Pinned rather than "latest": an image whose linter changes underneath it turns
 # an unrelated commit red, and the version is what a failure has to be

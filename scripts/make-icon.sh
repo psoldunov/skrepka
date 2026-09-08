@@ -12,6 +12,13 @@
 # The renderer is compiled rather than interpreted because it shares the mark
 # with the app — PaperclipPath.swift is linked in beside it, and
 # `swift <file>.swift` takes only one file.
+#
+# Four files now rather than one: OQ-12 split the artwork out of the Core
+# Graphics renderer, so the coordinate table lives in PaperclipMark.swift, the
+# portable path types in MarkPath.swift and the bounding box the renderer fits
+# against in MarkPath+Bounds.swift. All four have to be on this command line —
+# a missing one is an "unresolved identifier" at build time rather than a wrong
+# icon, which is the failure mode to want.
 
 set -euo pipefail
 
@@ -25,6 +32,9 @@ trap 'rm -rf "${WORK}"' EXIT
 echo "▸ Building the renderer"
 xcrun swiftc -O -parse-as-library \
 	scripts/make-icon.swift \
+	Sources/SkrepkaCore/Branding/MarkPath.swift \
+	Sources/SkrepkaCore/Branding/MarkPath+Bounds.swift \
+	Sources/SkrepkaCore/Branding/PaperclipMark.swift \
 	Sources/SkrepkaCore/Branding/PaperclipPath.swift \
 	-o "${WORK}/make-icon"
 
