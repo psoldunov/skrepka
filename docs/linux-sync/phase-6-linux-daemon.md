@@ -165,6 +165,23 @@ Specifically:
 7. `systemctl --user restart skrepkad` reconnects without re-pairing.
 8. `skrepka doctor` tells the truth on a machine with something wrong with it —
    test it by breaking something deliberately.
+9. The daemon survives the compositor restarting under it: log out and back in,
+   or restart KWin or Sway in place, and capture resumes without the user
+   touching anything.
+
+Point 9 is [Phase 5](phase-5-linux-clipboard.md#done-when)'s third criterion,
+moved here rather than dropped. Phase 5 proves a backend can read and write a
+session; noticing that the session has gone and building a new one is a
+lifetime question, and the daemon is the thing with a lifetime long enough to
+ask it. Concretely: the Wayland `finished` event and a `wl_display` read error
+both mean the session is dead, as does the X11 display connection closing, and
+the backend has to surface that rather than sit in a loop against a dead file
+descriptor. The daemon then re-runs `SessionProbe` — the compositor that comes
+back may not be the one that went away, and may not advertise the same globals
+— and starts whichever backend that now implies, with a bounded retry so a
+session that never returns does not spin. `skrepka doctor` reports the current
+backend, so a reconnection that picked a different one is visible rather than
+silent.
 
 Both quality gates green.
 

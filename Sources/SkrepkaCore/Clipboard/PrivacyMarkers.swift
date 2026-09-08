@@ -7,7 +7,47 @@ import Foundation
 /// returns nothing. All three `org.nspasteboard.*` strings do ship inside
 /// macOS 26.6.2, and password managers set them, so honouring them is the
 /// difference between a clipboard manager and a keylogger.
-enum PrivacyMarkers {
+///
+/// One table for both platforms rather than a Linux one beside it: the whole
+/// point of the type is that there is exactly one answer to "may this be
+/// stored", and two tables is how one of them ends up missing a marker.
+package enum PrivacyMarkers {
+    /// The one Linux convention there is.
+    ///
+    /// Verified 2026-09-07 against `klipper/historymodel.cpp` in
+    /// plasma-workspace, which compares the target's data to the literal bytes
+    /// `secret` and returns *before* inserting the entry — so it means reject
+    /// outright, not store-and-mask. KeePassXC (`src/gui/Clipboard.cpp`),
+    /// plasma-pass, QtPass, pwsafe and `wl-copy --sensitive` all set it, and
+    /// Klipper, CopyQ, kdeconnect, fcitx5 and clipcat all honour it.
+    ///
+    /// There is no GNOME or GTK equivalent — verified by searching GPaste,
+    /// which has no MIME-based sensitivity at all. `CLIPBOARD_STATE=sensitive`
+    /// is an environment variable `wl-paste --watch` sets for its child, and
+    /// `wl-clipboard`'s own manual says it sets it only on seeing this same
+    /// KDE target. So this string is the whole Linux privacy surface.
+    ///
+    /// **Value-sensitive, unlike every other entry here.** Only the payload
+    /// `secret` counts; Klipper stores an entry hinted `public` normally. A set
+    /// of type names cannot express that, so the Linux reader resolves the
+    /// value and declares this type only when it resolved to a rejection.
+    ///
+    /// That resolution is a precondition of putting this string anywhere near a
+    /// `declaredTypes` set, not a nicety. ``rejected`` holds this name and
+    /// ``isRejected(types:)`` matches on the name alone, so anything that puts
+    /// it into a set of declared types without having first read the payload
+    /// and found `secret` silently drops every clip a KDE application labelled
+    /// `public` — a whole desktop's worth of history, lost with no error
+    /// anywhere. `LinuxRepresentationMap.declaredTypes(forOfferedTargets:`
+    /// `concealedHintResolvedSecret:)` in `SkrepkaLinuxPlatform` is the only
+    /// sanctioned producer: it strips the name when the value did not resolve
+    /// to `secret`. New code that needs declared types from offered targets
+    /// calls that function rather than assembling the set itself.
+    package static let kdePasswordManagerHint = "x-kde-passwordManagerHint"
+
+    /// The payload that makes ``kdePasswordManagerHint`` mean "do not store".
+    package static let kdePasswordManagerHintSecret = "secret"
+
     /// Content that must never be stored at all.
     static let rejected: Set<String> = [
         "org.nspasteboard.TransientType",
@@ -15,6 +55,7 @@ enum PrivacyMarkers {
         "de.petermaurer.TransientPasteboardType",
         "com.typeit4me.clipping",
         "Pasteboard generator type",
+        kdePasswordManagerHint,
     ]
 
     /// Content that may be stored but must be masked in the UI.

@@ -67,16 +67,30 @@ What the decision buys, per phase:
 | [7](phase-7-linux-gui.md) | KDE half of "on KDE **and** on Sway", including the SNI tray, `xdg-desktop-portal-kde` and a 1280×800 screen the picker has to fit |
 | [8](phase-8-gnome-packaging.md) | An immutable distribution, which is what forces the user-scope installer to exist |
 
-**The channel decides which Wayland reader is under test.** The installed
-SteamOS 3.8 stable ships **Plasma 6.4.3**, and KWin did not port data control to
-`ext-data-control-v1` until Plasma **6.6** (KWin merge request !6606). So the
-Deck as it stands exercises `zwlr_data_control_manager_v1` and
-`WlrDataControlReader` — the legacy branch of `SessionProbe`, which would
-otherwise have gone untested. SteamOS 3.9 preview moves Desktop Mode to Plasma
-6.7.3 and swaps the branch to `ExtDataControlReader`. Both, from one device, by
-changing the update channel. Verified 2026-09-07 against the SteamOS 3.8 and 3.9
-release coverage and the KWin merge request; the Plasma version on the device
-was confirmed by its owner.
+**The channel decides which Wayland reader is under test — corrected
+2026-09-07.** This paragraph previously said KWin did not port data control to
+`ext-data-control-v1` until Plasma **6.6**, and concluded that the Deck as it
+stands exercises the legacy `zwlr` branch. **Both halves of that are wrong.**
+KWin merge request !6606 merged 2025-04-12 and landed in Plasma **6.4**, and
+that release advertises *both* globals from one implementation:
+`datacontroldevicemanager_v1.cpp` on the `Plasma/6.4` branch creates
+`zwlr_data_control_manager_v1` by hand alongside the new one. Per-branch counts
+of the protocol XML in `src/wayland/CMakeLists.txt`: 6.3 has two wlr and no ext;
+6.4 has one of each; 6.5 and 6.6 have ext only.
+
+So the installed SteamOS 3.8 stable, on **Plasma 6.4.3**, advertises both and
+`SessionProbe` binds `ext_data_control_manager_v1` — the *current* branch, not
+the legacy one. SteamOS 3.9 preview (Plasma 6.7.3) advertises ext alone and
+exercises the same branch. **The Deck does not exercise `wlr-data-control` on
+either channel**, and no change of update channel will make it: that needs a
+wlroots compositor older than 0.19, or KWin 6.3 or earlier.
+
+That is why the legacy path is covered by a **headless Sway 1.9** — wlroots
+0.17, which advertises `zwlr_data_control_manager_v1` version 2 and nothing
+newer — inside the Linux build image, where the Phase 5 integration tests drive
+it directly. Verified 2026-09-07 against the KWin merge request and the
+`Plasma/6.3` through `Plasma/6.6` branches of `src/wayland/`; the Plasma version
+on the device was confirmed by its owner.
 
 **`x86_64` only.** The Deck's APU is Zen 2, so every real-hardware result this
 project ever gets is `amd64`. `arm64` correctness stays a claim backed by
@@ -488,8 +502,10 @@ registers `DataControlDeviceManagerV1Interface` unconditionally, but its
 **How to answer, now that there is hardware:** enumerate the Wayland globals
 from inside a Flatpak sandbox on the Deck and again outside one, and compare.
 Note which manager is advertised while doing it — SteamOS 3.8 stable is on
-Plasma 6.4.3, which predates KWin's port to `ext-data-control-v1` in Plasma 6.6,
-so the global to look for there is `zwlr_data_control_manager_v1`.
+Plasma 6.4.3, which per the correction under [D-10](#d-10) advertises **both**
+`ext_data_control_manager_v1` and `zwlr_data_control_manager_v1`, so the
+comparison has to cover each of them separately: a filter that hides one and not
+the other is exactly the kind of finding this question exists for.
 
 Does not change the packaging decision — Flatpak is out either way, because a
 GNOME Shell extension cannot register from a sandbox. It changes how the

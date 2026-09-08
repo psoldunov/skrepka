@@ -102,7 +102,8 @@ compositor and it is not uniformly yes.
 |---|---|---|
 | X11 (incl. XWayland) | `XFixesSelectSelectionInput` + `XFixesSelectionNotify` | **Yes**, event-driven |
 | Sway, Hyprland, niri, labwc, COSMIC, Mir | `ext-data-control-v1` (+ legacy `wlr-data-control` v2) | **Yes** |
-| KDE Plasma / KWin 6.6+ | `ext-data-control-v1` only | **Yes** |
+| KDE Plasma / KWin 6.5+ | `ext-data-control-v1` only | **Yes** |
+| KDE Plasma / KWin 6.4 | **both** globals, one implementation | **Yes** |
 | Wayfire, river | `wlr-data-control` only | Yes, legacy path |
 | **GNOME / Mutter** | **neither** | **No** |
 | Weston, Muffin (Cinnamon), Cage, gamescope | neither | No |
@@ -111,15 +112,23 @@ compositor and it is not uniformly yes.
 `wayland-protocols` 1.39. The wlroots protocol's own XML now describes itself as
 deprecated and not intended for production use.
 
-**KWin before 6.6 belongs in the "wlr-data-control only" row.** The port
-happened in KWin merge request !6606 and landed in Plasma **6.6**, so a KDE
-session older than that advertises `zwlr_data_control_manager_v1` instead.
-Worth knowing rather than filing as trivia: this project's test rig is a Steam
-Deck on SteamOS 3.8 stable, which runs Plasma **6.4.3** — so the first real KDE
-hardware this design meets exercises the *deprecated* protocol, and the
-`ext-data-control-v1` row needs the SteamOS 3.9 preview channel (Plasma 6.7.3)
-or another compositor entirely. Verified 2026-09-07 against the KWin merge
-request and the SteamOS 3.8/3.9 release notes.
+**KWin's port landed in Plasma 6.4, not 6.6 — corrected 2026-09-07.** This
+paragraph previously said 6.6, and drew from that the conclusion that the
+project's Steam Deck (SteamOS 3.8 stable, Plasma **6.4.3**) would exercise the
+deprecated protocol. Both were wrong. KWin merge request !6606 merged
+2025-04-12 into Plasma **6.4**, and that release advertises *both* globals from
+one implementation — `datacontroldevicemanager_v1.cpp` on the `Plasma/6.4`
+branch creates `zwlr_data_control_manager_v1` by hand beside the new one. Plasma
+6.5 dropped it. Counts of the protocol XML in `src/wayland/CMakeLists.txt`, per
+branch: 6.3 two wlr / no ext; 6.4 one each; 6.5 and 6.6 ext only.
+
+Two consequences. **A client must prefer `ext` and ignore `wlr` when both are
+advertised**, or it binds two devices to one seat on 6.4 and records every copy
+twice. And **the Deck exercises the current protocol on either channel**, so the
+deprecated path needed a compositor of its own: a headless Sway 1.9 (wlroots
+0.17) inside the Linux build image, which is what the Phase 5 integration tests
+drive it with. Verified 2026-09-07 against the merge request and the `Plasma/6.3`
+through `Plasma/6.6` branches.
 
 The `gamescope` row has a practical consequence now that the rig is a Steam
 Deck: **Game Mode is not a clipboard environment**, and no phase should treat it
@@ -672,9 +681,14 @@ The capture and paste half, headless. No GUI yet.
 
 New target `SkrepkaLinuxPlatform`:
 
-- **`ExtDataControlReader`** — `ext-data-control-v1`. Covers KDE Plasma 6.6+,
-  Sway, Hyprland, niri, COSMIC. Falls back to `wlr-data-control` v2 where only
-  that is offered (Wayfire, river).
+- **`DataControlReader`** — one reader over both Wayland data-control
+  protocols, which differ only in their C symbol names;
+  `ExtDataControlBinding` and `WlrDataControlBinding` are what select between
+  them. `ext-data-control-v1` covers KDE Plasma 6.4+, Sway, Hyprland, niri and
+  COSMIC; it falls back to `wlr-data-control` v2 where only that is offered
+  (Wayfire, river). Plasma 6.4 advertises **both** globals from one
+  implementation, so the probe prefers `ext` and ignores `wlr` when it sees
+  both — binding the first recognised global would record every copy twice.
 - **`XFixesReader`** — `XFixesSelectSelectionInput` on X11 and XWayland.
   **Event-driven, so no polling** — better than the macOS side, which has no
   choice.

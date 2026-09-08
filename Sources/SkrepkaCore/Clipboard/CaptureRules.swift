@@ -116,13 +116,23 @@ public struct CaptureRules: Sendable {
     /// it. Only the file system can say whether that is a folder, and asking it
     /// from here would put a blocking disk call in the watcher's look;
     /// ``ThumbnailRenderer`` refines the kind instead.
+    ///
+    /// The image types are tested against ``PasteboardType/imageReadOrder``
+    /// ahead of the switch rather than spelled out as a case, because a `case`
+    /// cannot pattern-match a collection and a hand-written list here would be
+    /// a second copy of that one — the copy that would go stale the next time a
+    /// picture format is added, classifying it as nothing while it still hashed
+    /// and previewed as an image. Which kind wins is unchanged: rich text, file
+    /// and URL all sit earlier in ``PasteboardType/readOrder``, so a payload
+    /// carrying both a picture and a link is still a link.
     static func kind(for payload: ClipPayload) -> ClipKind? {
+        let imageTypes = Set(PasteboardType.imageReadOrder)
         for type in PasteboardType.readOrder where payload.data(forType: type) != nil {
+            if imageTypes.contains(type) { return .image }
             switch type {
             case PasteboardType.rtfd, PasteboardType.rtf, PasteboardType.html: return .richText
             case PasteboardType.fileURL: return .file
             case PasteboardType.url: return .link
-            case PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf: return .image
             case PasteboardType.string: return .text
             default: continue
             }

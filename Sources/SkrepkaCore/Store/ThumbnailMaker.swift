@@ -48,8 +48,7 @@
         /// only from inside this module, and exporting one of a matched pair
         /// freezes an API nothing outside asks for.
         func makePreview(fromImageBytesIn payload: ClipPayload) -> Preview? {
-            let imageTypes = [PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf]
-            for type in imageTypes {
+            for type in PasteboardType.imageReadOrder {
                 guard let data = payload.data(forType: type), let image = NSImage(data: data) else {
                     continue
                 }

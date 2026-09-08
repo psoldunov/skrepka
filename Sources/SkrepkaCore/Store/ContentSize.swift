@@ -108,8 +108,7 @@ enum ContentSize {
     /// representation instead would report a PNG and the TIFF beside it as one
     /// picture of twice the size.
     private static func imageByteCount(in payload: ClipPayload) -> Int? {
-        let imageTypes = [PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf]
-        for type in imageTypes {
+        for type in PasteboardType.imageReadOrder {
             if let data = payload.data(forType: type) { return data.count }
         }
         return nil

@@ -107,7 +107,7 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
     /// of two different apps collapse onto one entry.
     var identityTypes: [String]? {
         switch self {
-        case .image: [PasteboardType.png, PasteboardType.tiff, PasteboardType.pdf]
+        case .image: PasteboardType.imageReadOrder
         case .file, .folder, .imageFile: [PasteboardType.fileURL]
         case .text, .richText, .link: nil
         }

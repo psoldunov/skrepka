@@ -120,7 +120,15 @@ if ((!FAST)); then
 	# the files that cannot are guarded at file scope — so filtering to
 	# SkrepkaSyncTests would run 55 of the 144 tests this platform can actually
 	# run, and report the other 89 as neither passed nor skipped.
-	check "test" swift test --scratch-path "${SCRATCH}"
+	#
+	# SKREPKA_REQUIRE_HEADLESS turns a missing compositor from a skip into a
+	# failure. The live Wayland and X11 suites gate on
+	# `.enabled(if: HeadlessSession.isAvailable(...))`, which is right on a
+	# native checkout without sway or Xvfb and wrong here: this container
+	# installs both on purpose, so a Dockerfile regression that dropped one
+	# would disable seventeen tests and still go green. Set for this run only,
+	# so a bare `swift test` on a developer's machine still skips them.
+	check "test" env SKREPKA_REQUIRE_HEADLESS=1 swift test --scratch-path "${SCRATCH}"
 
 	# Periphery ships no Linux binary — the 3.8.0 artifactbundle declares only
 	# x86_64-apple-macosx and arm64-apple-macosx. It does build from source on

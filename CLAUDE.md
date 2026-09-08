@@ -12,6 +12,7 @@ scripts/bundle.sh     # build build/Skrepka.app only
 scripts/notarize.sh   # build, sign, notarize, staple — for builds you send out
 scripts/doctor.sh     # the quality gate — run after every change
 scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
+scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols from its XML
 ```
 
 `scripts/bundle.sh` signs without a secure timestamp, which is fine locally and
