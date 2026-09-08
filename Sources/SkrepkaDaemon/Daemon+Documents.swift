@@ -142,6 +142,22 @@ extension Daemon {
 
     // MARK: - Acting
 
+    /// The clipboard targets an entry's stored representations can be written
+    /// as, dropping any whose type identifier this build does not map.
+    ///
+    /// Split out of ``copy(_:)`` to keep that function inside the 40-line body
+    /// the lint rule allows; it is pure, so it costs nothing to lift.
+    private static func writableTargets(
+        from representations: [String: Data]
+    ) -> [String: Data] {
+        var payloads: [RepresentationKey: Data] = [:]
+        for (type, data) in representations {
+            guard let key = RepresentationKeyMap.key(forUTI: type) else { continue }
+            payloads[key] = data
+        }
+        return LinuxClipboardWriter.targets(for: payloads)
+    }
+
     /// Puts one entry on the clipboard.
     public func copy(_ selector: ClipSelector) async -> ActionDocument {
         guard clipboard != nil else {
@@ -167,22 +183,32 @@ extension Daemon {
         guard let contents = await store.contents(for: entry.summary.id) else {
             return .refused("that entry holds no bytes on this device yet", subject: entry.contentHash)
         }
-        var payloads: [RepresentationKey: Data] = [:]
-        for (type, data) in contents.payload.representations {
-            guard let key = RepresentationKeyMap.key(forUTI: type) else { continue }
-            payloads[key] = data
-        }
-        let targets = LinuxClipboardWriter.targets(for: payloads)
+        let targets = Self.writableTargets(from: contents.payload.representations)
         guard !targets.isEmpty else {
             return .refused(
                 "nothing in that entry can be written to a Linux clipboard",
                 subject: entry.contentHash
             )
         }
+        // Re-bound here rather than relied on from the guard at the top: the
+        // listing read and the contents read are both suspension points, and
+        // `performStop()` clears `clipboard` between them. The optional chain
+        // this replaces wrote nothing in that case and still answered
+        // `.succeeded`, so `skrepka copy` printed "Copied." over an unchanged
+        // clipboard.
+        guard let clipboard else {
+            return .refused(
+                """
+                The clipboard for this session went away while that entry was \
+                being read, so nothing was copied. Try again.
+                """,
+                subject: entry.contentHash
+            )
+        }
         // Not paused around this one, unlike a live push: a copy the user asked
         // for is a copy, and hoisting it back to the top of the history is what
         // every clipboard manager does.
-        await clipboard?.setSelection(targets)
+        await clipboard.setSelection(targets)
         return .succeeded(
             Self.copiedDetail(entry), subject: entry.contentHash)
     }

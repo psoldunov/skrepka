@@ -172,11 +172,30 @@ extension Daemon {
         }
     }
 
-    /// Answers a proposal that is waiting. Returns whether one was.
-    public func answerPairing(deviceID: SyncDeviceID, accept: Bool) -> Bool {
-        guard let pairing = pending[deviceID] else { return false }
+    /// Answers a proposal that is waiting, and says what that meant.
+    ///
+    /// Answers an ``ActionDocument`` rather than a bare `Bool` because refusing
+    /// an *outgoing* proposal has a consequence the user has to be told about,
+    /// and the sentence belongs here rather than in one client: the daemon
+    /// serves `skrepka`, the Phase 8 GNOME extension and anything else on the
+    /// session bus, and each of them would otherwise have to know the
+    /// asymmetry — see ``PairError/oneSidedWarning``.
+    public func answerPairing(deviceID: SyncDeviceID, accept: Bool) -> ActionDocument {
+        guard let pairing = pending[deviceID] else {
+            return .refused("no pairing is waiting for that device", subject: deviceID.hex)
+        }
         pairing.answer(accept)
-        return true
+        guard !accept else { return .succeeded("paired", subject: deviceID.hex) }
+        guard pairing.direction == PairingDirection.outgoing else {
+            // Inbound: the far side is still inside its own dial and this
+            // refusal is the answer it gets, so neither machine records the
+            // other. Nothing to warn about.
+            return .succeeded("refused", subject: deviceID.hex)
+        }
+        // The journal entry is written by ``completeOutgoing(_:proposalID:accepted:)``,
+        // which is also where an outgoing proposal nobody answered at all ends
+        // up — one line for both, rather than one here and none for the timeout.
+        return .succeeded("refused. \(PairError.oneSidedWarning)", subject: deviceID.hex)
     }
 
     /// Every proposal that arrives from now on.

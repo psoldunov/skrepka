@@ -39,15 +39,6 @@ import Logging
 /// process on a stream nothing can finish. So the *attempt* is stored, not just
 /// its result, and a second caller awaits the same `Task`.
 public actor BusSession {
-    /// Which bus to open.
-    public enum Bus: Sendable {
-        /// `org.freedesktop.Avahi` lives here.
-        case system
-        /// Where `dev.soldunov.Skrepka` is exported, and where the desktop's
-        /// own services live.
-        case session
-    }
-
     /// What the parked task reports back, once.
     ///
     /// The failure is a `String` rather than an `any Error` because `Error` is
@@ -56,28 +47,6 @@ public actor BusSession {
     private enum Outcome: Sendable {
         case connected(DBusClient.Connection)
         case failed(String)
-    }
-
-    /// Why a session could not be opened.
-    public enum SessionError: Error, Sendable, CustomStringConvertible {
-        /// The bus refused the connection, or there was no bus to connect to.
-        case cannotConnect(reason: String)
-        /// The task ended without reporting either way.
-        ///
-        /// Reached when ``BusSession/stop()`` finishes the readiness stream
-        /// while a connect is still in flight — not by cancelling the task that
-        /// is awaiting `connection()`. Awaiting a `Task`'s value neither throws
-        /// on the awaiting task's own cancellation nor cancels the awaited
-        /// task, so a caller that cancels stays suspended until the handshake
-        /// finishes either way. Reword this if that is ever made cancellable.
-        case cancelled
-
-        public var description: String {
-            switch self {
-            case .cannotConnect(let reason): "cannot connect to the bus: \(reason)"
-            case .cancelled: "connecting to the bus was cancelled"
-            }
-        }
     }
 
     private let bus: Bus
@@ -91,21 +60,31 @@ public actor BusSession {
     private var connecting: Task<DBusClient.Connection, any Error>?
     /// Finishing this is what un-parks the task and closes the connection.
     private var parking: AsyncStream<Void>.Continuation?
-    /// Bumped by every attempt and by every ``stop()``, so a caller suspended
-    /// across one can tell whether the state it is about to unwind is still its
-    /// own. Cheaper and more obvious than comparing task identities. Not
-    /// ``generation``: this counts state transitions, including the failures
-    /// and teardowns a caller has no use for.
+    /// Bumped by every attempt, every ``stop()`` and every ``invalidate()``, so
+    /// a caller suspended across one can tell whether the state it is about to
+    /// unwind — or the connection it is about to be handed — is still its own.
+    /// Cheaper and more obvious than comparing task identities. Not
+    /// ``generation``: this counts state transitions, including the failures a
+    /// caller has no use for.
     private var epoch = 0
 
-    /// How many underlying connections this session has opened.
+    /// A change-token for the connection this session hands out.
     ///
-    /// Zero before the first, and up by exactly one per connection opened; a
-    /// failed attempt does not move it. Anything a caller builds *on the bus* —
-    /// a browser, an entry group, a well-known name — belongs to one underlying
-    /// connection and dies with it, so a caller records the value it built that
-    /// state under and compares later. A different value means the server side
-    /// of all of it was reclaimed and has to be rebuilt, not reused.
+    /// Changes whenever the connection this session hands out is no longer the
+    /// one a caller may be holding: up by one per connection opened, and up by
+    /// one per ``invalidate()`` that had a connection to drop. A failed attempt
+    /// does not move it, because it built nothing to invalidate. Monotonically
+    /// increasing, so a comparison is `!=` and never needs to be an ordering.
+    ///
+    /// Anything a caller builds *on the bus* — a browser, an entry group, a
+    /// well-known name — belongs to one underlying connection and dies with it,
+    /// so a caller records the value it built that state under and compares
+    /// later. A different value means the server side of all of it was
+    /// reclaimed and has to be rebuilt, not reused.
+    ///
+    /// It moves on ``invalidate()`` rather than only on the next successful
+    /// open so that a caller sees the staleness at the moment it is known,
+    /// rather than at whatever later point somebody happens to reconnect.
     public private(set) var generation = 0
 
     /// - Parameters:
@@ -143,27 +122,75 @@ public actor BusSession {
     /// when state built on the bus has to outlive a call.
     ///
     /// What this session can see a connection end *from* is narrower than it
-    /// should be — see the note in ``beginConnecting(epoch:)``.
+    /// should be — see the note in ``beginConnecting(epoch:)`` — which is what
+    /// ``invalidate()`` is for. A call that lands while one is in flight opens
+    /// the replacement rather than returning the connection just dropped.
     public func connection() async throws -> DBusClient.Connection {
-        if let connecting { return try await connecting.value }
-
-        epoch += 1
-        let attempt = epoch
-        let opening = beginConnecting(epoch: attempt)
-        connecting = opening
-        do {
-            return try await opening.value
-        } catch {
-            // Unwind the failed attempt so the next caller opens a fresh one
-            // rather than awaiting a task that can only rethrow — unless
-            // somebody else has already moved on, which the epoch says.
-            if epoch == attempt { await stop() }
-            throw error
+        while true {
+            let opening: Task<DBusClient.Connection, any Error>
+            if let connecting {
+                opening = connecting
+            } else {
+                epoch += 1
+                opening = beginConnecting(epoch: epoch)
+                connecting = opening
+            }
+            let attempt = epoch
+            do {
+                let opened = try await opening.value
+                // An ``invalidate()`` that landed while this call was suspended
+                // dropped exactly the connection this attempt resolved to, so
+                // handing it back would defeat the invalidation it raced. Go
+                // round and open the replacement instead. Only another
+                // invalidation can send it round again, so this terminates.
+                if epoch == attempt { return opened }
+            } catch {
+                // Unwind the failed attempt so the next caller opens a fresh
+                // one rather than awaiting a task that can only rethrow —
+                // unless somebody else has already moved on, which the epoch
+                // says.
+                if epoch == attempt { await stop() }
+                throw error
+            }
         }
     }
 
     /// Closes the connection and lets the parked task unwind. Idempotent.
+    ///
+    /// The end of the session, as opposed to ``invalidate()``, which says only
+    /// that the current connection is dead.
     public func stop() async {
+        await drop()
+    }
+
+    /// Drops the cached connection so the next ``connection()`` opens a fresh
+    /// one.
+    ///
+    /// Idempotent, and safe to call from several call sites and concurrently.
+    ///
+    /// This exists because nothing else can see a channel die under a live
+    /// connection — see the note in ``beginConnecting(epoch:)`` — so the only
+    /// party that knows is the caller whose call died on it, and this is how it
+    /// says so. A session with nothing cached returns without touching
+    /// anything, which is what makes it safe to call from a failure path that
+    /// may not have been the one holding the connection, and what keeps
+    /// ``generation`` from moving for a session that never connected.
+    ///
+    /// Different from ``stop()``: that ends the session for good, this leaves
+    /// it usable and expects the next caller to reconnect.
+    public func invalidate() async {
+        guard task != nil || connecting != nil || parking != nil else { return }
+        // Before the teardown rather than after: a caller reads this to decide
+        // whether what it built on the bus survived, and the answer is already
+        // no.
+        generation += 1
+        await drop()
+    }
+
+    /// Unhooks the current attempt and lets the parked task unwind. What
+    /// ``stop()`` and ``invalidate()`` share; the two differ in what they mean
+    /// and in what they say about ``generation``, not in what they do here.
+    private func drop() async {
         epoch += 1
         connecting?.cancel()
         connecting = nil
@@ -250,43 +277,16 @@ public actor BusSession {
     /// handing back a corpse.
     ///
     /// - Parameter attempt: The ``epoch`` the ended task was started under. A
-    ///   mismatch means ``stop()`` — or a later attempt — has already torn this
+    ///   mismatch means a teardown — or a later attempt — has already torn this
     ///   state down and may have replaced it, so clearing would nil out
-    ///   somebody else's live task. It is also what keeps a ``stop()`` unwind
-    ///   out of the teardown already in flight: ``stop()`` bumps the epoch
-    ///   before it finishes the parking stream, so its unwind always mismatches.
+    ///   somebody else's live task. It is also what keeps a ``stop()`` or
+    ///   ``invalidate()`` unwind out of the teardown already in flight: both
+    ///   bump the epoch before finishing the parking stream, so the unwind they
+    ///   cause always mismatches.
     private func parkedTaskEnded(epoch attempt: Int) {
         guard epoch == attempt else { return }
         connecting = nil
         parking = nil
         task = nil
-    }
-
-    private static func open(
-        _ bus: Bus,
-        address: String?,
-        logger: Logger,
-        _ body: @Sendable @escaping (DBusClient.Connection) async throws -> Void
-    ) async throws {
-        let auth = SkrepkaBus.authentication()
-        if let address {
-            let explicit = try parse(address)
-            try await DBusClient.withConnection(to: explicit, auth: auth, logger: logger, body)
-            return
-        }
-        switch bus {
-        case .system:
-            try await DBusClient.withSystemBus(auth: auth, logger: logger, body)
-        case .session:
-            try await DBusClient.withSessionBus(auth: auth, logger: logger, body)
-        }
-    }
-
-    /// A bare path is the spelling everyone reaches for first, and
-    /// `DBusAddress.parse` rejects it — so accept both rather than making the
-    /// difference a caller's problem.
-    private static func parse(_ address: String) throws -> DBusAddress {
-        if address.hasPrefix("/") { return .unix(path: address) }
-        return try DBusAddress.parse(address)
     }
 }

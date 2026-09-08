@@ -18,13 +18,27 @@ import Logging
 /// the argument types, which is exactly what a generic helper hides.
 public struct DaemonProxy: Sendable {
     private let connection: DBusClient.Connection
+    private let session: BusSession?
     private let timeout: Duration
 
-    /// - Parameter timeout: How long one member call waits for its reply.
-    ///   `DBusClient` imposes no deadline of its own, so without this a CLI
-    ///   run against a wedged daemon hangs rather than reporting.
-    public init(connection: DBusClient.Connection, timeout: Duration = SkrepkaBus.callTimeout) {
+    /// - Parameters:
+    ///   - session: The session `connection` came out of, where there is one.
+    ///     A call that fails in a way only a dead transport explains
+    ///     ``BusSession/invalidate()``s it, so the next caller opens a fresh
+    ///     connection rather than reusing a corpse. Nil — the default — is the
+    ///     CLI path: ``SkrepkaBus/withDaemon(logger:_:)`` scopes the connection
+    ///     to one command and tears it down on the way out, so there is nothing
+    ///     for a later call to inherit.
+    ///   - timeout: How long one member call waits for its reply.
+    ///     `DBusClient` imposes no deadline of its own, so without this a CLI
+    ///     run against a wedged daemon hangs rather than reporting.
+    public init(
+        connection: DBusClient.Connection,
+        session: BusSession? = nil,
+        timeout: Duration = SkrepkaBus.callTimeout
+    ) {
         self.connection = connection
+        self.session = session
         self.timeout = timeout
     }
 
@@ -110,17 +124,26 @@ public struct DaemonProxy: Sendable {
     /// it, so this adds the match rule as well as subscribing. `AddMatch` is
     /// sent once per call; a caller that wants two streams of the same signal
     /// gets two rules, which the bus deduplicates by reference count.
+    ///
+    /// The subscription is taken *before* `AddMatch`, for the reason
+    /// `AvahiDiscovery` subscribes before the object that will emit exists: the
+    /// rule is what makes the bus start routing the signal here, so a
+    /// `pairingRequested` emitted in the gap between the two would arrive at a
+    /// connection with nobody reading and be dropped — and `skrepka pair` would
+    /// then wait out its whole window for a prompt that already happened.
+    /// Subscribing first cannot lose one: a subscriber with no rule yet simply
+    /// has nothing delivered to it.
     public func pairingRequests() async throws -> AsyncStream<PairingProposalDocument> {
+        let signals = await connection.subscribeToSignal(
+            interface: SkrepkaInterface.name,
+            member: SkrepkaInterface.Signal.pairingRequested
+        )
         let rule = """
             type='signal',sender='\(SkrepkaInterface.busName)',\
             interface='\(SkrepkaInterface.name)',\
             member='\(SkrepkaInterface.Signal.pairingRequested)'
             """
         try await addMatch(rule)
-        let signals = await connection.subscribeToSignal(
-            interface: SkrepkaInterface.name,
-            member: SkrepkaInterface.Signal.pairingRequested
-        )
         return AsyncStream { continuation in
             let task = Task {
                 for await message in signals {
@@ -176,13 +199,41 @@ public struct DaemonProxy: Sendable {
             method: member,
             body: arguments
         )
-        guard let reply = try await send(request, member: member) else {
+        let answer: DBusMessage?
+        do {
+            answer = try await send(request, member: member)
+        } catch {
+            await dropTransport()
+            throw error
+        }
+        guard let reply = answer else {
+            await dropTransport()
             throw IPCError.noReply(member: member)
         }
+        // Deliberately no ``dropTransport()`` here. An error reply is the bus
+        // alive and answering — `UnknownMethod` from a daemon on an older
+        // interface, `AccessDenied` from a policy that refuses the member — and
+        // tearing the connection down over one would turn a well-formed refusal
+        // into a reconnect the next call has to pay for.
         guard reply.messageType != .error else {
             throw IPCError.busError(member: member, name: reply.errorName ?? "", detail: reply.errorDetail)
         }
         return reply.body
+    }
+
+    /// Tells the session the connection this proxy holds is not worth reusing.
+    ///
+    /// Called for the transport-class failures only: a throw out of `send`, the
+    /// timeout it turns into ``IPCError/timedOut(member:after:)``, and a reply
+    /// that never arrived. There is no probe that separates those from a daemon
+    /// that is merely slow, so the accepted trade is that a live daemon which
+    /// exceeds ``SkrepkaBus/callTimeout`` also causes a reconnect. That costs
+    /// one handshake and heals a genuinely dead channel, which nothing else
+    /// here notices — the DBUS in `Package.resolved` reports a channel that
+    /// dies under a live connection to nobody.
+    private func dropTransport() async {
+        guard let session else { return }
+        await session.invalidate()
     }
 
     /// Every request goes out with ``timeout`` on it, and the library's

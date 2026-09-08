@@ -51,6 +51,15 @@ public struct SubmitRequest: SkrepkaDocument, Hashable {
     /// it is refused rather than truncated.
     public static let sizeLimit = 32 * 1024 * 1024
 
+    /// ``sizeLimit`` expressed in encoded bytes — the ceiling
+    /// ``isWithinEncodedLimit`` measures against.
+    ///
+    /// Base64 is four output bytes per three input, so a payload that decodes
+    /// to ``sizeLimit`` encodes to four thirds of it; the rounding and the
+    /// spare four bytes cover the padding. Generous on purpose: this is a bound
+    /// that must never refuse a submission the exact check would accept.
+    public static let encodedSizeLimit = (sizeLimit + 2) / 3 * 4 + 4
+
     public init(
         representations: [String: String],
         sourceApplication: String? = nil,
@@ -61,6 +70,32 @@ public struct SubmitRequest: SkrepkaDocument, Hashable {
         self.representations = representations
         self.sourceApplication = sourceApplication
         self.isConcealed = isConcealed
+    }
+
+    /// Whether the encoded payload could possibly fit ``sizeLimit`` once
+    /// decoded.
+    ///
+    /// Checked before ``decodedRepresentations()`` so a hostile caller cannot
+    /// force the decode allocation it is meant to be refused for. Base64 is 4
+    /// output bytes per 3 input, so the encoded length is a sound upper bound
+    /// on the decoded one; this is deliberately generous rather than exact —
+    /// the precise check still runs on the decoded bytes afterwards.
+    ///
+    /// Deliberately not folded into ``decodedRepresentations()``: nil there
+    /// already means "not valid base64", and a value that meant two things
+    /// would have the daemon report the wrong one of them.
+    public var isWithinEncodedLimit: Bool {
+        var total = 0
+        for base64 in representations.values {
+            // Reported rather than trapping: the sum is over lengths a caller
+            // chose, and a CLI or daemon crashing on arithmetic is a worse
+            // answer than the refusal this is computing.
+            let (sum, overflow) = total.addingReportingOverflow(base64.utf8.count)
+            if overflow { return false }
+            total = sum
+            if total > Self.encodedSizeLimit { return false }
+        }
+        return true
     }
 
     /// The decoded payload, or nil where a value was not base64.

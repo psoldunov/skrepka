@@ -1,4 +1,8 @@
 import Foundation
+// For `ActionDocument.ok` / `.detail`. Swift 6's MemberImportVisibility wants
+// the module that declares a member imported here, not merely somewhere in the
+// target.
+import SkrepkaIPC
 import SkrepkaSync
 import Testing
 
@@ -87,7 +91,7 @@ struct PairingRefusalTests {
         // The retry is still answerable, which is the point of replacing the
         // proposal rather than refusing the second dial.
         try await Self.waitForPending(daemon, count: 1)
-        #expect(await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: false))
+        #expect(await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: false).ok)
         #expect(await retry.value == false)
     }
 
@@ -95,7 +99,7 @@ struct PairingRefusalTests {
     func answeringNothingReportsFalse() async throws {
         let daemon = try Self.daemon(answering: .milliseconds(200))
         let deviceID = Self.proposal(seed: 3).peer.deviceID
-        #expect(await daemon.answerPairing(deviceID: deviceID, accept: true) == false)
+        #expect(await daemon.answerPairing(deviceID: deviceID, accept: true).ok == false)
     }
 
     @Test("an answered proposal is accepted, and only that one")
@@ -105,9 +109,55 @@ struct PairingRefusalTests {
 
         async let waiting = daemon.confirmPairing(proposal, direction: PairingDirection.incoming)
         try await Self.waitForPending(daemon, count: 1)
-        #expect(await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: true))
+        #expect(await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: true).ok)
         #expect(await waiting)
         // Answering the same device twice is not a second yes.
-        #expect(await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: true) == false)
+        #expect(await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: true).ok == false)
+    }
+
+    /// The honesty half of the one-sided-trust problem.
+    ///
+    /// `SyncResponder.answerPairRequest` saves the peer as soon as its own human
+    /// accepts, while the dialling side saves only once the short authentication
+    /// string is confirmed here — so refusing an *outgoing* proposal leaves the
+    /// far machine listing this one. Nothing on the wire undoes that, so the
+    /// refusal has to say so, and it has to say so from the daemon rather than
+    /// from one client.
+    @Test("refusing an outgoing proposal warns that the far device may still list this one")
+    func refusingOutgoingWarnsAboutOneSidedTrust() async throws {
+        let daemon = try Self.daemon(answering: .seconds(60))
+        let proposal = Self.proposal(seed: 5)
+
+        async let waiting = daemon.confirmPairing(proposal, direction: PairingDirection.outgoing)
+        try await Self.waitForPending(daemon, count: 1)
+        let answer = await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: false)
+        #expect(await waiting == false)
+
+        #expect(answer.ok)
+        #expect(answer.detail.contains(PairError.oneSidedWarning))
+    }
+
+    /// And not on the inbound path, where the far side is still inside its own
+    /// dial: it learns of the refusal from the `pairConfirm` reply and records
+    /// nothing, so the warning would be false.
+    @Test("refusing an incoming proposal says nothing about the far device")
+    func refusingIncomingCarriesNoWarning() async throws {
+        let daemon = try Self.daemon(answering: .seconds(60))
+        let proposal = Self.proposal(seed: 6)
+
+        async let waiting = daemon.confirmPairing(proposal, direction: PairingDirection.incoming)
+        try await Self.waitForPending(daemon, count: 1)
+        let answer = await daemon.answerPairing(deviceID: proposal.peer.deviceID, accept: false)
+        #expect(await waiting == false)
+
+        #expect(answer.ok)
+        #expect(answer.detail.contains(PairError.oneSidedWarning) == false)
+    }
+
+    /// The dial deadline says the same thing, because a dial abandoned mid-flight
+    /// leaves the far side in exactly the same place.
+    @Test("the dial timeout warns about the same asymmetry")
+    func theDialTimeoutWarnsAboutOneSidedTrust() {
+        #expect(PairError.tookTooLong("ab:cd").description.contains(PairError.oneSidedWarning))
     }
 }

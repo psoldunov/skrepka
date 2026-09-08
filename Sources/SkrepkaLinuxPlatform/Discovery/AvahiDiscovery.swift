@@ -95,7 +95,7 @@ public actor AvahiDiscovery: PeerDiscovery {
 
     /// Which of the session's connections the browser and entry group were
     /// built on — ``SkrepkaIPC/BusSession/generation``, sampled when the server
-    /// watch subscribed.
+    /// watch subscribed and again after every rebuild.
     ///
     /// A `dbus-daemon` restart replaces the connection under everything, and
     /// avahi reclaims every object the old connection owned. So a generation
@@ -103,12 +103,20 @@ public actor AvahiDiscovery: PeerDiscovery {
     /// whatever this side still has a path for. Zero until the first watch has
     /// subscribed, which is also `BusSession`'s "nothing has connected yet".
     ///
-    /// **Recorded, and not yet compared against anything that fires.** The one
-    /// reader is `handleWatchEnding(builtOn:)`, which a bus death does not
-    /// currently reach — `AvahiDiscovery+Reconnect.swift` says why, and says
-    /// what would have to change. Keeping the sample costs one `await` per
-    /// subscription and is what a working detector would need.
+    /// Read by `handleWatchEnding(builtOn:)`, which compares it against the
+    /// connection a watch pass ended on. Since ``noteTransportLoss(on:)``
+    /// brings it up to date as part of the rebuild it drives, a watch pass that
+    /// ends because that rebuild replaced the connection sees a generation that
+    /// has not moved and correctly declines to rebuild a second time.
     var busGeneration = 0
+
+    /// The rebuild in flight after the connection under this instance went
+    /// away, or nil.
+    ///
+    /// One at a time, which is what stops a rebuild whose own calls fail from
+    /// starting another. See `rebuildAfterBusLoss()` in
+    /// `AvahiDiscovery+Calls.swift`.
+    var busRebuild: Task<Void, Never>?
 
     /// avahi's unique bus name, as of the last `Server.StateChanged` this
     /// believed. Compared against a signal's sender so a forged one cannot
@@ -156,79 +164,12 @@ public actor AvahiDiscovery: PeerDiscovery {
     public func stopEverything() {
         serverWatchTask?.cancel()
         serverWatchTask = nil
+        // A rebuild in flight would otherwise publish a record and start a
+        // browse on the way out of a shutdown.
+        busRebuild?.cancel()
+        busRebuild = nil
         stopAdvertising()
         stopBrowsing()
-    }
-
-    // MARK: - Calling avahi
-
-    func callServer(_ method: String, _ arguments: [DBusValue] = []) async throws -> [DBusValue] {
-        try await call(
-            path: AvahiNames.serverPath,
-            interface: AvahiNames.Interface.server,
-            method: method,
-            arguments
-        )
-    }
-
-    /// One method call, bounded.
-    ///
-    /// `destination` is avahi for everything but the `AddMatch` and the
-    /// `GetNameOwner` that have to go to the bus daemon; `timeout` is
-    /// ``probeTimeout`` for everything,
-    /// because every call here is a local unary request.
-    func call(
-        destination: String = AvahiNames.busName,
-        path: String,
-        interface: String,
-        method: String,
-        timeout: Duration = AvahiDiscovery.probeTimeout,
-        _ arguments: [DBusValue] = []
-    ) async throws -> [DBusValue] {
-        let connection = try await session.connection()
-        let request = DBusRequest.createMethodCall(
-            destination: destination,
-            path: path,
-            interface: interface,
-            method: method,
-            body: arguments
-        )
-        let answer: DBusMessage?
-        do {
-            answer = try await connection.send(
-                request, timeoutNanoseconds: timeout.wholeNanoseconds)
-        } catch let error as DBusError {
-            // `DBusError.timeout` says only "timeout" when it is printed, which
-            // in a `skrepka doctor` line is a sentence with no subject.
-            if case .timeout = error { throw AvahiError.timedOut(method: method) }
-            throw error
-        }
-        guard let reply = answer else {
-            throw AvahiError.noReply(method: method)
-        }
-        guard reply.messageType != .error else {
-            throw AvahiError.refused(method: method, detail: reply.avahiErrorDetail)
-        }
-        return reply.body
-    }
-
-    /// Subscribes to one signal on one interface, before the object that will
-    /// emit it exists. See the type's discussion.
-    func signals(interface: String, member: String) async throws -> AsyncStream<DBusMessage> {
-        let connection = try await session.connection()
-        return await connection.subscribeToSignal(interface: interface, member: member)
-    }
-
-    /// `Free` on a transient object, ignoring whatever it says.
-    ///
-    /// Ignored deliberately, and this is the one place in this file a discarded
-    /// error is right: the object is being abandoned either way, and avahi
-    /// answers `org.freedesktop.Avahi.InvalidObject` for one it has already
-    /// destroyed itself — a browse that failed has usually done exactly that.
-    /// Reporting it would mean surfacing "the thing you are throwing away was
-    /// already thrown away".
-    func free(path: String, interface: String, method: String) async {
-        _ = try? await call(path: path, interface: interface, method: method)
     }
 
     func describe(_ error: any Error) -> String {
@@ -260,33 +201,5 @@ enum AvahiError: Error, Sendable, CustomStringConvertible {
         case .unreadableReply(let method): "avahi answered \(method) with something unreadable"
         case .timedOut(let method): "avahi did not answer \(method) in time"
         }
-    }
-}
-
-extension Duration {
-    /// Whole nanoseconds, for `DBusClient.Connection.send(_:timeoutNanoseconds:)`
-    /// — which takes a `UInt64` rather than a `Duration`.
-    ///
-    /// Saturating rather than trapping at both ends: a negative deadline is a
-    /// deadline that has passed, and one longer than 584 years is one nothing is
-    /// waiting for. Neither is worth crashing a daemon over.
-    var wholeNanoseconds: UInt64 {
-        let parts = components
-        guard parts.seconds > 0 || parts.attoseconds > 0 else { return 0 }
-        let seconds = UInt64(clamping: parts.seconds)
-        let (scaled, overflowed) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
-        guard !overflowed else { return .max }
-        let (total, wrapped) = scaled.addingReportingOverflow(
-            UInt64(clamping: parts.attoseconds) / 1_000_000_000)
-        return wrapped ? .max : total
-    }
-}
-
-extension DBusMessage {
-    /// The human half of an error reply, which D-Bus convention puts first in
-    /// the body.
-    var avahiErrorDetail: String {
-        guard case .string(let detail) = body.first else { return "" }
-        return detail
     }
 }

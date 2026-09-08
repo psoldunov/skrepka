@@ -171,10 +171,14 @@ extension Daemon {
     /// Without this a device drops off the network with nothing anywhere saying
     /// so — which on a headless daemon means a user staring at a peer list on
     /// the other machine wondering where this one went.
+    /// Replaces the watcher rather than adding one. See
+    /// ``Daemon/advertisementFailureTask``.
     private func watchAdvertisementFailures(_ discovery: AvahiDiscovery) {
-        Task { [weak self] in
+        advertisementFailureTask?.cancel()
+        advertisementFailureTask = Task { [weak self] in
             let failures = await discovery.advertisementFailures()
             for await failure in failures {
+                guard !Task.isCancelled else { return }
                 await self?.advertisementLost(failure)
             }
         }

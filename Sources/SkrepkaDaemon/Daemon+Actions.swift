@@ -19,6 +19,15 @@ extension Daemon {
     /// ceiling and the privacy markers are exactly as relevant to it as to one
     /// the daemon read itself.
     public func submit(_ request: SubmitRequest) async -> ActionDocument {
+        // Before the decode, not after it. `decodedRepresentations()` allocates
+        // the whole payload, so checking the size afterwards let any client on
+        // the session bus make this process allocate as much as it liked by
+        // sending one oversized submission. The encoded length bounds the
+        // decoded one from above, so this refuses early and the exact check
+        // below still decides.
+        guard request.isWithinEncodedLimit else {
+            return .refused("that clip is over the \(SubmitRequest.sizeLimit)-byte limit")
+        }
         guard let payloads = request.decodedRepresentations() else {
             return .refused("one of the representations was not valid base64")
         }
@@ -60,6 +69,12 @@ extension Daemon {
     /// completes the TCP connect and then goes quiet would hang not just this
     /// call but every `History`, `Copy` and `Diagnostics` behind it.
     public func pair(withFingerprint fingerprint: String) async throws -> PairingProposalDocument {
+        // First, ahead of even the sync-is-off check: a blank selector is a bad
+        // argument whatever this daemon's state is, and the answer should not
+        // depend on it. ``Daemon/sighting(matching:in:)`` refuses one too —
+        // this only says so in words a user can act on, because an empty
+        // selector prefix-matches every sighted device.
+        guard Self.selector(fingerprint) != nil else { throw PairError.noDeviceNamed }
         guard let runtime else { throw PairingWindowError.syncIsOff }
         guard let sighting = Self.sighting(matching: fingerprint, in: sighted) else {
             throw PairError.notOnTheNetwork(fingerprint)
@@ -128,9 +143,9 @@ extension Daemon {
             // given up on, and accepting it there records us as a peer while
             // nothing here has a record of it. Said in the error and written
             // to the journal, because the honest fix — carrying a late success
-            // into `completeOutgoing` — is bigger than this.
+            // into `completeOutgoing` — is a wire change rather than a report.
             logger.notice(
-                "a dial to pair was abandoned; the far device may still be prompting",
+                "a dial to pair was abandoned; \(PairError.oneSidedWarning)",
                 metadata: ["peer": .string(fingerprint)]
             )
             throw error
@@ -220,7 +235,17 @@ extension Daemon {
         accepted: Bool
     ) async {
         forget(proposal.peer.deviceID, proposalID: proposalID)
-        guard accepted else { return }
+        guard accepted else {
+            // Refused here, or unanswered until the deadline. Either way the
+            // far side has already run its own `confirmPairing` and may have
+            // saved this device, so the asymmetry goes in the journal as well
+            // as in the answer the client gets — see ``PairError/oneSidedWarning``.
+            logger.notice(
+                "an outgoing pairing ended unaccepted here; \(PairError.oneSidedWarning)",
+                metadata: ["peer": .string(proposal.peer.deviceID.fingerprint)]
+            )
+            return
+        }
         do {
             try await trust.savePairedPeer(proposal.peer)
             await pairedSetMayHaveChanged()
@@ -232,46 +257,4 @@ extension Daemon {
         }
     }
 
-    /// Forgets a paired device.
-    public func unpair(fingerprint: String) async -> ActionDocument {
-        let paired: [PairedPeer]
-        do {
-            paired = try await trust.pairedPeers()
-        } catch {
-            // Surfaced rather than discarded: an empty list here reads as "no
-            // paired device matches that", which is a different answer from
-            // "the store could not be read" and sends the user hunting for a
-            // fingerprint that is fine.
-            return .refused("could not read the paired devices: \(error)")
-        }
-        let matches =
-            paired.filter { $0.deviceID.hex.hasPrefix(fingerprint.lowercased()) }
-            + paired.filter { $0.deviceID.fingerprint == fingerprint }
-        guard let peer = Set(matches.map(\.deviceID)).count == 1 ? matches.first : nil else {
-            return matches.isEmpty
-                ? .refused("no paired device matches \"\(fingerprint)\"")
-                : .refused("\"\(fingerprint)\" matches more than one paired device")
-        }
-        do {
-            try await trust.forgetPairedPeer(peer.deviceID)
-        } catch {
-            return .refused("could not forget it: \(error)")
-        }
-        await pairedSetMayHaveChanged()
-        return .succeeded("forgot \(peer.deviceName)", subject: peer.deviceID.fingerprint)
-    }
-
-    static func sighting(
-        matching fingerprint: String,
-        in sighted: [SyncDeviceID: Sighting]
-    ) -> Sighting? {
-        let wanted = fingerprint.lowercased()
-        let matches = sighted.filter {
-            $0.key.hex.hasPrefix(wanted) || $0.key.fingerprint.lowercased() == wanted
-        }
-        // Exactly one, or nothing. Pairing with whichever of two peers a short
-        // prefix happened to hit is the one mistake this whole handshake exists
-        // to make impossible.
-        return matches.count == 1 ? matches.values.first : nil
-    }
 }

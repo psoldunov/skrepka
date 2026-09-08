@@ -6,7 +6,7 @@
 decision rather than blocked.** `AvahiDiscovery`, `skrepkad`, `skrepka`, the
 D-Bus interface and the systemd user unit all exist and both quality gates are
 green over them — `scripts/doctor.sh` at 538 tests / 71 suites,
-`scripts/doctor-linux.sh` at 572 tests / 75 suites. What has *not* happened is
+`scripts/doctor-linux.sh` at 659 tests / 90 suites. What has *not* happened is
 the twelve-step runbook against a real second machine, which is what the "done
 when" below is written as: **the owner decided on 2026-09-08 that the Steam Deck
 is not worth setting up until Phase 7's GUI exists**, so those steps wait for
@@ -28,9 +28,13 @@ both recorded here rather than quietly dropped:
   `DiscoveryError.responderUnavailable` with a reason, the daemon steps over it
   rather than refusing to start, and `skrepka doctor` reports
   `network.responder: none` with that reason. A second conformance drops in
-  behind `PeerDiscovery` without a redesign, and
-  `AvahiDiscoveryTests.exactlyOneResponderExists` is the assertion whoever adds
-  it has to change deliberately.
+  behind `PeerDiscovery` without a redesign, and the reasoning sits at the foot
+  of `Tests/SkrepkaDaemonTests/AvahiDiscoveryTests.swift` where whoever adds one
+  will read it. There is deliberately no test asserting "only one responder
+  exists": the one that was written built a single-element array and asserted it
+  had one element, which cannot fail, and Swift has no reflection that
+  enumerates a protocol's conformances — so there is no honest version to write,
+  and a test that cannot fail reads in a summary as coverage it is not.
 - **The clock-skew check the Risks section asks for**, in the form it asks for
   it. "Reporting the offset against a paired peer" needs a timestamp on the
   wire, and there is none: `PeerIdentity`'s `hello` carries a device
@@ -44,27 +48,9 @@ both recorded here rather than quietly dropped:
   cover a peer that is wrong. Closing the rest needs a protocol change, and
   belongs to whichever phase next opens the wire.
 
-Two gaps found in review and shipped deliberately, both recorded where the code
-is as well as here:
+One gap found in review and shipped deliberately, recorded where the code is as
+well as here:
 
-- **`BusSession` does not notice a bus connection that has died.** An
-  `avahi-daemon` restart *is* handled — `AvahiDiscovery+Reconnect.swift` watches
-  `Server.StateChanged`, and that is the common case — but a `dbus-daemon`
-  restart is not, so `skrepkad` would stay running with a bus name nothing can
-  reach until it is restarted. The obvious mechanism does not work and this is
-  worth writing down so it is not tried again: `DBusClient.withConnection` runs
-  its reply loop in a *separate* task and awaits the handler beside it
-  (`DBusClient.swift:398-431`), and the body runs under
-  `asyncChannel.executeThenClose`, which does not cancel the body when the
-  channel closes — so the parked task never unwinds on transport death, and the
-  signal-stream route fails identically because those streams end only in
-  `Connection.deinit` and two live references keep it alive. What would work is
-  invalidating the session when a *call* fails in a transport-shaped way, which
-  the now-wired `callTimeout` and `probeTimeout` already surface. That touches
-  error handling across three modules and was judged too wide to take at the
-  end of this phase. The consequence is bounded: a `dbus-daemon` restart ends
-  the graphical session on every platform this targets, and the workaround is
-  `systemctl --user restart skrepkad`.
 - **`HistorySchema` has three concurrency windows, and they are Phase 4's rather
   than this phase's.** Found while checking that two daemons racing one database
   is safe. `installedVersion` is read outside the `BEGIN IMMEDIATE`, so two

@@ -179,11 +179,47 @@ extension CLIOptions {
                 try none(verb)
                 return .sync
             case .copy: return .copy(try selector(verb))
-            case .unpair: return .unpair(fingerprint: try one(verb, named: "a fingerprint"))
+            case .unpair: return .unpair(fingerprint: try fingerprint(verb))
             case .pair:
                 try none(verb)
-                return .pair(peer: peer, seconds: seconds)
+                return .pair(peer: try namedPeer(), seconds: seconds)
             }
+        }
+
+        /// The fingerprint `unpair` was given, refused when it is blank.
+        ///
+        /// Blank is not the same as absent: `skrepka unpair ""` supplies an
+        /// argument, and a fingerprint is matched by prefix — so an empty one
+        /// selects whichever peer comes first rather than none, and forgets a
+        /// device nobody named. The daemon refuses it too, and is the authority
+        /// on it; this layer exists so the message names the argument and the
+        /// exit code says "you typed it wrong" rather than "the daemon reported
+        /// a failure".
+        private func fingerprint(_ verb: Verb) throws -> String {
+            let text = try one(verb, named: "a fingerprint")
+            guard !Self.isBlank(text) else {
+                throw CLIError.invalidArgument(
+                    text,
+                    command: verb.rawValue,
+                    reason: "a fingerprint has to name one device, and an empty one names any"
+                )
+            }
+            return text
+        }
+
+        /// `--peer`, refused when it is blank, for the reason
+        /// ``fingerprint(_:)`` is: `--peer ""` would dial whichever peer this
+        /// device happens to have sighted.
+        private func namedPeer() throws -> String? {
+            guard let peer else { return nil }
+            guard !Self.isBlank(peer) else { throw CLIError.invalidValue(peer, flag: "--peer") }
+            return peer
+        }
+
+        /// Empty, or nothing but whitespace. Checked rather than trimmed: a
+        /// selector quietly rewritten is one the user cannot see was changed.
+        private static func isBlank(_ text: String) -> Bool {
+            text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
 
         /// `copy 0` and `copy ""` are usage errors rather than hash prefixes:

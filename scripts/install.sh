@@ -331,18 +331,45 @@ echo "installed ${BIN_DIR}/${CLI_NAME}"
 if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
 	install -m 0644 "${REPOSITORY}/packaging/systemd/${UNIT_NAME}" "${UNIT_DIR}/${UNIT_NAME}"
 else
-	# Through a temporary file rather than `sed -i`, whose in-place flag takes a
-	# mandatory argument on BSD sed and none on GNU sed; the two spellings are
-	# incompatible and this script has no business caring which one it met.
+	# Rewritten line by line in the shell rather than with `sed`, and that is a
+	# correctness measure rather than a preference.
 	#
-	# The replacement is an absolute path that contains slashes, so `|` is the
-	# s/// separator. No path this script accepts can contain a newline or a
-	# `|` unescaped in a way that matters, because it came from an environment
-	# variable read at the top and is used only on the right-hand side.
+	# $BIN_DIR comes from $XDG_BIN_HOME, which is a user's environment variable
+	# and can hold anything a path can hold. Put on the right-hand side of an
+	# `s|||` it is not data, it is sed source: an `&` expands to the whole
+	# match, a backslash escapes the character after it, and a `|` closes the
+	# replacement early. Any of the three silently writes a corrupt ExecStart
+	# that systemd then reports as 203/EXEC with nothing pointing at the cause.
+	# Escaping the three would work; not handing the path to an expression
+	# language at all is shorter and has nothing left to get wrong.
+	#
+	# Through a temporary file rather than `sed -i` either way, whose in-place
+	# flag takes a mandatory argument on BSD sed and none on GNU sed; the two
+	# spellings are incompatible and this script has no business caring which
+	# one it met.
 	UNIT_STAGE="$(mktemp)"
 	trap 'rm -f "${UNIT_STAGE}"; if [[ -n "${CLONE_DIRECTORY}" ]]; then rm -rf "${CLONE_DIRECTORY}"; fi' EXIT
-	sed "s|^ExecStart=%h/.local/bin/${DAEMON_NAME}\$|ExecStart=${BIN_DIR}/${DAEMON_NAME}|" \
-		"${REPOSITORY}/packaging/systemd/${UNIT_NAME}" > "${UNIT_STAGE}"
+	EXEC_START_FROM="ExecStart=%h/.local/bin/${DAEMON_NAME}"
+	EXEC_START_TO="ExecStart=${BIN_DIR}/${DAEMON_NAME}"
+	REWROTE=0
+	# `|| [[ -n "${line}" ]]` so a final line without a trailing newline is not
+	# dropped; `IFS=` and `-r` so leading whitespace and backslashes survive.
+	while IFS= read -r line || [[ -n "${line}" ]]; do
+		if [[ "${line}" == "${EXEC_START_FROM}" ]]; then
+			printf '%s\n' "${EXEC_START_TO}"
+			REWROTE=1
+		else
+			printf '%s\n' "${line}"
+		fi
+	done < "${REPOSITORY}/packaging/systemd/${UNIT_NAME}" > "${UNIT_STAGE}"
+
+	# Asserted rather than assumed. The old `sed` exited 0 having substituted
+	# nothing if that line ever changed, and the next line claimed success — so
+	# the unit would point at a binary that is not there.
+	if [[ "${REWROTE}" -ne 1 ]]; then
+		echo "error: no '${EXEC_START_FROM}' line in ${UNIT_NAME}; cannot point it at ${BIN_DIR}." >&2
+		exit 1
+	fi
 	install -m 0644 "${UNIT_STAGE}" "${UNIT_DIR}/${UNIT_NAME}"
 	echo "unit ExecStart pointed at ${BIN_DIR}/${DAEMON_NAME} (\$XDG_BIN_HOME is set)"
 fi

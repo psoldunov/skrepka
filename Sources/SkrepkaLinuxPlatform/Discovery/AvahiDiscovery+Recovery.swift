@@ -223,12 +223,13 @@ extension AvahiDiscovery {
     /// Same reasoning as the browse: ``stopAdvertising()`` finishes the streams
     /// ``advertisementFailures()`` handed out, and a caller whose stream ends is
     /// entitled to conclude the advertisement is gone for good.
+    ///
+    /// The teardown itself is ``dropAdvertisement()``, which
+    /// `AvahiDiscovery+Withdrawal.swift` also gives the
+    /// ``SkrepkaSync/AdvertisementChange/republish`` case — one narrow teardown
+    /// for both of the ways an advertisement is replaced rather than ended.
     private func republish(_ descriptor: ServiceDescriptor) async {
-        entryGroupTask?.cancel()
-        entryGroupTask = nil
-        entryGroupPath = nil
-        published = nil
-        registrationValue = nil
+        dropAdvertisement()
         do {
             try await publish(descriptor)
         } catch {

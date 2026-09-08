@@ -56,6 +56,8 @@ extension Daemon {
 
         browseTask?.cancel()
         browseTask = nil
+        advertisementFailureTask?.cancel()
+        advertisementFailureTask = nil
         for link in links.values { await link.stop() }
         links = [:]
         progress = [:]

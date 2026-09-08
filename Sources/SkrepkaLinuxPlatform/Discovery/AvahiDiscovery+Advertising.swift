@@ -36,50 +36,15 @@ extension AvahiDiscovery {
         case .record:
             try await updateRecord(descriptor)
         case .republish:
-            stopAdvertising()
+            // ``dropAdvertisement()`` rather than ``stopAdvertising()``: this
+            // advertisement is being replaced, not ended, and finishing the
+            // streams ``advertisementFailures()`` handed out would tell every
+            // listener the record is gone for good. A descriptor change is not
+            // that. The same teardown `republish(_:)` uses, for the same
+            // reason.
+            dropAdvertisement()
             try await publish(descriptor)
         }
-    }
-
-    /// Withdraws the advertisement. Idempotent, and does not throw.
-    public func stopAdvertising() {
-        entryGroupTask?.cancel()
-        entryGroupTask = nil
-        published = nil
-        registrationValue = nil
-        if let path = entryGroupPath {
-            entryGroupPath = nil
-            // Unstructured on purpose: the protocol says teardown does not
-            // throw and does not suspend, and a `Free` that cannot be awaited
-            // is still worth sending — avahi withdraws the record when the
-            // client disconnects either way, so the worst case is that the
-            // record lives until the connection closes.
-            Task { [weak self] in
-                await self?.free(
-                    path: path,
-                    interface: AvahiNames.Interface.entryGroup,
-                    method: AvahiNames.EntryGroup.free
-                )
-            }
-        }
-        for sink in failureSinks.values { sink.finish() }
-        failureSinks = [:]
-    }
-
-    /// Reports an advertisement that was confirmed and then stopped being
-    /// published — a collision avahi could not rename around, or a failure.
-    public func advertisementFailures() -> AsyncStream<DiscoveryError> {
-        let (stream, continuation) = AsyncStream<DiscoveryError>.makeStream()
-        let id = UUID()
-        failureSinks[id] = continuation
-        continuation.onTermination = { [weak self] _ in
-            Task { await self?.removeFailureSink(id) }
-        }
-        return stream
-    }
-
-    func removeFailureSink(_ id: UUID) {
-        failureSinks[id] = nil
     }
 
     // MARK: - The entry group

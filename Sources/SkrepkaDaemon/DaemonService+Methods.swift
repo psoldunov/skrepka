@@ -172,11 +172,11 @@ extension DaemonService {
                 else {
                     throw ServiceError.badArguments(SkrepkaInterface.Member.confirmPairing)
                 }
-                let answered = await daemon.answerPairing(deviceID: deviceID, accept: accept)
-                let result =
-                    answered
-                    ? ActionDocument.succeeded(accept ? "paired" : "refused", subject: hex)
-                    : ActionDocument.refused("no pairing is waiting for that device", subject: hex)
+                // The document comes from the daemon rather than being composed
+                // here: refusing an outgoing proposal has to carry the
+                // one-sided-trust warning, and only the daemon knows which
+                // direction the waiting proposal ran in.
+                let result = await daemon.answerPairing(deviceID: deviceID, accept: accept)
                 return [.string(try SkrepkaDocumentCoding.encode(result))]
             },
         ]

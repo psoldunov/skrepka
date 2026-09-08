@@ -38,6 +38,20 @@ public enum ClockCheck {
     static let interfaceName = "org.freedesktop.timedate1"
     static let synchronisedProperty = "NTPSynchronized"
 
+    /// How long `timedate1` gets to answer before it is treated as absent.
+    ///
+    /// Two seconds, and the same two seconds as ``AvahiDiscovery/probeTimeout``
+    /// because it is the same shape of call: a property read over a Unix socket
+    /// from a daemon on this machine, answered at once or not at all.
+    ///
+    /// It exists because the connection is **shared and serial**. `DaemonService`
+    /// awaits ``run(over:)`` on the same ``SkrepkaIPC/BusSession`` it makes every
+    /// other call on, so a `timedate1` that accepts the call and never replies
+    /// does not merely delay one diagnostics line — it holds up every method
+    /// that comes after it. `DBusClient` applies no deadline of its own when
+    /// none is given.
+    static let replyTimeout: Duration = .seconds(2)
+
     /// What the check found.
     ///
     /// Three answers rather than a `Bool`, because "systemd is not running here"
@@ -81,7 +95,9 @@ public enum ClockCheck {
                 method: "Get",
                 body: [.string(interfaceName), .string(synchronisedProperty)]
             )
-            guard let reply = try await connection.send(request), reply.messageType != .error else {
+            let answer = try await connection.send(
+                request, timeoutNanoseconds: replyTimeout.wholeNanoseconds)
+            guard let reply = answer, reply.messageType != .error else {
                 return .unknown(reason: "timedate1 is not available on this system")
             }
             guard case .variant(let variant) = reply.body.first,
@@ -90,6 +106,14 @@ public enum ClockCheck {
                 return .unknown(reason: "timedate1 answered something unreadable")
             }
             return synchronised ? .synchronised : .notSynchronised
+        } catch DBusError.timeout {
+            // Told apart from the catch below on purpose. `DBusError.timeout`
+            // prints as the bare word "timeout", which in a `skrepka doctor`
+            // line is a sentence with no subject — and "timedate1 did not
+            // answer" is a different finding from "timedate1 is not here",
+            // which is the whole reason ``Finding`` carries a reason at all.
+            return .unknown(
+                reason: "timedate1 did not answer within \(replyTimeout.components.seconds)s")
         } catch {
             return .unknown(reason: String(describing: error))
         }

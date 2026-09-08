@@ -141,6 +141,41 @@ struct AvahiDiscoveryTests {
         await discovery.stopEverything()
     }
 
+    /// Two teardowns, and only one of them ends the failure streams.
+    ///
+    /// A stream ``AvahiDiscovery/advertisementFailures()`` handed out finishes
+    /// when the advertisement is over for good, so finishing it for a
+    /// descriptor change tells every listener something untrue — and a caller
+    /// that concluded the advertisement was gone would stop watching a record
+    /// that is still published. That is what
+    /// ``AvahiDiscovery/dropAdvertisement()`` exists to avoid, and it is the
+    /// teardown both `updateAdvertisement`'s
+    /// ``SkrepkaSync/AdvertisementChange/republish`` case and the restart
+    /// rebuild use.
+    ///
+    /// Asserted on the sinks rather than by iterating the stream: an
+    /// unfinished `AsyncStream` has no "is it done" to ask, so the only way to
+    /// read the negative case off the stream is to wait on it, and a broken
+    /// implementation would hang the suite instead of failing it.
+    @Test("replacing an advertisement keeps the failure streams; ending it finishes them")
+    func replacingKeepsTheFailureStreams() async {
+        let discovery = AvahiDiscovery(session: Self.deadSession())
+        // Held for the length of the test. An `AsyncStream` whose last
+        // reference goes away terminates itself, which would empty the sinks
+        // for a reason that has nothing to do with either teardown.
+        let failures = await discovery.advertisementFailures()
+        #expect(await discovery.failureSinks.count == 1)
+        await discovery.dropAdvertisement()
+        #expect(
+            await discovery.failureSinks.count == 1,
+            "a replaced advertisement must leave its listeners subscribed")
+        await discovery.stopAdvertising()
+        #expect(
+            await discovery.failureSinks.isEmpty,
+            "an ended advertisement must finish the streams it handed out")
+        withExtendedLifetime(failures) {}
+        await discovery.stopEverything()
+    }
 }
 
 /// The bound on rebuilding after an `avahi-daemon` restart — the one part of

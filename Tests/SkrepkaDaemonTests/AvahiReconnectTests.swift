@@ -2,16 +2,22 @@ import Testing
 
 @testable import SkrepkaLinuxPlatform
 
-/// The rule a server watch *would* apply if it noticed the bus underneath it
-/// being replaced, rather than avahi.
+/// The rule a server watch applies when it notices the bus underneath it being
+/// replaced, rather than avahi.
 ///
 /// Every test here calls ``AvahiDiscovery/ending(builtOn:now:avahi:)`` directly.
 /// That is deliberate and it is the limit of what is claimed: the function is
 /// pure, and these cases pin down the decision it makes. They say nothing about
-/// whether anything reaches it, and today nothing does — the reconnect trigger
-/// it was written for is dormant, for the reason set out at the top of
-/// `Sources/SkrepkaLinuxPlatform/Discovery/AvahiDiscovery+Reconnect.swift`. Read
-/// a green run here as "the rule is right", never as "a bus restart recovers".
+/// what reaches it.
+///
+/// **What now reaches it, and what still does not.** A dead bus is noticed at
+/// the call site — ``AvahiDiscovery/noteTransportLoss(on:)`` invalidates the
+/// session and rebuilds through ``AvahiDiscovery/recover()`` — so the rule
+/// below is no longer the trigger. It is the guard against that rebuild being
+/// paid for twice, and it is what puts the server watch back on the connection
+/// the rebuild landed on. Exercising either needs a bus a test can kill; see
+/// the note at the foot of this file. Read a green run here as "the rule is
+/// right", never as "a bus restart recovers".
 @Suite("The avahi bus-reconnect decision")
 struct AvahiReconnectTests {
     /// A watch that ended on the connection its state was built on did not lose
@@ -55,7 +61,9 @@ struct AvahiReconnectTests {
     /// The first connection is a change from ``AvahiDiscovery/busGeneration``'s
     /// zero, and would read as a reconnect if the loop asked. It does not —
     /// the first pass only records — but the numbering has to be the one
-    /// `BusSession` documents or the comparison means nothing.
+    /// `BusSession` documents or the comparison means nothing. `BusSession`
+    /// counts a connection opened *and* an `invalidate()` that had one to drop,
+    /// so a caller compares with `!=` and never with an ordering.
     @Test("a first connection is generation one, against a recorded zero")
     func theFirstConnectionIsAChangeFromZero() {
         #expect(AvahiDiscovery.ending(builtOn: 0, now: 1, avahi: .running) == .rebuild)
@@ -89,14 +97,23 @@ struct AvahiReconnectTests {
 // system bus, and published a real `_skrepka._tcp` record from a test run. So
 // these are stated plainly rather than left to be inferred from a green suite.
 //
-// - **No bus restart is exercised, and none can be.** Not because the harness
-//   lacks a bus, but because `runServerWatch()`'s trigger does not fire at all:
-//   its signal stream finishes only in `DBusClient.Connection.deinit`
-//   (`.build-linux/checkouts/dbus/Sources/DBUS/DBusClient.swift:70-77`), and
-//   both `BusSession`'s cached connection and the parked closure's own
-//   parameter keep that object alive while the bus is dead. A test that
-//   restarted a real `dbus-daemon` would therefore hang rather than pass. The
-//   file header on `AvahiDiscovery+Reconnect.swift` carries the full finding.
+// - **The invalidate-then-recover path is not exercised, and cannot be here.**
+//   `noteTransportLoss(on:)` is reached only from a call that *connected* and
+//   then died — a `send` that threw, a reply that missed `probeTimeout`, an
+//   empty answer. Against `AvahiDiscoveryTests.deadAddress` the connect itself
+//   throws first, so no test in this suite gets past `session.connection()` and
+//   into the classification at all. Reaching it needs a live `dbus-daemon` that
+//   a test may kill mid-call, which the Linux build image does not have. A test
+//   that asserted `busRebuild == nil` after a probe against a dead address
+//   would pass without entering the path it names, which is the kind of
+//   coverage this file exists to refuse.
+//
+// - **Nor is the resubscribe.** A second pass of `runServerWatch()` needs the
+//   signal stream to finish, which needs the library's `Connection` to be
+//   released. `BusSession.invalidate()` is what should now release it — the
+//   file header on `AvahiDiscovery+Reconnect.swift` carries that reasoning and
+//   labels it unverified — and confirming it means watching a real connection
+//   deinit, not calling a pure function.
 //
 // - **`discardEntryGroup(at:)` is not exercised.** It is reached when
 //   `EntryGroupNew` succeeds and `AddService` or `Commit` then fails, so it
@@ -111,4 +128,5 @@ struct AvahiReconnectTests {
 //   returns the right answer for every combination of a moved generation and an
 //   avahi state — including the `GetState` convergence that stops one
 //   `dbus-daemon` restart costing two rebuilds. That rule is the part worth
-//   pinning down, and it will be correct on the day something calls it.
+//   pinning down, and it is now the arbiter between two triggers that both
+//   exist rather than one that does not.

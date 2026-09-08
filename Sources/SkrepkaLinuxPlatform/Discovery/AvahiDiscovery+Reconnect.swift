@@ -17,67 +17,67 @@ import SkrepkaIPC
 /// that produces a live connection holding a dead browser and a path to an entry
 /// group avahi has already reclaimed.
 ///
-/// ## Which trigger fires today, and which does not
+/// ## Which trigger fires, and what each one covers
 ///
-/// **`Server.StateChanged` works, and it is the common case.** An
-/// `avahi-daemon` that restarts on its own — `systemctl restart avahi-daemon`,
-/// or an ordinary package upgrade — leaves the session bus up, so the
-/// subscription taken in ``AvahiDiscovery/runServerWatch()`` survives and the
-/// new daemon's `RUNNING` arrives on it. That path is live, and it is the one
-/// `AvahiDiscovery+Recovery.swift` was built for.
+/// **`Server.StateChanged` is the common case.** An `avahi-daemon` that
+/// restarts on its own — `systemctl restart avahi-daemon`, or an ordinary
+/// package upgrade — leaves the session bus up, so the subscription taken in
+/// ``AvahiDiscovery/runServerWatch()`` survives and the new daemon's `RUNNING`
+/// arrives on it. That is the path `AvahiDiscovery+Recovery.swift` was built
+/// for.
 ///
-/// **The watch-ending path below is dormant.** It is written against a
-/// `dbus-daemon` restart, where the reconnect would show up as the signal
-/// stream finishing — and with the `dbus` package this repo resolves, that
-/// stream never finishes. `Connection.deinit` is the only thing that finishes
-/// an entry in `signalSubscribers`
+/// **A dead *bus* is noticed at the call site, not here.** The only thing this
+/// library lets a connection holder observe about a dead transport is a call
+/// that fails: there is no close callback, no channel-state stream and no
+/// liveness signal. So ``AvahiDiscovery/noteTransportLoss(on:)`` invalidates
+/// the session when a call fails in a transport-shaped way and routes into the
+/// same ``AvahiDiscovery/recover()``. `AvahiDiscovery+Calls.swift` holds that,
+/// including the trade it accepts. Nothing polls and nothing probes.
+///
+/// **What the loop below is for now.** A reconnect leaves the server watch
+/// subscribed to a connection that is gone, and a watch on a dead connection
+/// hears no future `avahi-daemon` restart. The loop is what puts it back on the
+/// replacement, and ``AvahiDiscovery/handleWatchEnding(builtOn:)`` is what
+/// stops that costing a second rebuild for the one event the call site already
+/// rebuilt for.
+///
+/// **Unverified: whether the loop is reached at all.** It turns on a watch pass
+/// ending, and a pass ends when its signal stream finishes.
+/// `Connection.deinit` is the only thing that finishes an entry in
+/// `signalSubscribers`
 /// (`.build-linux/checkouts/dbus/Sources/DBUS/DBusClient.swift:70-77`; a
 /// `grep -n signalSubscribers` over that file gives 56, 74, 109, 224, 233, and
-/// 74 is the deinit). The `Connection` is held by two live references for as
-/// long as the bus is dead — `BusSession`'s cached connection, and the
-/// `connection` parameter of the parked closure, still suspended inside
-/// `handler(connection)` — so nothing releases it, `deinit` never runs, the
-/// `for await` in ``AvahiDiscovery/readServerStates(_:)`` never returns, and
-/// ``AvahiDiscovery/handleWatchEnding(builtOn:)`` is never reached. Nor does
-/// the parked task unwind on its own: `withConnection` awaits
-/// `handler(connection)` *beside* the reply loop rather than racing it, and
-/// `executeThenClose` runs its body to completion instead of cancelling it when
-/// the channel closes.
+/// 74 is the deinit). Before ``SkrepkaIPC/BusSession/invalidate()`` existed
+/// nothing released that object while the bus was dead — the session's cached
+/// connection and the parked closure's own `connection` parameter both held it
+/// — and the pass therefore never ended. `invalidate()` drops the cache and
+/// unparks the closure, which releases both, so `deinit` should now run and the
+/// stream should finish. *Should*: that is a claim about a library's retain
+/// graph under a real bus, and it cannot be settled without one. Read the loop
+/// as the resubscribe this design needs rather than as a resubscribe that is
+/// known to happen. If it does not happen, what is lost is narrower than the
+/// gap it replaces — the browse and the advertisement are back on a live
+/// connection either way, and only a *later* `avahi-daemon` restart would go
+/// unnoticed.
 ///
-/// So the code below is correct and unreached on that cause. It is kept rather
-/// than deleted because it is also what a working detector would call: the
-/// generation comparison, the `GetState` convergence and the rebuild are the
-/// part that is hard to get right, and none of it depends on which signal woke
-/// it up.
+/// ## Why one bus replacement cannot cost two rebuilds
 ///
-/// ## What would make it live — a decision not yet taken
+/// A `dbus-daemon` restart usually takes `avahi-daemon` down too, so the same
+/// event can reach ``AvahiDiscovery/recover()`` twice: once from the call site
+/// noticing the transport, once from the watch pass that ended with it. Two
+/// things keep that to one rebuild, and both are in
+/// ``AvahiDiscovery/handleWatchEnding(builtOn:)``.
 ///
-/// **Not chosen here, and deliberately not built.** The only thing this library
-/// lets a connection *holder* observe about a dead transport is a call that
-/// fails: there is no close callback, no channel-state stream, and no liveness
-/// signal. Since ``SkrepkaIPC/SkrepkaBus/callTimeout`` and
-/// ``AvahiDiscovery/probeTimeout`` are now wired through every call, a bus that
-/// has gone away surfaces as calls timing out rather than as silence.
-/// Invalidating the session on a transport-class failure at the call site —
-/// rather than polling, and rather than a liveness probe, which the owner ruled
-/// out — is the shape that would reach this file. Which failures count as
-/// transport-class, and who invalidates, is a design call nobody has made.
+/// **A rebuild already in flight wins outright.** The watch defers to it and
+/// does nothing, because it is the same event and that rebuild is what brings
+/// ``AvahiDiscovery/busGeneration`` up to the connection it landed on. Once it
+/// has, a later pass sees a generation that has not moved and answers
+/// ``AvahiDiscovery/WatchEnding/resubscribe``.
 ///
-/// Comparing ``SkrepkaIPC/BusSession/generation`` at the top of every `call` was
-/// the other candidate and is not enough by itself: nothing in `skrepkad` calls
-/// avahi on a schedule — after the browse and the publish are up, the next call
-/// is a resolve provoked by a browse result, and a dead browse provokes none —
-/// so a check that only runs when something calls would notice the reconnect at
-/// the moment it can no longer matter. The generation is still what *decides*
-/// once something has noticed; see ``AvahiDiscovery/busGeneration``.
-///
-/// ## Why both causes cannot each spend a rebuild
-///
-/// A `dbus-daemon` restart usually takes `avahi-daemon` down too, and the new
-/// avahi emits `Server.StateChanged(RUNNING)` on its way up. Left alone, a
-/// reconnect trigger and the state-changed watch would each rebuild for that
-/// one event. They cannot, and the thing that separates them is `GetState`
-/// asked at the instant the new subscription is in place:
+/// **Otherwise `GetState` decides**, asked at the instant the new subscription
+/// is in place. That covers a connection replaced by some *other* holder of the
+/// same ``SkrepkaIPC/BusSession`` — the daemon hands the same one to
+/// ``ClockCheck`` — where nothing here noticed and nothing here rebuilt:
 ///
 /// - avahi answers `RUNNING` — its `StateChanged` was emitted before this
 ///   subscription existed, so it can never arrive. This side rebuilds.
@@ -106,9 +106,9 @@ extension AvahiDiscovery {
 
     /// What a server watch whose signal stream ended should do about it.
     ///
-    /// Reachable today only through the resubscribe-on-first-pass path; see the
-    /// dormancy note on this file. The decision itself is exercised directly by
-    /// `AvahiReconnectTests.swift`, which is the honest extent of the coverage.
+    /// The decision is exercised directly by `AvahiReconnectTests.swift`, which
+    /// is the honest extent of the coverage: nothing in the suite reaches it
+    /// through a watch, because that needs a bus a test can kill.
     enum WatchEnding: Sendable, Equatable {
         /// The connection is still the one the browser and entry group were
         /// built on, so nothing avahi is holding has gone anywhere. Subscribe
@@ -147,13 +147,12 @@ extension AvahiDiscovery {
     /// One pass per connection: subscribe, note which connection it is, decide
     /// what the *previous* pass ending meant, then read until the stream ends.
     ///
-    /// **In practice it makes one pass.** The `for await` in
-    /// `readServerStates(_:)` returns only when the subscription finishes, and
-    /// with the resolved `dbus` package nothing finishes one while the process
-    /// still holds the connection — dead bus included. So the loop is the shape
-    /// a reconnect would take rather than a reconnect that happens; the live
-    /// work is `readServerStates(_:)` handling an `avahi-daemon` restart on a
-    /// session bus that stayed up. See the note on this file.
+    /// **A second pass needs the subscription to finish**, which needs the
+    /// library's `Connection` to be released, which is what
+    /// ``SkrepkaIPC/BusSession/invalidate()`` is expected to cause and what
+    /// cannot be confirmed without a bus to kill. See the note on this file. On
+    /// a session bus that stays up it makes one pass, and the live work is
+    /// `readServerStates(_:)` handling an `avahi-daemon` restart.
     func runServerWatch() async {
         var isReconnect = false
         while !Task.isCancelled {
@@ -219,9 +218,18 @@ extension AvahiDiscovery {
     /// Acts on the pass that just ended, now that the next subscription is in
     /// place and ``busGeneration`` says which connection it is on.
     ///
-    /// Not reached today: the pass before it does not end. See the note on this
-    /// file for what stops it and what would have to change.
+    /// In the ordinary reconnect this answers ``WatchEnding/resubscribe`` and
+    /// does nothing: ``AvahiDiscovery/noteTransportLoss(on:)`` rebuilt already
+    /// and brought ``busGeneration`` up to the connection it rebuilt onto, so
+    /// there is no change left here to act on. It stays because the generation
+    /// comparison is the only thing that makes that true, and because a stream
+    /// that ends for some other reason is still a watch that has to go back on
+    /// a connection.
     private func handleWatchEnding(builtOn: Int) async {
+        // A rebuild the call site already started covers this same event and
+        // is what will bring ``busGeneration`` up to date; acting here as well
+        // is the double spend. See the note on this file.
+        guard busRebuild == nil else { return }
         // `GetState` is a bus round trip, and ``ending(builtOn:now:avahi:)``
         // ignores its answer when the generation has not moved. Asking only
         // when it can change the outcome is what keeps a stream that ended for

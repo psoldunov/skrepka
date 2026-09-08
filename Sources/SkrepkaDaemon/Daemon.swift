@@ -118,6 +118,16 @@ public actor Daemon {
 
     var discovery: AvahiDiscovery?
     var browseTask: Task<Void, Never>?
+
+    /// The loop that reports the entry group failing after it was published.
+    ///
+    /// Stored and replaced rather than started and forgotten, the same shape as
+    /// ``syncAcceptTask``. ``publishAdvertisement()`` runs on every `.ready` and
+    /// on every republish — a pairing window opening or closing is one — so the
+    /// fire-and-forget version left one live watcher per successful publish, and
+    /// a single collision then called ``advertisementLost(_:)`` once for each of
+    /// them.
+    var advertisementFailureTask: Task<Void, Never>?
     var isPublished = false
     var responderProblem: String?
 
