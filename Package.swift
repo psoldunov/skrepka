@@ -254,6 +254,13 @@ let package = Package(
     package.products.append(.executable(name: "skrepka-clip-probe", targets: ["skrepka-clip-probe"]))
     package.products.append(.executable(name: "skrepkad", targets: ["skrepkad"]))
     package.products.append(.executable(name: "skrepka", targets: ["skrepka"]))
+    // A hand-driven Steam Deck bring-up binary: opens the picker over whatever
+    // compositor is running, with canned rows and no history store, and prints
+    // every key command it fields. A product only so `swift build --product`
+    // can name it; `scripts/install.sh` never installs it. `scripts/build-deck.sh`
+    // ships it in the tarball so Phase 7 step 1 can be walked through on KWin
+    // without depending on the daemon.
+    package.products.append(.executable(name: "skrepka-palette-demo", targets: ["skrepka-palette-demo"]))
     package.targets.append(contentsOf: [
         // libwayland-client itself. `providers:` is what turns a missing
         // package into a message naming it rather than a link failure;
@@ -426,6 +433,25 @@ let package = Package(
             dependencies: ["SkrepkaCLI"],
             path: "Sources/skrepka-cli",
             swiftSettings: sharedSwiftSettings
+        ),
+        // A Steam Deck bring-up binary, and nothing else. See the Sources file
+        // for what it is not.
+        //
+        // `rpath $ORIGIN/../lib` because SteamOS may not carry
+        // `gtk4-layer-shell` — it is an optional Arch package and no part of a
+        // default install advertises it — so `scripts/build-deck.sh` ships the
+        // .so beside the binary and this line tells the runtime linker to look
+        // for it there. `$ORIGIN` is a token the loader expands to the
+        // binary's own directory at execution time, so the tarball can be
+        // untarred anywhere and still work. The token is written as a shell
+        // literal, not expanded, because ld is what reads it.
+        .executableTarget(
+            name: "skrepka-palette-demo",
+            dependencies: ["SkrepkaCore", "SkrepkaLinuxUI"],
+            swiftSettings: sharedSwiftSettings,
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/../lib"])
+            ]
         ),
         .testTarget(
             name: "SkrepkaDaemonTests",

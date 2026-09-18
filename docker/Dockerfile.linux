@@ -111,12 +111,30 @@ RUN apt-get update \
 # languages and `vapigen` is not installed, which is a hard meson error rather
 # than a skipped target.
 ARG GTK4_LAYER_SHELL_VERSION=v1.3.0
+# --libdir is passed explicitly rather than left to meson. Meson's default is
+# `lib` on some hosts and `lib64` on others, and pkg-config on Ubuntu Noble
+# searches only `lib/${multiarch}` and `lib` — never `lib64`. Under emulation
+# the amd64 image ended up with meson installing gtk4-layer-shell-0.pc into
+# /usr/lib64/pkgconfig, which pkg-config then could not find, and the arm64
+# image happened to land in /usr/lib and worked by accident. Pinning to the
+# multi-arch triplet makes both platforms install where pkg-config already
+# looks. `dpkg-architecture` is not in the base swift image, and pulling
+# dpkg-dev in for one variable would triple the layer size; a case on `uname
+# -m` names both architectures this image is ever built for and refuses
+# outright anything else.
 RUN set -eux; \
+	case "$(uname -m)" in \
+		x86_64) multiarch=x86_64-linux-gnu ;; \
+		aarch64) multiarch=aarch64-linux-gnu ;; \
+		*) echo "no multiarch triplet for $(uname -m)" >&2; exit 1 ;; \
+	esac; \
 	git clone --depth 1 --branch "${GTK4_LAYER_SHELL_VERSION}" \
 		https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell; \
 	meson setup -Dexamples=false -Ddocs=false -Dtests=false \
 		-Dintrospection=false -Dvapi=false \
-		--prefix /usr /tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell; \
+		--prefix=/usr \
+		--libdir="lib/${multiarch}" \
+		/tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell; \
 	ninja -C /tmp/gtk4-layer-shell/build; \
 	ninja -C /tmp/gtk4-layer-shell/build install; \
 	rm -rf /tmp/gtk4-layer-shell; \

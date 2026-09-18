@@ -12,9 +12,12 @@
 # module caches, and sharing one scratch directory forces a full rebuild on
 # every switch.
 #
-# SKREPKA_LINUX_IMAGE overrides the image. It is pinned to the same Swift
-# version the macOS toolchain ships, because "compiles on Linux" is only a
-# useful claim when the two compilers agree on the language.
+# SKREPKA_LINUX_IMAGE overrides the image. Pinned to 6.3 rather than to what
+# the macOS toolchain ships: Xcode 27 ships Swift 6.4, and there is no
+# `swift:6.4-noble` on Docker Hub as of 2026-09-18, so the image stays on 6.3
+# until the base is published. The two compilers no longer agree on the
+# language exactly; the source in this tree still has to compile against
+# both.
 
 set -euo pipefail
 

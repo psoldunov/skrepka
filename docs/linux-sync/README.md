@@ -329,6 +329,11 @@ update because `/home` does. That script is a
 it is useful well beyond the Deck: it is the no-root install path for any
 distribution, including the ones nobody packages for.
 
+**Added 2026-09-18:** `scripts/build-deck.sh` builds the x86_64 tarball from
+the arm64 Mac, inside an amd64 variant of the build image, with the Swift
+runtime linked statically. The first session with it is scripted in
+[`steam-deck-session.md`](steam-deck-session.md).
+
 Flatpak would be the SteamOS-native answer and it stays **out**, for the reason
 Phase 8 already records: a sandboxed client is refused the data-control globals.
 The immutable-distribution case makes that ruling more consequential, not less.
