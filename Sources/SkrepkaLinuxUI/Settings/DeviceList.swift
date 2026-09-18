@@ -3,9 +3,11 @@ import CGtk4
 /// "Devices": every paired device and every device in sight, with the one
 /// decision the user can take about each, and Sync Now beneath them.
 ///
-/// The rows are rebuilt rather than updated in place, and only when what they
-/// show has changed — ``PeerRowState`` is `Hashable` and coarse on purpose, so
-/// a poll that moved nothing on screen rebuilds nothing, which is most polls.
+/// Rows are kept, not rebuilt: ``DeviceListPlan`` decides which devices
+/// arrived, left or changed kind, only those rows are inserted or removed, and
+/// every other one is redrawn in place. A poll that moved a subtitle, a flip on
+/// its way, or a pairing opening over the window therefore leaves the
+/// keyboard focus where the person put it.
 final class DeviceList {
     var onPair: ((String) -> Void)?
     var onUnpair: ((String) -> Void)?
@@ -20,11 +22,8 @@ final class DeviceList {
     private let empty: GtkWidgetPointer
     private let syncRow: GtkWidgetPointer
     private let syncNow: GtkWidgetPointer
-    /// What the list is showing now.
-    private var shown: [PeerRowState] = []
-    /// The live-push switches, kept alive for as long as their rows are:
-    /// each one's handler holds only a weak reference to it.
-    private var switches: [SettingsSwitchRow] = []
+    /// The rows on screen, in the order they are shown.
+    private var rows: [DeviceRow] = []
 
     init() throws {
         guard let column = GtkBuild.box(vertical: true, spacing: 12),
@@ -66,72 +65,54 @@ final class DeviceList {
     }
 
     func render(_ state: SyncPaneState) {
-        if state.rows != shown {
-            rebuild(state.rows)
-        }
-        GtkBuild.setVisible(frame, !shown.isEmpty)
+        reconcile(state.rows)
+        GtkBuild.setVisible(frame, !rows.isEmpty)
         GtkBuild.setText(empty, state.emptyMessage ?? "")
         GtkBuild.setVisible(empty, state.emptyMessage != nil)
         GtkBuild.setVisible(syncRow, state.showsSyncNow)
         GtkBuild.setEnabled(syncNow, state.isSyncNowEnabled)
     }
 
-    private func rebuild(_ rows: [PeerRowState]) {
-        gtk_list_box_remove_all(list)
-        switches = []
-        var built: [PeerRowState] = []
+    /// Brings the rows on screen to `wanted`: out with the ones the plan
+    /// removes, in with the ones it adds, and every row given its state.
+    private func reconcile(_ wanted: [PeerRowState]) {
+        let plan = DeviceListPlan.between(shown: rows.map(\.key), wanted: wanted.map(DeviceRow.key))
+        let removed = Set(plan.removals)
+        for row in rows where removed.contains(row.key) {
+            gtk_list_box_remove(list, row.widget)
+        }
+        var kept = rows.filter { !removed.contains($0.key) }
+        // A row GTK would not build is left out and the rest still shown, one
+        // place further up. It is missing from `rows`, so the next render's
+        // plan inserts it again rather than believing the list is complete.
+        var skipped = 0
+        for insertion in plan.insertions {
+            guard let row = try? makeRow(wanted[insertion.index]) else {
+                skipped += 1
+                continue
+            }
+            let position = insertion.index - skipped
+            gtk_list_box_insert(list, row.widget, Int32(position))
+            kept.insert(row, at: position)
+        }
+        rows = kept
+
+        let states = Dictionary(
+            wanted.map { (DeviceRow.key($0), $0) }, uniquingKeysWith: { first, _ in first })
         for row in rows {
-            // A row GTK would not build is left out and the rest still shown.
-            // `shown` then differs from the state, so the next render tries
-            // again rather than believing the list is complete.
-            guard let widget = try? makeRow(row) else { continue }
-            gtk_list_box_append(list, widget)
-            built.append(row)
+            if let state = states[row.key] { row.render(state) }
         }
-        shown = built
     }
 
-    private func makeRow(_ row: PeerRowState) throws -> GtkWidgetPointer {
-        guard let column = GtkBuild.box(vertical: true, spacing: 0),
-            let platform = GtkBuild.label(row.platform, classes: [SettingsStyle.secondary]),
-            let button = actionButton(for: row)
-        else { throw SettingsError.widgetCreationFailed }
-        let line = try SettingsRow(title: row.title, subtitle: row.subtitle)
-        line.addTrailing(platform)
-        line.addTrailing(button)
-        GtkBuild.append(line.widget, to: column)
-
-        if let live = row.livePush {
-            let toggle = try SettingsSwitchRow(title: "Live clipboard", isOn: live.isOn)
-            toggle.render(isOn: live.isOn, isEnabled: live.isEnabled, subtitle: live.explanation)
-            toggle.setAccessibleLabel("Live clipboard with \(row.title)")
-            let id = row.id
-            toggle.onToggle = { [weak self] isOn in self?.onLivePush?(id, isOn) }
-            // Indented under the device it belongs to, as on a Mac.
-            gtk_widget_set_margin_start(toggle.row.widget, 36)
-            GtkBuild.append(toggle.row.widget, to: column)
-            switches.append(toggle)
-        }
-        return column
-    }
-
-    private func actionButton(for row: PeerRowState) -> GtkWidgetPointer? {
-        let id = row.id
-        switch row.action {
-        case .pair(let isEnabled):
-            guard let button = GtkBuild.button("Pair…") else { return nil }
-            GtkBuild.setEnabled(button, isEnabled)
-            GtkSignal.connect(UnsafeMutableRawPointer(button), "clicked") { [weak self] in
-                self?.onPair?(id)
-            }
-            return button
-        case .unpair(let isEnabled):
-            guard let button = GtkBuild.button("Unpair") else { return nil }
-            GtkBuild.setEnabled(button, isEnabled)
-            GtkSignal.connect(UnsafeMutableRawPointer(button), "clicked") { [weak self] in
-                self?.onUnpair?(id)
-            }
-            return button
-        }
+    private func makeRow(_ state: PeerRowState) throws -> DeviceRow {
+        let id = state.id
+        let isPaired = DeviceRow.key(state).isPaired
+        return try DeviceRow(
+            state,
+            onAction: { [weak self] in
+                if isPaired { self?.onUnpair?(id) } else { self?.onPair?(id) }
+            },
+            onLivePush: { [weak self] isOn in self?.onLivePush?(id, isOn) }
+        )
     }
 }

@@ -11,8 +11,8 @@ import SkrepkaIPC
 ///
 /// Lives on GTK's main-loop thread. The link's reports reach it through a
 /// ``MainLoopWatch``, so nothing here is ever called from another thread, and
-/// the one thing it sends the other way is a ``SyncAction`` value inside a
-/// `Task` that captures only the link.
+/// all it sends the other way is a ``SyncAction`` value, queued synchronously,
+/// and the shutdown, from a `Task` that captures only the link.
 final class SyncController {
     /// Called once the link has shut down, after ``close()``.
     var onShutDown: (() -> Void)?
@@ -104,21 +104,17 @@ final class SyncController {
         }
     }
 
-    /// The window is closing. Stops drawing at once, and tells the link to
-    /// close what it opened; ``onShutDown`` fires when it has.
+    /// The window is closing. Stops drawing and sending at once, and tells the
+    /// link to wind up; ``onShutDown`` fires when it has.
     ///
-    /// A code on screen, and any peer waiting behind it, is answered no first
-    /// — queued ahead of the shutdown, so it is sent before the link stops. The
-    /// pairing dialog goes down with this window without a close request of
-    /// its own, and without this the other machine would wait out its timeout.
+    /// Nothing is answered from here. The pairing dialog goes down with this
+    /// window without a close request of its own, and a code on screen, a peer
+    /// waiting behind it and one that dials in while the link winds up all
+    /// still need a no — or the other machine waits out its timeout. The link
+    /// has seen every one of them and every answer, so it refuses whatever is
+    /// left on its way out; see ``DaemonLink/shutdown()``.
     func close() {
         guard !isClosed else { return }
-        for action in model.cancellingPrompt(now: Date()).effects {
-            link.perform(action)
-        }
-        for proposal in model.waiting {
-            link.perform(.answer(deviceID: proposal.deviceID, accept: false))
-        }
         isClosed = true
         ticker?.cancel()
         let link = link

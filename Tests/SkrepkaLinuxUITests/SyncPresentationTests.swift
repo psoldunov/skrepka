@@ -83,13 +83,25 @@ struct SyncPresentationTests {
         #expect(rows.first?.action == .pair(isEnabled: false))
     }
 
-    @Test("a live-push flip holds its position, disabled, until the daemon answers")
+    /// Enabled throughout: GTK takes keyboard focus from a switch it disables,
+    /// and the one a person just flipped is the one they are still on.
+    @Test("a live-push flip holds its position, and says what was chosen, until the daemon answers")
     func livePushFlipIsHeld() {
         let flipped = Fixture.model(Fixture.document([Fixture.paired()])).sending(
             .setLivePush(deviceID: Fixture.macID, isOn: false))
         let live = SyncPaneState(flipped, now: Fixture.now, timeZone: .gmt).rows.first?.livePush
         #expect(live?.isOn == false)
-        #expect(live?.isEnabled == false)
+        #expect(live?.isEnabled == true)
+        #expect(live?.explanation == "Only history is shared with this device.")
+    }
+
+    @Test("flipped again before the first answer, the switch shows the latest flip")
+    func secondFlipWins() {
+        let twice = Fixture.model(Fixture.document([Fixture.paired()]))
+            .sending(.setLivePush(deviceID: Fixture.macID, isOn: false))
+            .sending(.setLivePush(deviceID: Fixture.macID, isOn: true))
+        let live = SyncPaneState(twice, now: Fixture.now, timeZone: .gmt).rows.first?.livePush
+        #expect(live?.isOn == true)
     }
 
     @Test("the sentence beside the switch says why it is where it is")
@@ -139,6 +151,17 @@ struct SyncPresentationTests {
         #expect(text.status.hasSuffix("This code is good for 1:05 more."))
         #expect(text.isConfirmEnabled)
         #expect(text.confirmLabel == "Codes Match — Pair")
+        #expect(text.isCancelEnabled)
+    }
+
+    /// Nothing can call an answer back, so Cancel does not pretend it can.
+    @Test("an answer on its way cannot be cancelled")
+    func answeringText() {
+        let prompt = PairingPrompt.comparing(Fixture.proposal()).moved(to: .answering(accept: true))
+        let text = PairingPromptText(prompt, now: Fixture.now)
+        #expect(text.isCancelEnabled == false)
+        #expect(text.isConfirmEnabled == false)
+        #expect(text.isWorking)
     }
 
     @Test("an ended pairing can only be closed")

@@ -17,19 +17,47 @@ extension Daemon {
     }
 
     /// The platform default for one peer and whatever the user chose instead.
+    ///
+    /// The peer's platform is its link's: what the pairing recorded until the
+    /// link has connected this run, and what the peer's `hello` said from then
+    /// on — see ``beginTracking(_:)``.
     func livePushSetting(for deviceID: SyncDeviceID) async -> LivePushSetting {
-        // A read that fails falls back to the platform default, deliberately.
-        // This runs once per peer on every capture, so it cannot report or
-        // propagate without turning a locked store into a log flood or into a
-        // failed capture; and the default is the setting the user has not
-        // overridden, which is the safe answer to give when the override
-        // cannot be read.
-        let choice = (try? await trust.livePushChoice(for: deviceID)) ?? .followsPlatformDefault
-        return LivePushSetting(
+        LivePushSetting(
             local: .linux,
             remote: progress[deviceID]?.platform ?? .unknown,
-            choice: choice
+            choice: await livePushChoice(for: deviceID)
         )
+    }
+
+    /// What the user chose for one peer, or `off` while that cannot be read.
+    ///
+    /// **Fails closed.** The platform default is on between Linux and anything
+    /// else, so falling back to it would push the clipboard to a device the
+    /// user turned off whenever the store could not say so. Held off instead,
+    /// a failed read costs only immediacy: history still carries each copy
+    /// within half a minute. Not reported: this runs once per peer on every
+    /// capture, so a store that stays unreadable would flood the log, and a
+    /// failed capture is worse than a quiet one.
+    private func livePushChoice(for deviceID: SyncDeviceID) async -> LivePushChoice {
+        do {
+            return try await trust.livePushChoice(for: deviceID)
+        } catch {
+            return .off
+        }
+    }
+
+    /// Starts the progress row a paired peer's link reports into, knowing the
+    /// peer's platform from its pairing record.
+    ///
+    /// Seeded rather than left unknown until the link connects: the platform
+    /// decides the live-push default, and a Mac that is asleep would otherwise
+    /// be drawn with the unrecognised-platform default — off — while the push
+    /// gate and the document both read it from here. The record's platform was
+    /// proved inside the tunnel, at pairing or at the last `hello` — see
+    /// `PairedDeviceStoring.refreshPeerIdentity(_:)` — and this run's `hello`
+    /// replaces it through ``apply(_:to:)``.
+    func beginTracking(_ peer: PairedPeer) {
+        progress[peer.deviceID] = PeerProgress(platform: peer.platform)
     }
 
     /// Records the user's live-push choice for one paired device.

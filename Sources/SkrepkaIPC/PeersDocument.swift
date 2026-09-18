@@ -47,6 +47,10 @@ public struct PeerDocument: Codable, Sendable, Hashable {
     /// version 2. Carried beside ``livePush`` rather than instead of it
     /// because a settings row shows both: the switch follows ``livePush``,
     /// and the sentence under it depends on whether the user has chosen at all.
+    ///
+    /// `off` while the daemon cannot read the choice. It holds live push off
+    /// until it can rather than fall back to a default that may be on, and
+    /// this says what it is applying.
     public let livePushChoice: String?
 
     /// Why live push is on or off while the user has chosen nothing, as one of
@@ -117,8 +121,12 @@ public struct PeerDocument: Codable, Sendable, Hashable {
         public static let on = "on"
         /// Two Apple devices, where Universal Clipboard already does this.
         public static let offBetweenAppleDevices = "offBetweenAppleDevices"
-        /// The peer has not said what it runs — on Linux, until its link has
-        /// connected this run.
+        /// Nothing says what the peer runs, or it runs something this build
+        /// does not recognise. On Linux a peer's platform is its link's: the one
+        /// the pairing recorded until the link connects, and its `hello`'s
+        /// after. So this is a peer with no link (sync is off), one paired from
+        /// this side that has not connected since, or one whose `hello` named a
+        /// platform newer than this daemon.
         public static let offForUnrecognisedPlatform = "offForUnrecognisedPlatform"
     }
 }

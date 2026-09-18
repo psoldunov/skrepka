@@ -48,10 +48,15 @@ it. The directory is computed from `$XDG_BIN_HOME`, not `$HOME`, because the
 rpath is relative to the binary. GTK 4 itself is not bundled and has to come
 from the host.
 
-Building it from source needs the GTK4 and gtk4-layer-shell development files;
-`skrepkad` and `skrepka` do not. `scripts/install.sh` builds it only when
-`pkg-config --exists gtk4 gtk4-layer-shell-0` succeeds, and a headless install
-with just the daemon and the CLI is a complete one.
+Building it from source needs the development files for GTK 4.12 or newer and
+gtk4-layer-shell; `skrepkad` and `skrepka` do not. 4.12 is the oldest GTK with
+every call the window makes — `gtk_css_provider_load_from_string` and
+`gtk_list_box_remove_all` are the newest of them — and the build image carries
+4.14. `scripts/install.sh` builds the window only when
+`pkg-config --exists 'gtk4 >= 4.12' gtk4-layer-shell-0` succeeds, and a headless
+install with just the daemon and the CLI is a complete one. A binary built
+elsewhere, the Deck tarball's included, needs GTK 4.12 or newer on the machine
+it runs on: an older one fails at launch with a missing symbol.
 
 ## `scripts/install.sh`
 

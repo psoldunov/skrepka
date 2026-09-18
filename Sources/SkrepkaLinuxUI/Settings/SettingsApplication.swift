@@ -21,9 +21,10 @@ public enum SettingsApplication {
         return run { try await SkrepkaBus.proxy(on: session) }
     }
 
-    /// Runs the window against whatever `connect` reaches — the daemon, or a
-    /// stand-in with canned devices for looking at the window without a
-    /// network of peers to fill it.
+    /// Runs the window against whatever `connect` reaches: the daemon, or
+    /// anything else that answers ``SyncDaemon``. The second is the seam for
+    /// looking at the window with canned devices rather than a network of
+    /// peers; no such stand-in is committed.
     static func run(connect: @escaping DaemonLink.Connect) -> Int32 {
         // Asked first, with the call that returns rather than aborts, so a
         // shell without a display gets a sentence instead of GTK's abort.
@@ -32,6 +33,10 @@ public enum SettingsApplication {
             return 2
         }
         SettingsStyle.install()
+        // The window's copyable labels are in the focus chain, and a new
+        // window focuses its first focusable widget — here, a label. Left on,
+        // that would select the label's text the moment the window appears.
+        GtkBuild.selectsLabelTextOnFocus(false)
         let inbox: MainLoopInbox<SyncEvent>
         do {
             inbox = try MainLoopInbox()

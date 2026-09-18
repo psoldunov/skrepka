@@ -11,6 +11,12 @@ public struct PeerRowState: Sendable, Hashable {
         /// A device on the network and not paired.
         case pair(isEnabled: Bool)
         case unpair(isEnabled: Bool)
+
+        public var isEnabled: Bool {
+            switch self {
+            case .pair(let isEnabled), .unpair(let isEnabled): isEnabled
+            }
+        }
     }
 
     /// The per-device switch, for paired devices only.
@@ -79,28 +85,37 @@ public struct PeerRowState: Sendable, Hashable {
 
     private static func livePush(_ peer: PeerDocument, model: SyncModel, canAct: Bool) -> LivePush {
         // A switch the user just flipped keeps the position they gave it until
-        // the daemon has answered, rather than snapping back on the next poll.
+        // the daemon has answered, rather than snapping back on the next poll —
+        // the latest flip, if they flipped it again meanwhile. It stays
+        // enabled while the change is on its way: GTK takes keyboard focus
+        // from a widget it disables, and the link sends flips in order, so a
+        // second one needs no guarding against.
         let pending = model.inFlight.last { action in
             guard case .setLivePush(let deviceID, _) = action else { return false }
             return deviceID == peer.deviceID
         }
-        let isOn: Bool
-        if case .setLivePush(_, let wanted)? = pending {
-            isOn = wanted
-        } else {
-            isOn = peer.livePush
-        }
-        guard let choice = peer.livePushChoice else {
+        guard let recorded = peer.livePushChoice else {
             // A daemon from before interface version 2 has no member to set it.
             return LivePush(
-                isOn: isOn,
+                isOn: peer.livePush,
                 isEnabled: false,
                 explanation: "This daemon is too old to change this here — update skrepkad."
             )
         }
+        let isOn: Bool
+        let choice: String
+        if case .setLivePush(_, let wanted)? = pending {
+            // A flip on its way is a choice the user has made, whatever the
+            // document still says, and the sentence describes that one.
+            isOn = wanted
+            choice = wanted ? PeerDocument.LivePushChoiceName.on : PeerDocument.LivePushChoiceName.off
+        } else {
+            isOn = peer.livePush
+            choice = recorded
+        }
         return LivePush(
             isOn: isOn,
-            isEnabled: canAct && pending == nil,
+            isEnabled: canAct,
             explanation: explanation(choice: choice, reason: peer.livePushDefault, isOn: isOn)
         )
     }

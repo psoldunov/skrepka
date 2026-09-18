@@ -51,10 +51,13 @@ public actor DaemonLink {
     /// Whether the pairing window is one this link opened and nobody has
     /// closed since — the one the window has to close when it goes away.
     private var ownsPairingWindow = false
-    /// Devices this link dialled whose code nobody has answered yet. Refused
-    /// on the way out, so a window closed mid-dial does not leave the daemon
-    /// holding a proposal until it times out.
-    private var unansweredDials: Set<String> = []
+    /// Devices with a proposal this link has seen and nobody has answered
+    /// through it: codes it dialled for, and peers that dialled in. Refused on
+    /// the way out, so a window that closes — mid-dial, with a code on screen,
+    /// or with a peer dialling in while it winds up — does not leave another
+    /// machine waiting out its timeout. The link sees every proposal and every
+    /// answer, which is why this is kept here rather than read off the prompt.
+    private var unanswered: Set<String> = []
 
     public init(connect: @escaping Connect, report: @escaping Report) {
         self.connect = connect
@@ -77,10 +80,8 @@ public actor DaemonLink {
             await self?.consume(commands)
         }
         if let interval { startPolling(every: interval) }
-        let connect = connect
-        let report = report
-        watching = Task {
-            await Self.watchPairingRequests(connect: connect, report: report, retryAfter: retry)
+        watching = Task { [weak self] in
+            await self?.watchPairingRequests(retryAfter: retry)
         }
     }
 
@@ -107,10 +108,11 @@ public actor DaemonLink {
         enqueue(.refresh)
     }
 
-    /// Finishes what was queued before it, closes a pairing window this link
-    /// opened, refuses any code it dialled that nobody answered, and stops.
-    /// Reports ``SyncEvent/shutDown`` last. Needs ``start(pollingEvery:retryingAfter:)``
-    /// to have run, or there is nothing working through the queue to reach it.
+    /// Finishes what was queued before it, refuses every proposal it has seen
+    /// that nobody answered, closes a pairing window this link opened, and
+    /// stops. Reports ``SyncEvent/shutDown`` last. Needs
+    /// ``start(pollingEvery:retryingAfter:)`` to have run, or there is nothing
+    /// working through the queue to reach it.
     ///
     /// The pairing window is closed rather than left to expire because it is
     /// the one moment a stranger on the network can complete a handshake with
@@ -166,15 +168,16 @@ public actor DaemonLink {
         sink.finish()
         // Best effort, and uninteresting when it fails: the daemon closes the
         // window when it expires, and refuses a code nobody answers when that
-        // runs out.
-        guard ownsPairingWindow || !unansweredDials.isEmpty, let daemon = try? await connect() else { return }
-        for deviceID in unansweredDials {
+        // runs out. A proposal that has already expired is refused anyway —
+        // the daemon answers that nothing is waiting, which costs one call.
+        guard ownsPairingWindow || !unanswered.isEmpty, let daemon = try? await connect() else { return }
+        for deviceID in unanswered.sorted() {
             _ = try? await daemon.confirmPairing(deviceID: deviceID, accept: false)
         }
         if ownsPairingWindow {
             _ = try? await daemon.closePairing()
         }
-        unansweredDials = []
+        unanswered = []
         ownsPairingWindow = false
     }
 
@@ -184,10 +187,10 @@ public actor DaemonLink {
             ownsPairingWindow = true
         case .finished(.closePairingWindow, .answered(let document), _) where document.ok:
             ownsPairingWindow = false
-        case .finished(.pair(let deviceID), .proposed, _):
-            unansweredDials.insert(deviceID)
+        case .finished(.pair, .proposed(let proposal), _):
+            unanswered.insert(proposal.deviceID)
         case .finished(.answer(let deviceID, _), _, _):
-            unansweredDials.remove(deviceID)
+            unanswered.remove(deviceID)
         default:
             break
         }
@@ -247,19 +250,31 @@ public actor DaemonLink {
     ///
     /// Outside the queue on purpose. Subscribing is a call to the bus itself,
     /// not to the daemon, so it cannot wait behind a dial — and a proposal
-    /// arriving mid-dial is exactly the one that must not be missed.
-    private static func watchPairingRequests(connect: Connect, report: Report, retryAfter: Duration) async {
+    /// arriving mid-dial is exactly the one that must not be missed. Every
+    /// wait here is a suspension, so the loop holds the actor only while it
+    /// forwards.
+    private func watchPairingRequests(retryAfter: Duration) async {
         while !Task.isCancelled {
             // Both discarded deliberately: an unreachable daemon is reported by
             // the poll, once and in words, and this only has to try again.
             if let daemon = try? await connect(), let requests = try? await daemon.pairingRequests() {
                 for await proposal in requests {
-                    report(.pairingRequested(proposal))
+                    forward(proposal)
                 }
             }
             // A stream that ended means its connection did. Cancellation cuts
             // the wait short, and the `while` then ends the loop.
             try? await Task.sleep(for: retryAfter)
         }
+    }
+
+    /// Reports a proposal, and remembers one a peer started until it is
+    /// answered. An outgoing one on the signal is another client's dial —
+    /// `skrepka pair --peer` — and not this link's to refuse.
+    private func forward(_ proposal: PairingProposalDocument) {
+        if proposal.direction == PairingProposalDocument.Direction.incoming {
+            unanswered.insert(proposal.deviceID)
+        }
+        report(.pairingRequested(proposal))
     }
 }

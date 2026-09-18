@@ -14,19 +14,21 @@ import Testing
 /// the push loop actually uses.
 @Suite("Live push per device, over the bus")
 struct LivePushMemberTests {
-    static func daemon() throws -> Daemon {
+    /// - Parameter peers: A store to use for the paired half, where a test
+    ///   needs one that fails; the daemon's own SQLite store otherwise.
+    static func daemon(peers: (any PairedDeviceStoring)? = nil) throws -> Daemon {
         var options = DaemonOptions()
         options.syncEnabled = false
         options.dataDirectory = FileManager.default.temporaryDirectory
             .appending(path: "skrepka-live-push-\(UUID().uuidString)", directoryHint: .isDirectory)
-        return try Daemon(options: options, environment: [:])
+        return try Daemon(options: options, environment: [:], peers: peers)
     }
 
-    static func peer(seed: UInt8) -> PairedPeer {
+    static func peer(seed: UInt8, platform: PeerPlatform = .macos) -> PairedPeer {
         PairedPeer(
             certificateDER: Data(repeating: seed, count: 32),
             deviceName: "peer-\(seed)",
-            platform: .macos,
+            platform: platform,
             pairedAt: Date()
         )
     }
@@ -67,27 +69,64 @@ struct LivePushMemberTests {
         #expect(stored == .followsPlatformDefault)
     }
 
-    /// Before its link has connected this run, the daemon does not know what a
-    /// paired peer runs, so the default is the unrecognised-platform one — and
-    /// the document has to say that rather than the platform the pairing
-    /// recorded, or the row explains a default the push loop is not applying.
+    /// A paired peer's platform is its link's: unknown with no link — sync is
+    /// off here — then what the pairing recorded, then what its `hello` says.
+    /// The document states the default for whichever applies, and the push
+    /// gate reads the same one, so the row never explains a default the push
+    /// loop is not applying.
     @Test("the peers document carries the choice and the default the push gate resolved")
     func documentCarriesTheResolvedSetting() async throws {
         let daemon = try Self.daemon()
         let peer = Self.peer(seed: 13)
         try await daemon.trust.savePairedPeer(peer)
 
-        let first = await daemon.peersDocument()
-        let before = try #require(first.peers.first)
-        #expect(before.livePushChoice == PeerDocument.LivePushChoiceName.followsPlatformDefault)
-        #expect(before.livePushDefault == PeerDocument.LivePushDefaultName.offForUnrecognisedPlatform)
-        #expect(before.livePush == false)
+        let untracked = try #require(await daemon.peersDocument().peers.first)
+        #expect(untracked.livePushChoice == PeerDocument.LivePushChoiceName.followsPlatformDefault)
+        #expect(untracked.livePushDefault == PeerDocument.LivePushDefaultName.offForUnrecognisedPlatform)
+        #expect(untracked.livePush == false)
+
+        // What a link does as it starts. A Mac that is asleep is known by the
+        // platform its pairing recorded, so it is drawn on — as the push gate
+        // treats it the moment it connects.
+        await daemon.beginTracking(peer)
+        let tracked = try #require(await daemon.peersDocument().peers.first)
+        #expect(tracked.livePushDefault == PeerDocument.LivePushDefaultName.on)
+        #expect(tracked.livePush)
+        #expect(await daemon.isLivePushOn(for: peer.deviceID))
+
+        // Its `hello` outranks the record: here, a platform this build does not know.
+        await daemon.apply(.connected(name: "peer-13", platform: .unknown), to: peer.deviceID)
+        let greeted = try #require(await daemon.peersDocument().peers.first)
+        #expect(greeted.livePushDefault == PeerDocument.LivePushDefaultName.offForUnrecognisedPlatform)
+        #expect(await daemon.isLivePushOn(for: peer.deviceID) == false)
 
         _ = await daemon.setLivePush(device: peer.deviceID.fingerprint, choice: .on)
-        let second = await daemon.peersDocument()
-        let after = try #require(second.peers.first)
-        #expect(after.livePushChoice == PeerDocument.LivePushChoiceName.on)
-        #expect(after.livePush)
+        let chosen = try #require(await daemon.peersDocument().peers.first)
+        #expect(chosen.livePushChoice == PeerDocument.LivePushChoiceName.on)
+        #expect(chosen.livePush)
+    }
+
+    /// Two Linux machines push by default, so a store that cannot say whether
+    /// the user turned a peer off must not be read as "follows the default".
+    @Test("a choice that cannot be read holds live push off rather than falling back to the default")
+    func unreadableChoiceFailsClosed() async throws {
+        let peer = Self.peer(seed: 14, platform: .linux)
+
+        let readable = RecordingPeerStore()
+        let control = try Self.daemon(peers: readable)
+        try await readable.savePairedPeer(peer)
+        await control.beginTracking(peer)
+        #expect(await control.isLivePushOn(for: peer.deviceID))
+
+        let unreadable = RecordingPeerStore(failsOnChoiceRead: true)
+        let daemon = try Self.daemon(peers: unreadable)
+        try await unreadable.savePairedPeer(peer)
+        await daemon.beginTracking(peer)
+        #expect(await daemon.isLivePushOn(for: peer.deviceID) == false)
+
+        let document = try #require(await daemon.peersDocument().peers.first)
+        #expect(document.livePush == false)
+        #expect(document.livePushChoice == PeerDocument.LivePushChoiceName.off)
     }
 
     /// `SkrepkaIPC` cannot import `SkrepkaSync`, so its names are a second

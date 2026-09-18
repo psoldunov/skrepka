@@ -8,8 +8,9 @@
 #   scripts/install.sh --uninstall         reverse it
 #   curl -fsSL <raw-url>/scripts/install.sh | bash
 #
-# Everything lands under $HOME. Nothing is written outside it, nothing asks for
-# root, and no package manager is involved:
+# By default everything lands under $HOME; an absolute $XDG_BIN_HOME,
+# $XDG_CONFIG_HOME or $XDG_DATA_HOME moves its part to wherever it points.
+# Nothing asks for root, and no package manager is involved:
 #
 #   ~/.local/bin/skrepkad            the daemon      ($XDG_BIN_HOME is honoured)
 #   ~/.local/bin/skrepka             the CLI
@@ -54,6 +55,9 @@ UNIT_NAME="skrepkad.service"
 DAEMON_NAME="skrepkad"
 CLI_NAME="skrepka"
 SETTINGS_NAME="skrepka-settings"
+# The oldest GTK whose API the Settings window uses throughout:
+# gtk_css_provider_load_from_string and gtk_list_box_remove_all are 4.12.
+GTK_REQUIREMENT="gtk4 >= 4.12"
 DESKTOP_NAME="dev.soldunov.Skrepka.Settings.desktop"
 LAYER_SHELL_LIBRARY="libgtk4-layer-shell.so.0"
 REPOSITORY_URL="${SKREPKA_REPOSITORY_URL:-https://github.com/psoldunov/skrepka.git}"
@@ -114,7 +118,8 @@ usage() {
 Installs Skrepka's Linux daemon (skrepkad) and CLI (skrepka) into your home
 directory, plus a systemd user unit that starts the daemon with your graphical
 session, and the Settings window (skrepka-settings) with a launcher entry when
-the build has one. No root, no package manager, nothing written outside $HOME.
+the build has one. No root, no package manager, and by default nothing
+installed outside $HOME.
 
 Usage:
   install.sh                    build this checkout in release and install
@@ -122,9 +127,10 @@ Usage:
   install.sh --uninstall        stop and remove the unit, binaries and entry
   install.sh --help             this message
 
-The Settings window needs GTK4 and gtk4-layer-shell. Building from a checkout,
-it is built only when pkg-config finds both; with --from-build, only when DIR
-holds a skrepka-settings. Otherwise it is skipped and the rest still installs.
+The Settings window needs GTK 4.12 or newer and gtk4-layer-shell. Building from
+a checkout, it is built only when pkg-config finds both; with --from-build, only
+when DIR holds a skrepka-settings. Otherwise it is skipped and the rest still
+installs.
 
 Where things land (XDG_BIN_HOME, XDG_CONFIG_HOME and XDG_DATA_HOME are
 honoured when they hold an absolute path):
@@ -417,10 +423,12 @@ else
 	# The Settings window is the only product that links GTK4 and
 	# gtk4-layer-shell, so it is the only one whose build can fail on a machine
 	# that is otherwise fine. Building it is gated on both -dev packages being
-	# visible to pkg-config, and a machine without them gets the daemon and the
-	# CLI and a note. A third invocation, for the reason above.
+	# visible to pkg-config — GTK at the version its API needs, so an older one
+	# is a note here rather than a screen of compiler errors — and a machine
+	# without them gets the daemon and the CLI and a note. A third invocation,
+	# for the reason above.
 	if command -v pkg-config > /dev/null 2>&1 \
-		&& pkg-config --exists gtk4 gtk4-layer-shell-0; then
+		&& pkg-config --exists "${GTK_REQUIREMENT}" gtk4-layer-shell-0; then
 		#
 		# A failed build is a skipped Settings window, not a failed install: under
 		# `set -e` a bare failure here would abort before the daemon and the CLI
@@ -432,7 +440,7 @@ else
 			yellow "  The daemon and the CLI are installed regardless."
 		fi
 	else
-		yellow "skipping ${SETTINGS_NAME}: pkg-config cannot find gtk4 and gtk4-layer-shell-0."
+		yellow "skipping ${SETTINGS_NAME}: pkg-config cannot find ${GTK_REQUIREMENT} and gtk4-layer-shell-0."
 		yellow "  Install their development packages and re-run to get the Settings window."
 	fi
 	BUILD_DIR="$(cd "${REPOSITORY}" && swift build -c release --show-bin-path)"
@@ -464,8 +472,8 @@ fi
 # was built against the previous daemon's D-Bus interface. Left silently, it
 # would talk to a daemon that has moved on.
 if [[ "${INSTALL_SETTINGS}" -eq 0 && -e "${BIN_DIR}/${SETTINGS_NAME}" ]]; then
-	yellow "note: ${BIN_DIR}/${SETTINGS_NAME} was left as it was. It may not match the"
-	yellow "  daemon just installed, whose D-Bus interface is now version 2."
+	yellow "note: ${BIN_DIR}/${SETTINGS_NAME} was left as it was, and may not match"
+	yellow "  the D-Bus interface of the daemon just installed."
 fi
 
 # ---------------------------------------------------------------------------

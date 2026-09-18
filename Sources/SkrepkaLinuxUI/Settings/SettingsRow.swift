@@ -6,6 +6,7 @@ import CGtk4
 /// The macOS pane's `SettingsRow`, so the two read as the same product.
 final class SettingsRow {
     let widget: GtkWidgetPointer
+    private let titleLabel: GtkWidgetPointer
     private let subtitleLabel: GtkWidgetPointer
     private let trailing: GtkWidgetPointer
 
@@ -28,6 +29,7 @@ final class SettingsRow {
         GtkBuild.append(trailing, to: line)
 
         self.widget = line
+        self.titleLabel = titleLabel
         self.subtitleLabel = subtitleLabel
         self.trailing = trailing
     }
@@ -35,6 +37,12 @@ final class SettingsRow {
     /// Adds a control or a value at the right-hand end.
     func addTrailing(_ child: GtkWidgetPointer) {
         GtkBuild.append(child, to: trailing)
+    }
+
+    /// For a row that outlives its first title — a device whose name arrives
+    /// once its link has said hello.
+    func setTitle(_ text: String) {
+        GtkBuild.setText(titleLabel, text)
     }
 
     func setSubtitle(_ text: String) {

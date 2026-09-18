@@ -125,7 +125,8 @@ extension SyncModel {
             // Refused on purpose. The daemon adds a sentence only when the
             // other machine may have recorded this one anyway.
             let warning =
-                document.detail == "refused" ? nil : SyncNotice.info(SyncText.sentence(document.detail))
+                document.detail == ActionDocument.refusedDetail
+                ? nil : SyncNotice.info(SyncText.sentence(document.detail))
             return SyncTransition(
                 model: withPrompt(nil).withNotice(warning ?? notice).promotingWaiting(now: now))
         case .answered(let document):

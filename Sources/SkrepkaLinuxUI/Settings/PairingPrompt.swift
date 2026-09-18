@@ -24,6 +24,15 @@ public struct PairingPrompt: Sendable, Hashable {
         case answering(accept: Bool)
         /// It is over and did not pair; the sentence says why.
         case ended(String)
+
+        /// Whether Cancel, Close, Escape or the title bar does anything here:
+        /// everything but an answer already on its way, which the daemon
+        /// cannot be asked to take back — ``SyncModel/cancellingPrompt(now:)``
+        /// leaves that one alone.
+        var isCancellable: Bool {
+            if case .answering = self { return false }
+            return true
+        }
     }
 
     /// The device's full hex ID — what the answer names.

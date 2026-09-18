@@ -16,7 +16,14 @@ struct SyncModelTests {
         let opening = closed.sending(.openPairingWindow)
         let during = SyncPaneState(opening, now: Fixture.now, timeZone: .gmt).pairingSwitch
         #expect(during.isOn)
-        #expect(during.isEnabled == false)
+        // Still enabled: disabling it would take the keyboard focus off it.
+        #expect(during.isEnabled)
+
+        // Flipped back before the daemon answered: the latest flip is shown.
+        let reconsidered = SyncPaneState(
+            opening.sending(.closePairingWindow), now: Fixture.now, timeZone: .gmt
+        ).pairingSwitch
+        #expect(reconsidered.isOn == false)
 
         let window = PairingWindowDocument(port: 5555, expiresAt: Fixture.now + 300)
         let refreshed = Fixture.document([Fixture.paired()], pairingPort: 5555)

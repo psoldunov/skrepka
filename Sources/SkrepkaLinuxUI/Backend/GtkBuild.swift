@@ -32,17 +32,23 @@ enum GtkBuild {
         return widget
     }
 
-    /// Lets the mouse select a label's text, and keeps it out of the focus
-    /// chain.
+    /// Lets a label's text be selected and copied, by mouse or keyboard.
     ///
-    /// Out of the chain because a selectable label is focusable by default,
-    /// and GTK gives a new window's focus to the first focusable widget — which
-    /// selects that label's whole text the moment the window appears, and puts
-    /// Tab's first stop on a line of text rather than a control. Copying still
-    /// works from the selection and the label's context menu.
+    /// A selectable label is focusable, and stays so: Tab reaches it, then
+    /// Ctrl+A and Ctrl+C copy it, or the Menu key opens its context menu. That
+    /// is the only way a keyboard reaches the text at all. A new window gives
+    /// its focus to the first focusable widget, which can be one of these —
+    /// ``selectsLabelTextOnFocus(_:)`` is what stops that from selecting the
+    /// label's whole text the moment the window appears.
     static func makeCopyable(_ label: GtkWidgetPointer) {
         gtk_label_set_selectable(skrepka_as_label(label), 1)
-        gtk_widget_set_focusable(label, 0)
+    }
+
+    /// Whether a selectable label selects all of its text when it takes focus,
+    /// for every label in this process. GTK's own default is yes, and it is a
+    /// setting of the display rather than of one label.
+    static func selectsLabelTextOnFocus(_ selects: Bool) {
+        skrepka_set_label_select_on_focus(selects ? 1 : 0)
     }
 
     static func box(vertical: Bool, spacing: Int32, classes: [String] = []) -> GtkWidgetPointer? {

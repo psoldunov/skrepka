@@ -17,6 +17,9 @@ public struct PairingPromptText: Sendable, Hashable {
     /// Whether the status carries a spinner: something is on its way.
     public let isWorking: Bool
     public let cancelLabel: String
+    /// False while an answer is on its way, which nothing can call back — so
+    /// the button says so rather than taking a click that does nothing.
+    public let isCancelEnabled: Bool
     /// Nil once the pairing is over and there is nothing left to confirm.
     public let confirmLabel: String?
     public let isConfirmEnabled: Bool
@@ -29,6 +32,7 @@ public struct PairingPromptText: Sendable, Hashable {
             ? "Pair with \(prompt.name)" : "\(prompt.name) wants to pair"
         device = "Device \(prompt.fingerprint)"
         code = prompt.code
+        isCancelEnabled = prompt.stage.isCancellable
         switch prompt.stage {
         case .dialling:
             status = "Connecting to \(prompt.name)…"

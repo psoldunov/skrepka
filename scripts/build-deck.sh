@@ -189,7 +189,9 @@ bold "Runtime probe written to ${REPORT}"
 #
 # GTK itself is not bundled: gtk-4 is a plain KDE dependency on SteamOS
 # through Plasma's GTK integration and any KDE spin has it, so the loader
-# finds libgtk-4.so.1 in the default search path. gtk4-layer-shell is the
+# finds libgtk-4.so.1 in the default search path. It has to be 4.12 or newer,
+# the oldest with every call skrepka-settings and the palette demo make, and a
+# missing symbol surfaces at launch rather than in ldd. gtk4-layer-shell is the
 # one library the target box may lack.
 #
 # The container copies them straight into the stage through the bind mount,
@@ -257,8 +259,9 @@ Installing on the Steam Deck
 The installer places skrepkad, skrepka and skrepka-settings into ~/.local/bin,
 the systemd user unit into ~/.config/systemd/user, a private copy of
 libgtk4-layer-shell into ~/.local/lib/skrepka, and a launcher entry named
-"Skrepka Settings" into ~/.local/share/applications. Nothing is written outside
-$HOME and nothing needs root.
+"Skrepka Settings" into ~/.local/share/applications. Those are the defaults: an
+absolute XDG_BIN_HOME, XDG_CONFIG_HOME or XDG_DATA_HOME moves its part to
+wherever it points. Nothing needs root.
 
 Running the Settings window
 ---------------------------
@@ -267,7 +270,8 @@ Running the Settings window
 
 Runs in place from the untarred tarball, the same way the palette demo does. Once
 installed, open "Skrepka Settings" from the application launcher instead. It
-talks to the running skrepkad, so the daemon has to be up.
+talks to the running skrepkad, so the daemon has to be up, and it needs the
+host's GTK to be 4.12 or newer.
 
 Running the palette demo
 ------------------------

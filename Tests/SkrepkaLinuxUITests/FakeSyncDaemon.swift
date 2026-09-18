@@ -81,7 +81,7 @@ actor FakeSyncDaemon: SyncDaemon {
     func confirmPairing(deviceID: String, accept: Bool) async throws -> ActionDocument {
         await enter("confirmPairing")
         leave("confirmPairing")
-        return .succeeded(accept ? "paired" : "refused", subject: deviceID)
+        return .succeeded(accept ? "paired" : ActionDocument.refusedDetail, subject: deviceID)
     }
 
     func unpair(fingerprint: String) async throws -> ActionDocument {

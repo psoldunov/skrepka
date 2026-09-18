@@ -163,6 +163,59 @@ struct DaemonLinkTests {
         #expect(log.all.last == .shutDown)
     }
 
+    /// Emits `proposal` once and waits until the link has reported it, or five
+    /// seconds pass. The stream buffers, so one emission reaches a watch that
+    /// subscribes late.
+    static func dialIn(
+        _ proposal: PairingProposalDocument,
+        on daemon: FakeSyncDaemon,
+        log: EventLog
+    ) async -> Bool {
+        await daemon.emit(proposal)
+        for _ in 0..<500 {
+            if log.all.contains(.pairingRequested(proposal)) { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+
+    static func refusals(on daemon: FakeSyncDaemon) async -> Int {
+        await daemon.calls.filter { $0 == "start confirmPairing" }.count
+    }
+
+    /// The pairing dialog goes down with the window, and nothing else answers
+    /// the peer that is waiting on it.
+    @Test("a peer that dialled in and was never answered is refused on the way out")
+    func shutdownRefusesAnUnansweredPeer() async {
+        let daemon = FakeSyncDaemon(document: Fixture.document([Fixture.nearby()]))
+        let log = EventLog()
+        let link = await Self.link(daemon, log)
+
+        #expect(await Self.dialIn(Fixture.proposal(), on: daemon, log: log))
+        await link.shutdown()
+
+        #expect(await Self.refusals(on: daemon) == 1)
+        #expect(log.all.last == .shutDown)
+    }
+
+    @Test("…but not one that was answered, and not another client's dial")
+    func shutdownLeavesAnsweredAndForeignProposals() async {
+        let daemon = FakeSyncDaemon(document: Fixture.document([Fixture.nearby()]))
+        let log = EventLog()
+        let link = await Self.link(daemon, log)
+
+        #expect(await Self.dialIn(Fixture.proposal(), on: daemon, log: log))
+        link.perform(.answer(deviceID: Fixture.deckID, accept: true))
+        let foreign = Fixture.proposal(
+            Fixture.laptopID, name: "Laptop", direction: PairingProposalDocument.Direction.outgoing)
+        #expect(await Self.dialIn(foreign, on: daemon, log: log))
+        await link.shutdown()
+
+        // The one confirmation is the answer itself.
+        #expect(await Self.refusals(on: daemon) == 1)
+        #expect(log.all.last == .shutDown)
+    }
+
     @Test("a peer dialling in is reported as it happens")
     func pairingRequestsAreForwarded() async {
         let daemon = FakeSyncDaemon(document: Fixture.document())

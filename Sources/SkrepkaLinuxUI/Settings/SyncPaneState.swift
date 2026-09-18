@@ -64,12 +64,14 @@ public struct SyncPaneState: Sendable, Hashable {
     }
 
     /// Open or closed as the daemon says, except while a flip the user just
-    /// made is on its way — then as the user put it.
+    /// made is on its way — then as the user last put it.
+    ///
+    /// Enabled while a flip is on its way, for the reason the live-clipboard
+    /// switch is: GTK takes keyboard focus from a widget it disables, and the
+    /// link opens and closes in the order it was asked.
     static func pairingSwitch(_ model: SyncModel, now: Date, timeZone: TimeZone) -> PairingSwitch {
-        let opening = model.isInFlight(.openPairingWindow)
-        let closing = model.isInFlight(.closePairingWindow)
-        let isOpen = model.peers?.pairingPort != nil
-        let isOn = opening || (isOpen && !closing)
+        let latest = model.inFlight.last { $0 == .openPairingWindow || $0 == .closePairingWindow }
+        let isOn = latest.map { $0 == .openPairingWindow } ?? (model.peers?.pairingPort != nil)
         let subtitle: String
         if isOn, let endsAt = model.pairingWindowEndsAt, endsAt > now {
             subtitle = """
@@ -84,11 +86,7 @@ public struct SyncPaneState: Sendable, Hashable {
                 It turns itself off after a few minutes.
                 """
         }
-        return PairingSwitch(
-            isOn: isOn,
-            isEnabled: model.isSyncAvailable && !opening && !closing,
-            subtitle: subtitle
-        )
+        return PairingSwitch(isOn: isOn, isEnabled: model.isSyncAvailable, subtitle: subtitle)
     }
 
     private static func emptyMessage(_ model: SyncModel) -> String {

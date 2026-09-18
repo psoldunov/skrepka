@@ -78,15 +78,20 @@ struct OutgoingPairingSaveTests {
 /// `InMemoryTrustStore` is the shape, minus the identity half this does not
 /// need and plus the one thing a real store will not do on demand.
 actor RecordingPeerStore: PairedDeviceStoring {
-    /// What a store that cannot write says. The daemon reports the failure
-    /// rather than the error, so the case carries nothing.
-    enum Failure: Error { case cannotWrite }
+    /// What a store that cannot write, or read, says. The daemon reports the
+    /// failure rather than the error, so the cases carry nothing.
+    enum Failure: Error {
+        case cannotWrite
+        case cannotRead
+    }
 
     private let failsOnSave: Bool
+    private let failsOnChoiceRead: Bool
     private(set) var saved: [SyncDeviceID: PairedPeer] = [:]
 
-    init(failsOnSave: Bool = false) {
+    init(failsOnSave: Bool = false, failsOnChoiceRead: Bool = false) {
         self.failsOnSave = failsOnSave
+        self.failsOnChoiceRead = failsOnChoiceRead
     }
 
     func pairedPeers() -> [PairedPeer] {
@@ -110,7 +115,10 @@ actor RecordingPeerStore: PairedDeviceStoring {
 
     func recordProtocolVersion(_ version: ProtocolVersion, for deviceID: SyncDeviceID) {}
 
-    func livePushChoice(for deviceID: SyncDeviceID) -> LivePushChoice { .followsPlatformDefault }
+    func livePushChoice(for deviceID: SyncDeviceID) throws -> LivePushChoice {
+        guard !failsOnChoiceRead else { throw Failure.cannotRead }
+        return .followsPlatformDefault
+    }
 
     func setLivePushChoice(_ choice: LivePushChoice, for deviceID: SyncDeviceID) {}
 }

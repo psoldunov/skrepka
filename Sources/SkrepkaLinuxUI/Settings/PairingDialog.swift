@@ -118,6 +118,7 @@ final class PairingDialog {
         GtkBuild.setVisible(spinner, text.isWorking)
         gtk_spinner_set_spinning(skrepka_as_spinner(spinner), text.isWorking ? 1 : 0)
         gtk_button_set_label(skrepka_as_button(cancel), text.cancelLabel)
+        GtkBuild.setEnabled(cancel, text.isCancelEnabled)
         GtkBuild.setVisible(confirm, text.confirmLabel != nil)
         GtkBuild.setEnabled(confirm, text.isConfirmEnabled)
         guard !isShowing else { return }

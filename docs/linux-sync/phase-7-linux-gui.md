@@ -159,7 +159,8 @@ Three things it settled that the picker's daemon connection will reuse:
 
 Done when #5 — pairing completed entirely from the GUI — is covered by the
 model's tests in both directions, and the window and its pairing dialog were
-drawn under the headless sway against a stand-in daemon. It has not yet run
+drawn under the headless sway against a stand-in daemon — a throwaway harness
+behind `SettingsApplication.run(connect:)`, not committed. It has not yet run
 against a real peer, or on KWin. Section 5 of
 [`steam-deck-session.md`](steam-deck-session.md) is that check.
 

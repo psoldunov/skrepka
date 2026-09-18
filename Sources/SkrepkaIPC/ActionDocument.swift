@@ -45,4 +45,14 @@ public struct ActionDocument: SkrepkaDocument, Hashable {
     public static func refused(_ detail: String, subject: String? = nil) -> ActionDocument {
         ActionDocument(ok: false, detail: detail, subject: subject)
     }
+
+    /// The whole ``detail`` of a pairing refused with nothing more to say:
+    /// `ConfirmPairing` answering no to a device that dialled this one, after
+    /// which neither machine has recorded the other.
+    ///
+    /// A refusal that needs a warning — an outgoing one, which the other
+    /// machine may already have recorded — starts with this and goes on. A
+    /// client tells the two apart by comparing ``detail`` against this, so the
+    /// daemon spells its answer from here rather than from a literal of its own.
+    public static let refusedDetail = "refused"
 }

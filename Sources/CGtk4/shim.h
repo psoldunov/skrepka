@@ -45,6 +45,10 @@ static inline GtkListBox *skrepka_as_list_box(GtkWidget *widget) {
 	return GTK_LIST_BOX(widget);
 }
 
+static inline GtkListBoxRow *skrepka_as_list_box_row(GtkWidget *widget) {
+	return GTK_LIST_BOX_ROW(widget);
+}
+
 static inline GtkEditable *skrepka_as_editable(GtkWidget *widget) {
 	return GTK_EDITABLE(widget);
 }
@@ -91,6 +95,17 @@ static inline void skrepka_install_css(const char *css) {
 	gtk_style_context_add_provider_for_display(display, GTK_STYLE_PROVIDER(provider),
 	                                           GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	g_object_unref(provider);
+}
+
+/// Whether focusing a selectable label selects all of its text — GTK's
+/// `gtk-label-select-on-focus` setting, for this process's default display.
+///
+/// In C because `g_object_set` is variadic. Setting it here overrides the
+/// desktop's value for this process alone.
+static inline void skrepka_set_label_select_on_focus(gboolean select) {
+	GtkSettings *settings = gtk_settings_get_default();
+	if (settings == NULL) { return; }
+	g_object_set(settings, "gtk-label-select-on-focus", select, NULL);
 }
 
 // MARK: - Variadic and array-taking calls

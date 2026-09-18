@@ -36,9 +36,9 @@ extension Daemon {
             progress[deviceID] = nil
             await link?.stop()
         }
-        for deviceID in wanted where links[deviceID] == nil {
-            links[deviceID] = makeLink(to: deviceID, runtime: runtime)
-            progress[deviceID] = PeerProgress()
+        for peer in peers where links[peer.deviceID] == nil {
+            links[peer.deviceID] = makeLink(to: peer.deviceID, runtime: runtime)
+            beginTracking(peer)
         }
         // Starting a link that is already running does nothing, so a browse
         // event that re-announces a peer costs one call per peer and no state.

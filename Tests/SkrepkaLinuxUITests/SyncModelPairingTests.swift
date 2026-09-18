@@ -120,7 +120,7 @@ struct SyncModelPairingTests {
 
         let refusedFirst = SyncEvent.finished(
             .answer(deviceID: Fixture.deckID, accept: false),
-            .answered(.succeeded("refused")),
+            .answered(.succeeded(ActionDocument.refusedDetail)),
             refreshed: nil
         )
         let next = two.sending(.answer(deviceID: Fixture.deckID, accept: false))

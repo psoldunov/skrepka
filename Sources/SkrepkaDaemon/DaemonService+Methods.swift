@@ -121,16 +121,10 @@ extension DaemonService {
                 ],
                 outputArgs: [DBusObjectServer.MethodArg(name: "result", type: "s")]
             ) { context in
-                // An unknown choice is a malformed call rather than an
-                // ordinary refusal: nothing a user did produces one, only a
-                // client that built the argument wrong.
-                guard let device = Self.string(context.arguments.first),
-                    let raw = Self.string(context.arguments.dropFirst().first),
-                    let choice = LivePushChoice(rawValue: raw)
-                else {
+                guard let arguments = Self.livePushArguments(context.arguments) else {
                     throw ServiceError.badArguments(SkrepkaInterface.Member.setLivePush)
                 }
-                let result = await daemon.setLivePush(device: device, choice: choice)
+                let result = await daemon.setLivePush(device: arguments.device, choice: arguments.choice)
                 return [.string(try SkrepkaDocumentCoding.encode(result))]
             },
         ]
@@ -203,6 +197,24 @@ extension DaemonService {
     }
 
     // MARK: - Argument reading
+
+    /// `SetLivePush`'s arguments: a device selector and one of
+    /// ``SkrepkaIPC/PeerDocument/LivePushChoiceName``, and nothing else.
+    ///
+    /// Nil for anything but exactly those two, which the caller answers as a
+    /// malformed call rather than an ordinary refusal — nothing a user did
+    /// produces one, only a client that built the message wrong. The count is
+    /// checked here because the bus library hands a handler whatever body the
+    /// caller sent without comparing it to the declared arguments, so a third
+    /// argument would otherwise be ignored rather than refused.
+    static func livePushArguments(_ arguments: [DBusValue]) -> (device: String, choice: LivePushChoice)? {
+        guard arguments.count == 2,
+            let device = string(arguments.first),
+            let raw = string(arguments.last),
+            let choice = LivePushChoice(rawValue: raw)
+        else { return nil }
+        return (device, choice)
+    }
 
     static func string(_ value: DBusValue?) -> String? {
         guard case .string(let text) = value else { return nil }
