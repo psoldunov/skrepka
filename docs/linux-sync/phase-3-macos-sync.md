@@ -117,8 +117,9 @@ name and short fingerprint. Each paired peer is a `PeerRowView` carrying:
   no explanation is a bug report waiting to be filed.
 - unpair, which forgets the pinned certificate
 
-`PairingSheet` shows the eight-character SAS on both sides and asks the user to
-confirm they match. It must be *readable* — grouped `A3F2-91BC`, in a face where
+`PairingSheet` shows the sixteen-character SAS on both sides — eight until
+[OQ-15](open-questions.md#oq-15) widened it — and asks the user to confirm they
+match. It must be *readable* — grouped `A3F2-91BC-D4E7-0182`, in a face where
 `0`/`O` and `1`/`l` differ — because the entire MITM defence is a human
 comparing two strings on two screens.
 

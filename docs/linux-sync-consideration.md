@@ -446,6 +446,11 @@ Both devices display eight hex characters — `A3F2-91BC` — derived as
 they match. The timestamp in the hash is what kills replay of a stale key;
 lifted from KDE Connect's `pairinghandler.cpp`.
 
+> **Superseded 2026-09-06.** Eight hex characters became sixteen,
+> `A3F2-91BC-D4E7-0182` — 32 bits to 64 —
+> [OQ-15](linux-sync/open-questions.md#oq-15), which also records the
+> commit-then-reveal fix still owed.
+
 A PAKE (SPAKE2, as Magic Wormhole uses) was considered and is not needed: its
 job is to authenticate over an untrusted rendezvous server, and there is no
 server here. The SAS gets the same MITM protection for free. QR codes are a

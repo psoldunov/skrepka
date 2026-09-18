@@ -229,7 +229,8 @@ if it does not, this phase's design changes and Phase 4 inherits the problem.
   with those permissions rather than chmod'ed afterwards. Phase 6 writes it.
 - Tests: an in-memory conformance, which is why `TrustStore` is a protocol.
 
-**`ShortAuthString`** — eight hex characters, `A3F2-91BC`, derived as
+**`ShortAuthString`** — sixteen hex characters, `A3F2-91BC-D4E7-0182`
+(eight until [OQ-15](open-questions.md#oq-15) widened it), derived as
 `SHA-256(sorted DER public keys ‖ pairing timestamp)`. Sorting the keys is what
 makes both ends compute the same string without agreeing who is "first"; the
 timestamp is what kills replay of a stale key. Both are lifted from KDE
