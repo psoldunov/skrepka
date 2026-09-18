@@ -183,7 +183,11 @@ scenario_cross() {
 	sleep 4
 	say_a list
 	sleep 2
-	if latest_list a.out | grep -q '^  [0-9a-f]\{12\}  pinned'; then
+	# The row has to still be there as well as unpinned: an unpin that dropped
+	# the entry would otherwise pass as an unpin that worked.
+	if ! latest_list a.out | grep -q '^  b4b7[0-9a-f]\{8\}  '; then
+		fail "step 6 — an unpin propagates (alpha no longer lists b4b7)"
+	elif latest_list a.out | grep -q '^  [0-9a-f]\{12\}  pinned'; then
 		fail "step 6 — an unpin propagates (alpha still shows a pin)"
 	else
 		pass "step 6 — an unpin propagates"
