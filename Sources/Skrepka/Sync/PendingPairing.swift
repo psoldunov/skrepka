@@ -36,7 +36,7 @@ final class PendingPairing: Identifiable {
     let peerName: String
     /// The short form of the peer's identifier, which is an identity.
     let fingerprint: String
-    /// The eight characters the two users compare, already grouped `A3F2-91BC`.
+    /// The code the two users compare, already grouped `A3F2-91BC-D4E7-0182`.
     let code: String
 
     var stage: Stage

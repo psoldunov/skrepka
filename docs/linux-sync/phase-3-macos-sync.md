@@ -26,8 +26,10 @@ Sources/Skrepka/Sync/
 Sources/Skrepka/Settings/
   SyncSettingsView.swift
   SettingsTabBar.swift            # + .sync case
-Sources/SkrepkaCore/Store/
-  HistoryStoring.swift            # protocol, pulled forward from Phase 4
+Sources/SkrepkaSync/Transport/
+  HistoryStoring.swift            # protocol, pulled forward from Phase 4 — lives
+                                   # here rather than SkrepkaCore/Store/ because
+                                   # it has to build on Linux too
 
 Sources/skrepka-sync-probe/
   main.swift
@@ -115,8 +117,9 @@ name and short fingerprint. Each paired peer is a `PeerRowView` carrying:
   no explanation is a bug report waiting to be filed.
 - unpair, which forgets the pinned certificate
 
-`PairingSheet` shows the eight-character SAS on both sides and asks the user to
-confirm they match. It must be *readable* — grouped `A3F2-91BC`, in a face where
+`PairingSheet` shows the sixteen-character SAS on both sides — eight until
+[OQ-15](open-questions.md#oq-15) widened it — and asks the user to confirm they
+match. It must be *readable* — grouped `A3F2-91BC-D4E7-0182`, in a face where
 `0`/`O` and `1`/`l` differ — because the entire MITM defence is a human
 comparing two strings on two screens.
 
@@ -131,9 +134,11 @@ of the test loop entirely.
 It depends on `SkrepkaSync` and *not* on `SkrepkaCore`, so it stays buildable on
 Linux and becomes the Phase 6 smoke-test binary for free.
 
-Subcommands: `advertise`, `pair`, `list`, `add <text>`, `pin <hash>`,
-`delete <hash>`, `dump`. Enough to drive every case in the runbook below from a
-terminal.
+Subcommands: `add <text>`, `list`, `dump`, `pin <hash>`, `unpin <hash>`,
+`delete <hash>`, `peers`, `connect`, `address`, `sync`, `status`, `pair`,
+`unpair`, `accept`, `reject`. There is no `advertise` verb — running the probe
+advertises automatically. Enough to drive every case in the runbook below from
+a terminal.
 
 ## The runbook
 

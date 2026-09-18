@@ -6,8 +6,8 @@ import Foundation
     import Crypto
 #endif
 
-/// The eight hex characters both devices display during pairing, rendered
-/// `A3F2-91BC`.
+/// The ``hexDigitCount`` hex characters both devices display during pairing,
+/// rendered `A3F2-91BC-D4E7-0182`.
 ///
 /// This is the entire man-in-the-middle defence. TLS at first contact can only
 /// prove that the two ends share a tunnel, not that the far end is the laptop

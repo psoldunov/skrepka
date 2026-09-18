@@ -33,8 +33,10 @@ decisions already taken and the fourteen questions still open.
 - macOS 26.0 or later
 - **Xcode 26, a full install.** Not Command Line Tools. Its toolchain ships no
   `libSwiftDataMacros.dylib`, so every `@Model` in `Sources/SkrepkaCore/Store/`
-  fails to expand. Every script in `scripts/` pins `DEVELOPER_DIR` to
-  `/Applications/Xcode.app/Contents/Developer` for exactly this reason — never
+  fails to expand. Every script in `scripts/` that runs Swift on the Mac pins
+  `DEVELOPER_DIR` to `/Applications/Xcode.app/Contents/Developer` for exactly
+  this reason; the Linux ones run theirs in the build image, or natively on a
+  Linux host, with no Xcode to pin. Never
   build with a bare `swift build`, which also invalidates `.build/` and forces
   a full rebuild each time you switch toolchains.
 - SwiftLint and Periphery:

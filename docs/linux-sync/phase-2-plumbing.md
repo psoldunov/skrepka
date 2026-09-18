@@ -59,6 +59,17 @@ Tests/SkrepkaCoreTests/
   HistoryStoreSyncTests.swift
 ```
 
+Where those four tests actually live moved since this was planned: they are
+now in the shared contract files `Tests/SkrepkaCoreTests/HistoryStoringSyncTests.swift`,
+`HistoryStoringTests.swift`, `HistoryStoringTombstoneTests.swift` and
+`Tests/SkrepkaSyncTests/HistoryStoringContractTests.swift`, run against every
+`HistoryStoring` conformance rather than the SwiftData store alone. The first
+three are one suite, `HistoryStoringTests`, split across files by extension,
+so that is the name the tests below carry.
+`HistoryStoreSyncTests.swift` still exists, but covers only the representation
+index — the one thing the SQLite schema has no equivalent of, so it cannot be
+asked as a shared conformance test.
+
 ## Work
 
 ### 1. Storage
@@ -132,7 +143,7 @@ is the only honest place for the rule.
 **No toggle** ([D-7](open-questions.md#d-7)): concealed items never cross the
 wire in v1, and there is no preference to change that. So the filter is
 unconditional and `syncIndex` needs no parameter for it — which is also what
-makes `HistoryStoreSyncTests.syncIndexOmitsConcealed` a one-case test rather
+makes `HistoryStoringTests.syncIndexOmitsConcealed` a one-case test rather
 than a two-case one.
 
 If the feature is ever wanted, D-7 records why encrypting them and syncing
@@ -218,7 +229,8 @@ if it does not, this phase's design changes and Phase 4 inherits the problem.
   with those permissions rather than chmod'ed afterwards. Phase 6 writes it.
 - Tests: an in-memory conformance, which is why `TrustStore` is a protocol.
 
-**`ShortAuthString`** — eight hex characters, `A3F2-91BC`, derived as
+**`ShortAuthString`** — sixteen hex characters, `A3F2-91BC-D4E7-0182`
+(eight until [OQ-15](open-questions.md#oq-15) widened it), derived as
 `SHA-256(sorted DER public keys ‖ pairing timestamp)`. Sorting the keys is what
 makes both ends compute the same string without agreeing who is "first"; the
 timestamp is what kills replay of a stale key. Both are lifted from KDE
@@ -284,10 +296,10 @@ Phase 1 folded into `id=`.
 
 | Test | Asserts |
 |---|---|
-| `HistoryStoreSyncTests.syncIndexOmitsConcealed` | unconditionally — there is no preference that lets them through (D-7) |
-| `HistoryStoreSyncTests.deleteWritesATombstone` | and `clear(keepingPinned:)` writes a batch |
-| `HistoryStoreSyncTests.retentionWritesNoTombstone` | the most important test in the phase |
-| `HistoryStoreSyncTests.applyRemoteIsIdempotent` | applying the same plan twice changes nothing the second time |
+| `HistoryStoringTests.syncIndexOmitsConcealed` | unconditionally — there is no preference that lets them through (D-7) |
+| `HistoryStoringTests.deleteWritesATombstone` | and `clear(keepingPinned:)` writes a batch |
+| `HistoryStoringTests.retentionWritesNoTombstone` | the most important test in the phase |
+| `HistoryStoringTests.applyRemoteIsIdempotent` | applying the same plan twice changes nothing the second time |
 | `ShortAuthStringTests.bothSidesDeriveTheSameString` | with the key order swapped |
 | `ShortAuthStringTests.timestampChangesTheString` | replay protection, asserted rather than assumed |
 | `PairingSessionTests.rejectsMismatchedInTunnelIdentity` | the anti-downgrade rule |

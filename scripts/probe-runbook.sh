@@ -98,6 +98,17 @@ refute() {
 	if grep -q -- "$3" "${WORK}/$2"; then fail "$1 (found /$3/ in $2)"; else pass "$1"; fi
 }
 
+# latest_list <file>
+#
+# The newest `list` a peer printed, header included. `expect` searches the whole
+# log, which cannot tell "pinned" now from "pinned" three commands ago — and an
+# unpin is exactly the case where the old answer is still in the file.
+latest_list() {
+	local start
+	start=$(grep -n '^syncable: ' "${WORK}/$1" | tail -1 | cut -d: -f1)
+	[[ -n "${start}" ]] && tail -n "+${start}" "${WORK}/$1"
+}
+
 # poll_for <name> <a|b> <command> <file> <pattern> [seconds]
 #
 # Asks a peer `command` until `pattern` shows up in its output, or gives up.
@@ -165,6 +176,22 @@ scenario_cross() {
 	say_a list
 	sleep 2
 	expect "step 6 — a pin propagates" a.out "pinned"
+
+	say_b "unpin b4b7"
+	sleep 1
+	say_a sync
+	sleep 4
+	say_a list
+	sleep 2
+	# The row has to still be there as well as unpinned: an unpin that dropped
+	# the entry would otherwise pass as an unpin that worked.
+	if ! latest_list a.out | grep -q '^  b4b7[0-9a-f]\{8\}  '; then
+		fail "step 6 — an unpin propagates (alpha no longer lists b4b7)"
+	elif latest_list a.out | grep -q '^  [0-9a-f]\{12\}  pinned'; then
+		fail "step 6 — an unpin propagates (alpha still shows a pin)"
+	else
+		pass "step 6 — an unpin propagates"
+	fi
 
 	say_a "delete a3a3"
 	sleep 1

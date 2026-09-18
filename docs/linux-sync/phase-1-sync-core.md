@@ -228,12 +228,23 @@ public enum MergeAction: Sendable, Hashable {
     case applyPin(contentHash: String, register: LWWRegister<Bool>)
     case deleteLocally(contentHash: String)
     case recordTombstone(Tombstone)
+    case dropTombstone(contentHash: String)
 }
 ```
+
+`dropTombstone` prunes a local tombstone whose retention window has expired —
+added after this phase shipped, once a receive-only machine turned out to keep
+re-reading graveyard rows nothing else ever prunes. The engine stays pure
+because the clock it measures expiry against is injected as `MergeInput.now`,
+not read from the system.
 
 No `fetchPayload` case. Payload transfer is lazy and demand-driven per design
 §7, so it is the transport's business and not the merge's — putting it here
 would make a pure function decide when to spend bandwidth.
+
+`applyPin`'s register, and every other last-writer-wins field the model
+carries, resolves through the `LWWValue` protocol — the value-level tie-break
+that `LWWRegister` merges over.
 
 Three rules the engine encodes, and each gets its own test:
 
@@ -258,7 +269,7 @@ Three rules the engine encodes, and each gets its own test:
 | `FrameCodecTests.decodesTwoFramesFromOneBuffer` | the streaming case, which loopback would otherwise hide |
 | `FrameCodecTests.rejectsUnknownMessageType` | throws `unknownMessageType`, not a crash and not silence |
 | `FrameCodecTests.survivesMalformedBody` | truncated and corrupted CBOR bodies throw rather than trap — this is [OQ-8](open-questions.md#oq-8) turned into a regression test |
-| `MergeEngineTests.convergesRegardlessOfOrder` | two divergent histories applied in both orders produce identical results |
+| `MergeConvergenceTests.gossipConvergesInEveryOrder` | two divergent histories applied in both orders produce identical results |
 | `MergeEngineTests.tombstoneBeatsInsert` | in both arrival orders |
 | `MergeEngineTests.evictionEmitsNoTombstone` | an item absent locally but present remotely is re-inserted, never tombstoned |
 | `MergeEngineTests.createdAtTakesTheMaximum` | commutative under clock skew in either direction |
@@ -279,7 +290,10 @@ The test for it belongs where the decision is made.
   container.
 - `swift test --filter SkrepkaSyncTests` is green on both.
 - `scripts/doctor.sh` is green.
-- Not one line of networking exists.
+- Not one line of networking exists — true of `SkrepkaSync` as this phase
+  delivered it. Phases 2 and 3 added `Transport/`, `Session/`, `Discovery/`
+  and `Pairing/` to this target on purpose; the claim is about Phase 1's
+  contents at handoff, not about the target forever.
 
 ## Risks
 

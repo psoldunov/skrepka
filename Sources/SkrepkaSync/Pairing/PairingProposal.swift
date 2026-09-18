@@ -9,8 +9,8 @@ import Foundation
 public struct PairingProposal: Sendable, Hashable {
     /// What ``PairedDeviceStoring/savePairedPeer(_:)`` is handed if the user says yes.
     public let peer: PairedPeer
-    /// The eight characters the user compares against the other screen, already
-    /// rendered — `A3F2-91BC`. See ``ShortAuthString``.
+    /// The code the user compares against the other screen, already rendered —
+    /// `A3F2-91BC-D4E7-0182`. See ``ShortAuthString``.
     public let shortAuthenticationString: String
 
     public init(peer: PairedPeer, shortAuthenticationString: String) {

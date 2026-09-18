@@ -13,6 +13,12 @@ is not worth setting up until Phase 7's GUI exists**, so those steps wait for
 that rather than for this phase. Nothing here is blocked on them; Phase 7 can
 start.
 
+**Amended 2026-09-18:** the runbook is now deferred along with all Linux
+hardware testing, by the owner's decision — no longer waiting on Phase 7's GUI,
+but on the owner picking hardware testing back up. It is ready to run when that
+happens: section 3 of [`steam-deck-session.md`](steam-deck-session.md) walks the
+"done when" list below against a real Mac.
+
 Two things in the deliverables below were **not** built, both deliberately and
 both recorded here rather than quietly dropped:
 
@@ -117,7 +123,6 @@ Sources/skrepkad/
   main.swift
   Daemon.swift                      # the composition root
   DBusInterface.swift
-  SessionPaths.swift                # XDG directories
 
 Sources/skrepka/                    # the CLI
   main.swift
@@ -167,6 +172,9 @@ Four differences from the plan, each with a reason:
   filesystems are case-insensitive and `Sources/Skrepka/` is the app target —
   the two are one directory there. The target is still named `skrepka`, via an
   explicit `path:`.
+- **`SessionPaths.swift` lives at `Sources/SkrepkaCore/Store/SQLite/SessionPaths.swift`**,
+  not `Sources/skrepkad/`, because Phase 4's SQLite storage needs the same XDG
+  paths and pulling them into `SkrepkaCore` avoids a second copy.
 - **`skrepka doctor` reads a `DiagnosticsDocument`, not `DiagnosticsSnapshot`.**
   Work item 3 asks for the shared shape so the CLI and the Phase 7 GUI cannot
   drift, and that is what this is — one document, both readers. It is not
@@ -252,16 +260,18 @@ useful in CI and over SSH.
 | `skrepka list [--limit n] [--json]` | history, newest first, pinned hoisted |
 | `skrepka copy <n\|hash>` | put an entry on the clipboard |
 | `skrepka pair [--peer id]` | run pairing, print the SAS, wait for confirmation |
-| `skrepka peers` | paired and discovered peers, with live-push state |
-| `skrepka doctor` | the Linux equivalent of the Status pane |
+| `skrepka sync` | ask the daemon to resync with every peer now |
+| `skrepka unpair <fingerprint>` | drop a peer's trust |
+| `skrepka peers [--json]` | paired and discovered peers, with live-push state |
+| `skrepka doctor [--json]` | the Linux equivalent of the Status pane |
 
-`skrepka doctor` reads the same `DiagnosticsSnapshot` the GUI will, so the two
+`skrepka doctor` reads the same `DiagnosticsDocument` the GUI will, so the two
 cannot drift. It must report the Phase 5 cases plainly: which backend was
 chosen, whether the GNOME extension is present when it is needed, whether
 `avahi-daemon` is running or the embedded responder is in use.
 
-`--json` on `list` and `doctor` from the start. It costs nothing and it is what
-makes the Phase 8 packaging tests scriptable.
+`--json` on `list`, `peers` and `doctor` from the start. It costs nothing and
+it is what makes the Phase 8 packaging tests scriptable.
 
 ### 4. The D-Bus interface
 
@@ -269,10 +279,11 @@ makes the Phase 8 packaging tests scriptable.
 extension talks to the daemon, and designing it now avoids retrofitting an
 interface around a JavaScript client written later.
 
-On the session bus, `dev.soldunov.Skrepka`. Minimum surface: submit a captured
-clip, request the current selection be set, query history, subscribe to
-history-changed. Version it from the first commit — the extension ships through
-a review queue and will lag the daemon.
+On the session bus, `dev.soldunov.Skrepka`, exporting the `dev.soldunov.Skrepka1`
+interface. Minimum surface: submit a captured clip, request the current
+selection be set, query history, subscribe to history-changed. Version it from
+the first commit — the extension ships through a review queue and will lag the
+daemon.
 
 ### 5. systemd
 
@@ -285,10 +296,9 @@ than a stack trace.
 
 | Test | Asserts |
 |---|---|
-| `AvahiDiscoveryTests.parsesServiceRecords` | against captured D-Bus payloads, no live daemon |
-| `AvahiDiscoveryTests.fallsBackWhenDaemonAbsent` | and does **not** run both responders at once |
-| `SessionPathsTests.honoursXDGVariables` | and the defaults when they are unset |
-| `DaemonTests.keyFileIsCreated0600` | at creation, not after |
+| `AvahiSignalsTests.parsesServiceRecords` | a resolution carries the host, the port and the raw TXT record — against captured D-Bus payloads, no live daemon |
+| `DaemonPathsTests.fallsBackToTheSpecifiedDefaults` | the XDG defaults, when the variables are unset |
+| `FileTrustStoreTests.keyFileIsCreated0600` | at creation, not after |
 | `HistoryStoringTests` | the SQLite conformance, again, now under the daemon's real paths |
 | CLI golden tests | `list --json` and `doctor --json` output shapes |
 
