@@ -10,7 +10,9 @@ Three are not, and cannot be: they need a real pasteboard, a password manager, o
 a second physical machine, and a runbook that pretended otherwise would be worth
 less than one that says so.
 
-Date of this record: 2026-09-06. Re-run it with:
+Date of this record: 2026-09-06. Revised 2026-09-18: step 6 now drives the
+unpin as well as the pin, step 1 records the code's width after OQ-15, and the
+whole script was re-run green in both modes. Re-run it with:
 
 ```
 swift build --product skrepka-sync-probe
