@@ -11,11 +11,12 @@ The same day's follow-up work is recorded under [Done today](#done-today).
 Linux hardware testing is **deferred** (owner's decision, 2026-09-18). Phase 7
 carries on without it — see [Phase 7](#phase-7-the-linux-picker) below.
 
-**Deferred: the Steam Deck session.** It is ready, and it is about 2 hours:
+**Deferred: the Steam Deck session.** It is ready, and it is a little over 2
+hours:
 
 1. On the Mac: `scripts/build-deck.sh`. *About 20 minutes the first time.*
 2. On the Deck: follow [`steam-deck-session.md`](steam-deck-session.md),
-   sections 0 → 5. *90 minutes if nothing blocks.*
+   sections 0 → 5. *100 minutes if nothing blocks.*
 3. Record the results where section 5 says. *10 minutes.*
 
 Four things wait on it:
@@ -29,13 +30,16 @@ Four things wait on it:
 
 ## Done today
 
-| | What | Where |
+Commits are named by subject rather than hash: this repository squash-merges,
+and a branch's hashes do not survive that.
+
+| | What | Commit |
 |---|---|---|
-| ✅ | macOS gate green again under Xcode 27 / Swift 6.4 — 556 tests | `c328254` |
-| ✅ | OQ-16 decided as [D-11](open-questions.md#d-11): Return copies, the user presses Ctrl+V | `e7b434e` |
-| ✅ | Doc drift fixed across README and seven phase docs | `e7b434e` |
-| ✅ | Unpin propagation tested end to end in the probe runbook | `9066f21` |
-| ✅ | x86_64 Deck build, palette demo, session checklist | `34d8e8d` |
+| ✅ | macOS gate green again under Xcode 27 / Swift 6.4 — 556 tests | *fix: build and gate under Xcode 27 and Swift 6.4* |
+| ✅ | OQ-16 decided as [D-11](open-questions.md#d-11): Return copies, the user presses Ctrl+V | *docs: decide how the Linux picker pastes, and bring the plan back in line with the code* |
+| ✅ | Doc drift fixed across README and seven phase docs | the same |
+| ✅ | Unpin propagation tested end to end in the probe runbook | *test: assert that an unpin propagates in the probe runbook* |
+| ✅ | x86_64 Deck build, palette demo, session checklist | *build: ship an x86_64 Linux build to the Steam Deck, and script its first session* |
 
 **What broke on macOS, and the fix.** Nothing in the repo changed; the
 toolchain did.
@@ -147,7 +151,7 @@ Reference only. Skim when you need a file path.
   against headless Sway and Xvfb.
 - **Phase 6.** `AvahiDiscovery`, `skrepkad`, `SkrepkaIPC`, the CLI, the systemd
   unit, `scripts/install.sh`. The two parts skipped on purpose are recorded.
-- **Phase 7.** Palette window, key map, metrics, mark path code, 29 UI tests,
+- **Phase 7.** Palette window, key map, metrics, mark path code, 26 UI tests,
   and now `skrepka-palette-demo`. No `Tray/`, `Hotkey/`, `Settings/` or
   `Thumbnails/` yet.
 - **Phase 8.** Only Phase 6's installer and systemd unit.

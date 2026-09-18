@@ -11,7 +11,7 @@ Phase 7's palette — has only been exercised inside a container against a
 headless sway. This is the checklist for the first run on a real KDE Plasma 6.4
 session, with a real Mac at the other end.
 
-Ninety minutes if nothing blocks, an afternoon if something does.
+A hundred minutes if nothing blocks, an afternoon if something does.
 
 ## Read this first — two things that could stop the session
 
@@ -43,10 +43,10 @@ you install into. All of these run from Desktop Mode's Konsole.
    `sudo systemctl enable --now sshd`, then `ip -4 addr | grep inet` for the
    address to scp to.
    - **Pass:** `ss -ltn | grep :22` shows a listener.
-4. Check Avahi is up on the system bus:
-   `busctl --system status org.freedesktop.Avahi 2>/dev/null | head -3`.
-   - **Pass:** the line reads `Name: org.freedesktop.Avahi`.
-   - **Fail:** stop at step 3 of section 3 and record the state.
+4. Check Avahi is running: `systemctl is-active avahi-daemon`.
+   - **Pass:** it prints `active`.
+   - **Fail:** anything else — `inactive`, `failed`. Stop at step 3 of section
+     3 and record the state.
 5. Check glibc, then the libraries: `ldd --version | head -1`, then
    `ldconfig -p | grep <soname>` for each `.so` line in the tarball's
    `runtime-report.txt`. `libgtk4-layer-shell.so.0` is expected to be missing,
@@ -91,15 +91,19 @@ so both binaries do not fight over the clipboard.
 3. `./bin/skrepka-clip-probe watch &`, then copy something in Firefox / Dolphin /
    Konsole in turn.
    - **Pass:** each copy prints a line naming its MIME types and payload size.
-4. `./bin/skrepka-clip-probe copy "hello from skrepka"` — writes the string to
-   the clipboard from the probe.
-   - **Pass:** any other app can paste `hello from skrepka` with Ctrl+V.
+4. `./bin/skrepka-clip-probe copy "hello from skrepka"` — puts the string on
+   the clipboard and stays in the foreground, printing `serving … targets — ^C
+   to release the selection`. On Wayland the bytes live in the process that
+   offered them, so it has to keep running for a paste to work.
+   - **Pass:** while it runs, any other app can paste `hello from skrepka` with
+     Ctrl+V. Then press Ctrl+C.
 5. `kill %1` to stop the watcher, then `systemctl --user start skrepkad`.
 
-## 3. Daemon and pairing with the Mac — 20 minutes
+## 3. Daemon and pairing with the Mac — 30 minutes
 
 The Mac side runs Skrepka.app from `scripts/run.sh`. Do this section over ssh
-from the Mac so both terminals are visible.
+from the Mac so both terminals are visible — all but step 5, which cuts the
+network and the ssh session with it.
 
 1. On the Mac: `scripts/run.sh`. Confirm the menu-bar icon is present.
 2. On the Deck: `skrepka doctor`, then `skrepka peers`.
@@ -113,19 +117,52 @@ from the Mac so both terminals are visible.
    on both screens. It is 16 characters in groups of four. Confirm on both.
    - **Pass:** the codes match, the Deck prints `Paired.`, and the Mac's row
      shows the Deck as paired.
-4. Walk the Phase 6 "Done when" list, marking each item pass/fail as it
-   happens ([phase-6-linux-daemon.md](phase-6-linux-daemon.md#done-when)):
-   - History flows both ways (copy on Mac → appears in `skrepka list`; copy on
-     Deck → appears in the Mac history).
-   - Pin on one side propagates to the other.
-   - Delete on one side propagates.
-   - Concealed content (a password manager) does **not** cross.
-   - `systemctl --user restart skrepkad` reconnects without re-pairing.
-5. Break something on purpose: unplug the Deck's network, wait 30 s, plug it
-   back in. `skrepka doctor` should report the outage while it is down, and
-   sync should resume on its own after.
-   - **Pass:** history added on either side while the Deck was offline is
-     present on both after ~15 s.
+4. Walk all nine items of the Phase 6 "Done when" list
+   ([phase-6-linux-daemon.md](phase-6-linux-daemon.md#done-when)), marking
+   each pass or fail under its number there:
+   1. **Discover and pair with matching codes** — steps 2 and 3 above.
+   2. **History both ways, pins and deletes included.** Copy on the Mac and
+      find it in `skrepka list`; copy in Kate and find it in the Mac's history.
+      Then pin one entry on the Mac and delete another there. **Pass:** the
+      pinned one is marked `*` in `skrepka list` and the deleted one is gone.
+      The CLI has no pin or delete verb, so this half runs Mac → Deck only;
+      record it that way.
+   3. **Live push both ways, on by default.** The copies in item 2 arrive
+      within a few seconds without anyone running `skrepka sync`.
+   4. **Retention stays local.** On the Mac, open Settings → History and set
+      **Keep at most** below the number of entries the Deck holds (100 is the
+      smallest choice; **Discard after** works too), so the Mac drops its
+      oldest. **Pass:** `skrepka list --limit 1000` on the Deck still shows
+      them. Put the setting back afterwards.
+   5. **Concealed content does not cross.** Copy a password from a password
+      manager on the Mac. **Pass:** it never appears in `skrepka list`.
+   6. **A network cut resumes rather than corrupts** — step 5 below. The cut
+      is made by hand and not timed to land mid-transfer, so record this item
+      as partly covered.
+   7. **`systemctl --user restart skrepkad` reconnects without re-pairing.**
+      **Pass:** `skrepka peers` still lists the Mac as paired, and a copy on
+      either side still arrives on the other.
+   8. **`skrepka doctor` tells the truth when something is wrong** — step 5
+      below breaks the network on purpose and reads `doctor` while it is
+      broken.
+   9. **The daemon survives the compositor restarting under it.** Switch to
+      Game Mode, then back to Desktop Mode as in step 0.1 — the KWin session
+      ends and a new one starts — and touch nothing else. **Pass:** a copy in
+      Kate reaches `skrepka list`, and `skrepka doctor` names a backend. A
+      `restarts` line in `doctor` means the daemon survived and rebuilt its
+      session. Without one, `systemctl --user status skrepkad` shows whether
+      systemd started a new daemon instead. Record which happened.
+5. Break the network on purpose. Do this step from the Deck's own Konsole, not
+   over ssh, because it cuts the ssh session. Turn the Deck's Wi-Fi off (it has
+   no Ethernet port without a dock), copy something on each side, and run
+   `skrepka doctor`. Wait 30 s, then turn Wi-Fi back on.
+   - **Pass, while offline:** `doctor` has a `PROBLEMS` section that says so.
+     The daemon has two lines that fit, and which one appears depends on how
+     Avahi reacts to losing its interface, which is unverified: `Paired but
+     not on the network right now: <fingerprint>`, or `This device is not
+     published on the local network…`.
+   - **Pass, after:** both copies are present on both sides within ~15 s of
+     Wi-Fi returning, with no `skrepka sync` and no re-pairing.
 
 ## 4. Palette on KWin — 20 minutes
 
@@ -167,8 +204,8 @@ Write results into these files, in this order:
    confirmed under D-10.
 2. **[`phase-6-linux-daemon.md`](phase-6-linux-daemon.md)** — the "Done when"
    list, item by item, with the actual behaviour observed.
-3. **[`phase-7-linux-gui.md`](phase-7-linux-gui.md)** — replace "KDE: not
-   demonstrated" with the actual result of section 4, and update D-4's
+3. **[`phase-7-linux-gui.md`](phase-7-linux-gui.md)** — replace "**Not
+   demonstrated: KDE.**" with the actual result of section 4, and update D-4's
    provisional exit condition to settled or reverted.
 4. Attach the `runtime-report.txt` from the tarball to whichever finding
    depends on it — a Deck-side glibc mismatch belongs beside the finding it
