@@ -83,7 +83,10 @@ split across four files in `Sources/SkrepkaCore/Branding/`:
 so plain `swift scripts/make-icon.swift` no longer works — it takes one file.
 Change the mark in one place.
 
-Every script pins `DEVELOPER_DIR` to `/Applications/Xcode.app/Contents/Developer`.
+Every script that runs Swift on the Mac pins `DEVELOPER_DIR` to
+`/Applications/Xcode.app/Contents/Developer`. The Linux ones — `linux.sh`,
+`linux-image.sh`, `doctor-linux.sh`, `build-deck.sh`, `install.sh` — do not:
+their Swift runs inside the build image or on a Linux host, with no Xcode to pin.
 Do not build with a bare `swift build`: `xcode-select -p` points at
 CommandLineTools, whose toolchain ships no `libSwiftDataMacros.dylib`, so `@Model`
 in `Sources/SkrepkaCore/Store/` fails to expand. Mixing the two toolchains also
