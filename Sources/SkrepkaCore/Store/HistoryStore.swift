@@ -15,9 +15,17 @@
     /// step with the database in `HistoryStore+Projection.swift`; the sync
     /// surface is in `HistoryStore+Sync.swift`, `HistoryStore+Merge.swift` and
     /// `HistoryStore+Pairing.swift`.
+    ///
+    /// `Sendable` is spelled out here rather than left implied by the main-actor
+    /// isolation: `HistoryStoring` and `PairedDeviceStoring` both refine
+    /// `Sendable`, their conformances live in other files — one in another
+    /// module — and Swift 6.4 refuses a `Sendable` conformance that is implied
+    /// from anywhere but the class's own file.
     @MainActor
     @Observable
-    public final class HistoryStore {
+    // Not redundant under Swift 6.4, whatever the rule believes; see above.
+    // swiftlint:disable:next redundant_sendable
+    public final class HistoryStore: Sendable {
         /// Newest first, pinned entries hoisted to the top.
         ///
         /// A view of ``projection``, so SwiftUI observes it through that: the

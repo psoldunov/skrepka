@@ -71,7 +71,17 @@ check "build" swift build
 
 if ((!FAST)); then
 	check "test" swift test --parallel
-	optional "dead code" periphery periphery scan --strict --quiet
+	# Xcode 27's SwiftPM builds with Swift Build by default, which writes the
+	# index store to .build/out rather than the .build/debug/index/store that
+	# Periphery 3.8 looks for — so Periphery stopped with "index store path does
+	# not exist". Pointing it at the store this run's build just wrote also skips
+	# a second build. The native build system still writes the old layout, and
+	# there Periphery keeps building for itself.
+	periphery_arguments=(scan --strict --quiet)
+	if [[ "$(cat .build/.buildSystem_debug 2>/dev/null)" == "swiftbuild" ]]; then
+		periphery_arguments+=(--index-store-path .build/out)
+	fi
+	optional "dead code" periphery periphery "${periphery_arguments[@]}"
 fi
 
 printf '\n'
