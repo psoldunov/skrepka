@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-08T12:25:01.516Z",
+	"generatedAt": "2026-09-18T13:07:40.043Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -553,7 +553,7 @@
 						"path": "scripts"
 					}
 				],
-				"sublabel": "doctor, doctor-linux, probe-runbook, linux, bundle, notarize",
+				"sublabel": "doctor, doctor-linux, probe-runbook, linux, build-deck, bundle, notarize",
 				"type": "backend"
 			},
 			{
@@ -567,7 +567,7 @@
 						"path": "scripts/linux-image.sh"
 					}
 				],
-				"sublabel": "Swift 6.3.3, SwiftLint, libsqlite3, GTK4/gtk4-layer-shell — required, not optional",
+				"sublabel": "Swift 6.3.3, SwiftLint, libsqlite3, GTK4/gtk4-layer-shell; a host and an amd64 variant — required, not optional",
 				"type": "backend"
 			},
 			{
@@ -1146,8 +1146,15 @@
 			{
 				"from": "scripts",
 				"id": "e-scripts-linuximage",
-				"label": "doctor-linux requires it",
+				"label": "doctor-linux and build-deck run in it — build-deck in the amd64 variant",
 				"to": "linux-image",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-peer",
+				"label": "build-deck.sh: the x86_64 tarball for the Steam Deck",
+				"to": "peer",
 				"variant": "dashed"
 			}
 		],

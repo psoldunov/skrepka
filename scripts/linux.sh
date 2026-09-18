@@ -5,6 +5,7 @@
 #   scripts/linux.sh                       an interactive shell
 #   scripts/linux.sh swift build --product SkrepkaLinux
 #   scripts/linux.sh swift test --filter SkrepkaSyncTests
+#   SKREPKA_LINUX_ARCH=amd64 scripts/linux.sh uname -m   the amd64 variant
 #
 # The container mounts the repository read-write at the same path it has on the
 # host, so paths in compiler diagnostics are clickable on both sides. It builds
@@ -18,6 +19,11 @@
 # until the base is published. The two compilers no longer agree on the
 # language exactly; the source in this tree still has to compile against
 # both.
+#
+# SKREPKA_LINUX_ARCH — arm64 or amd64 — runs the command in that variant of the
+# image, skrepka-linux:6.3-<arch>, with a matching `--platform`, emulated when it
+# is not the host's arch. scripts/linux-image.sh builds it under that tag on
+# every host. Unset, the plain tag: the host's own arch.
 
 set -euo pipefail
 
@@ -39,18 +45,9 @@ REPO="$(pwd)"
 #
 # so the fallback produced a pkg-config resolution failure that reads as a
 # broken repository. Saying "build the image first" is the smaller surprise.
-DEFAULT_IMAGE="skrepka-linux:6.3"
-if [[ -z "${SKREPKA_LINUX_IMAGE:-}" ]] \
-	&& ! docker image inspect "${DEFAULT_IMAGE}" > /dev/null 2>&1; then
-	echo "${DEFAULT_IMAGE} is not built yet." >&2
-	echo "Build it with: scripts/linux-image.sh" >&2
-	echo "It carries libsqlite3-dev and SwiftLint, which the stock swift image" >&2
-	echo "does not — the Linux build cannot resolve CSQLite without them." >&2
-	echo "Set SKREPKA_LINUX_IMAGE to override." >&2
-	exit 1
-fi
-IMAGE="${SKREPKA_LINUX_IMAGE:-${DEFAULT_IMAGE}}"
-
+#
+# Docker's reachability is asked first: with the daemon down, `docker image
+# inspect` fails too, and the message would blame a missing image.
 if ! docker info > /dev/null 2>&1; then
 	echo "docker is not reachable." >&2
 	echo "OrbStack exposes its socket at ~/.orbstack/run/docker.sock; under a" >&2
@@ -58,10 +55,40 @@ if ! docker info > /dev/null 2>&1; then
 	exit 1
 fi
 
+SWIFT_VERSION="${SKREPKA_SWIFT_VERSION:-6.3}"
+PLATFORM_ARGS=()
+case "${SKREPKA_LINUX_ARCH:-}" in
+	"")
+		DEFAULT_IMAGE="skrepka-linux:${SWIFT_VERSION}"
+		;;
+	arm64 | amd64)
+		DEFAULT_IMAGE="skrepka-linux:${SWIFT_VERSION}-${SKREPKA_LINUX_ARCH}"
+		PLATFORM_ARGS=(--platform "linux/${SKREPKA_LINUX_ARCH}")
+		;;
+	*)
+		echo "SKREPKA_LINUX_ARCH must be arm64 or amd64, not ${SKREPKA_LINUX_ARCH}." >&2
+		exit 1
+		;;
+esac
+
+if [[ -z "${SKREPKA_LINUX_IMAGE:-}" ]] \
+	&& ! docker image inspect "${DEFAULT_IMAGE}" > /dev/null 2>&1; then
+	echo "${DEFAULT_IMAGE} is not built yet." >&2
+	echo "Build it with: ${SKREPKA_LINUX_ARCH:+SKREPKA_LINUX_ARCH=${SKREPKA_LINUX_ARCH} }scripts/linux-image.sh" >&2
+	echo "It carries libsqlite3-dev and SwiftLint, which the stock swift image" >&2
+	echo "does not — the Linux build cannot resolve CSQLite without them." >&2
+	echo "Set SKREPKA_LINUX_IMAGE to override." >&2
+	exit 1
+fi
+IMAGE="${SKREPKA_LINUX_IMAGE:-${DEFAULT_IMAGE}}"
+
 # `-it` only when there is a terminal to attach. Passing it unconditionally
 # makes every non-interactive caller — CI, doctor-linux.sh, an agent's shell —
 # fail with "cannot attach stdin to a TTY-enabled container", which reads as a
 # broken build rather than a broken invocation.
+# Decided per invocation, from this call's own stdout, and that is what lets a
+# caller capture output or redirect bytes through it: a pty turns every LF into
+# CRLF, and GNU tar refuses to write an archive to a terminal at all.
 # The `${A[@]+"${A[@]}"}` form is deliberate: under `set -u`, bash 3.2 — which
 # is what /bin/bash still is on macOS — treats a plain `"${A[@]}"` on an empty
 # array as an unbound variable.
@@ -72,6 +99,7 @@ TTY_ARGS=()
 # as the host user keeps every artefact owned by whoever ran the script, so a
 # later macOS build is not blocked by root-owned files in the tree.
 exec docker run --rm ${TTY_ARGS[@]+"${TTY_ARGS[@]}"} \
+	${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} \
 	-u "$(id -u):$(id -g)" \
 	-e HOME=/tmp/skrepka-linux-home \
 	-v "${REPO}:${REPO}" \

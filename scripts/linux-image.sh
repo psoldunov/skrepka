@@ -2,7 +2,7 @@
 #
 # Builds the Linux build image scripts/linux.sh runs against.
 #
-#   scripts/linux-image.sh                    build skrepka-linux:6.3 for the host
+#   scripts/linux-image.sh                            build for the host
 #   SKREPKA_LINUX_ARCH=amd64 scripts/linux-image.sh   build the amd64 variant
 #
 # scripts/linux.sh requires this image and does not fall back to stock
@@ -10,16 +10,18 @@
 # wayland and X11 system libraries, so the fallback produced a pkg-config
 # failure that read as a broken repository. Run this first on a fresh clone.
 #
-# SKREPKA_LINUX_ARCH — one of arm64 or amd64. When unset, the image is built
-# for whatever `docker info` reports as OSArch, tagged plainly
-# skrepka-linux:${SWIFT_VERSION}. When set, `--platform linux/${arch}` is
-# passed to `docker build` and the tag carries the arch as a suffix, so an
-# aarch64 host can carry both variants side by side without either overwriting
-# the other. The amd64 variant is what scripts/build-deck.sh runs against
+# SKREPKA_LINUX_ARCH — one of arm64 or amd64, defaulting to the arch the docker
+# daemon runs on. `--platform linux/${arch}` is passed to `docker build`, and
+# the image is always tagged skrepka-linux:${SWIFT_VERSION}-${arch}, so an
+# aarch64 host can carry both variants side by side and a caller that wants one
+# arch — `SKREPKA_LINUX_ARCH=amd64 scripts/linux.sh`, which is what
+# scripts/build-deck.sh runs — names it the same way on every host. The host's
+# own arch is also tagged plainly skrepka-linux:${SWIFT_VERSION}, which is what
+# scripts/linux.sh runs when no arch is asked for. The amd64 variant exists
 # because the Steam Deck is x86_64 only and Swift on Linux is not a cross
 # compiler.
 #
-# SKREPKA_LINUX_IMAGE overrides the tag either variant produces.
+# SKREPKA_LINUX_IMAGE replaces all of those tags with the one it names.
 
 set -euo pipefail
 
@@ -27,11 +29,20 @@ cd "$(dirname "$0")/.."
 
 SWIFT_VERSION="${SKREPKA_SWIFT_VERSION:-6.3}"
 
-# `docker info` reports the daemon's own arch (linux/arm64/v8, linux/amd64…);
-# splitting on the second slash is the field docker itself uses for --platform
-# elsewhere, so a plain build with no arch override matches what docker would
-# have picked anyway.
-HOST_ARCH="$(docker info --format '{{.OSType}}/{{.Architecture}}' 2> /dev/null | cut -d/ -f2)"
+# Before anything else asks docker a question: under `set -e` a failing
+# `docker info` inside the command substitution below ends the script with no
+# message at all.
+if ! docker info > /dev/null 2>&1; then
+	echo "docker is not reachable." >&2
+	echo "OrbStack exposes its socket at ~/.orbstack/run/docker.sock; under a" >&2
+	echo "sandbox that path has to be granted before this script can run." >&2
+	exit 1
+fi
+
+# `.Architecture` is the daemon's kernel arch in uname spelling — aarch64 or
+# x86_64, not docker's arm64/amd64 — so it is mapped onto the two names
+# `--platform` takes.
+HOST_ARCH="$(docker info --format '{{.Architecture}}')"
 case "${HOST_ARCH}" in
 	aarch64) HOST_ARCH="arm64" ;;
 	x86_64) HOST_ARCH="amd64" ;;
@@ -51,34 +62,33 @@ case "${ARCH:-}" in
 		;;
 esac
 
-# The plain tag stays skrepka-linux:${SWIFT_VERSION} whenever the arch matches
-# the host — every existing caller keeps working — and the amd64 build on an
-# arm64 host gets its own tag so the two coexist.
+# The arch-suffixed tag on every build, so it is there to be named whatever
+# the host is; the plain tag only when the arch is the host's, so the default
+# scripts/linux.sh runs is never an emulated image.
 if [[ -n "${SKREPKA_LINUX_IMAGE:-}" ]]; then
-	IMAGE="${SKREPKA_LINUX_IMAGE}"
-elif [[ "${ARCH}" == "${HOST_ARCH}" ]]; then
-	IMAGE="skrepka-linux:${SWIFT_VERSION}"
+	TAGS=("${SKREPKA_LINUX_IMAGE}")
 else
-	IMAGE="skrepka-linux:${SWIFT_VERSION}-${ARCH}"
+	TAGS=("skrepka-linux:${SWIFT_VERSION}-${ARCH}")
+	if [[ "${ARCH}" == "${HOST_ARCH}" ]]; then
+		TAGS+=("skrepka-linux:${SWIFT_VERSION}")
+	fi
 fi
+IMAGE="${TAGS[0]}"
+TAG_ARGS=()
+for tag in "${TAGS[@]}"; do
+	TAG_ARGS+=(-t "${tag}")
+done
 
-if ! docker info > /dev/null 2>&1; then
-	echo "docker is not reachable." >&2
-	echo "OrbStack exposes its socket at ~/.orbstack/run/docker.sock; under a" >&2
-	echo "sandbox that path has to be granted before this script can run." >&2
-	exit 1
-fi
-
-echo "building ${IMAGE} from docker/Dockerfile.linux (linux/${ARCH})"
+echo "building ${TAGS[*]} from docker/Dockerfile.linux (linux/${ARCH})"
 docker build \
 	--platform "linux/${ARCH}" \
 	--build-arg "SWIFT_VERSION=${SWIFT_VERSION}" \
 	-f docker/Dockerfile.linux \
-	-t "${IMAGE}" \
+	"${TAG_ARGS[@]}" \
 	docker
 
 echo
-echo "built ${IMAGE}:"
+echo "built ${TAGS[*]}:"
 # Every line here is a thing the gate needs and would otherwise discover as a
 # link failure halfway through a build.
 # The host's `set -euo pipefail` does not cross into `bash -lc`, so the block

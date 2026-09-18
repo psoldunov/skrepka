@@ -6,13 +6,15 @@
 # Linux is not a cross compiler and the Deck's Zen 2 is not aarch64.
 #
 #   scripts/build-deck.sh                       full build + tarball
-#   SKREPKA_LINUX_ARCH=amd64 scripts/build-deck.sh   same thing, spelled out
 #
-# The image the amd64 build runs against is skrepka-linux:6.3-amd64. It is
-# built on demand by scripts/linux-image.sh with SKREPKA_LINUX_ARCH=amd64,
-# which is what this script does when the tag is missing. Under emulation on
-# an arm64 host that first build takes a few minutes; subsequent runs reuse
-# the cached image and only pay for what changed in the Swift sources.
+# Every command that runs in the image goes through scripts/linux.sh with
+# SKREPKA_LINUX_ARCH=amd64, so the image tag, the --platform, the bind mount,
+# the host-user mapping and the TTY decision are that script's and nowhere
+# else. The image is skrepka-linux:6.3-amd64, the tag scripts/linux-image.sh
+# gives the amd64 variant on every host, and this script builds it when the
+# tag is missing. Under emulation on an arm64 host that first build takes a few
+# minutes; subsequent runs reuse the cached image and only pay for what changed
+# in the Swift sources.
 #
 # Everything lands in .build-linux-x86_64/ (a dedicated scratch, never shared
 # with .build or .build-linux) and build/deck/. Both are covered by the
@@ -30,6 +32,13 @@ STAGE_ROOT="build/deck"
 STAGE_NAME="skrepka-linux-x86_64"
 STAGE="${STAGE_ROOT}/${STAGE_NAME}"
 TARBALL="${STAGE_ROOT}/${STAGE_NAME}.tar.gz"
+
+# The Deck is x86_64, so both scripts this one calls are told amd64. An
+# SKREPKA_LINUX_IMAGE exported for scripts/linux.sh names the host's own image
+# and would win over the amd64 tag in both of them — building and then running
+# a native image as if it were the Deck's — so it goes no further than here.
+export SKREPKA_LINUX_ARCH=amd64
+unset SKREPKA_LINUX_IMAGE
 
 bold() { printf '\n\033[1m▸ %s\033[0m\n' "$1"; }
 green() { printf '\033[32m%s\033[0m\n' "$1"; }
@@ -67,28 +76,15 @@ fi
 
 if ! docker image inspect "${IMAGE}" > /dev/null 2>&1; then
 	bold "Building ${IMAGE}"
-	SKREPKA_LINUX_ARCH=amd64 scripts/linux-image.sh
+	scripts/linux-image.sh
 fi
 
-# `-t` only when the caller has one; CI and background invocations do not, and
-# `-it` on a non-TTY dies with `input device is not a TTY`. The same shape
-# scripts/linux.sh already uses.
-TTY_ARGS=()
-[[ -t 0 && -t 1 ]] && TTY_ARGS=(-it)
-
-# One-shot exec into the amd64 image, with the repo mounted at its host path
-# so paths in diagnostics are clickable on both sides, and the caller's uid so
-# every artefact ends up owned by the host user. Matches scripts/linux.sh.
-run_in_container() {
-	docker run --rm ${TTY_ARGS[@]+"${TTY_ARGS[@]}"} \
-		--platform linux/amd64 \
-		-u "$(id -u):$(id -g)" \
-		-e HOME=/tmp/skrepka-linux-home \
-		-v "${REPO}:${REPO}" \
-		-w "${REPO}" \
-		"${IMAGE}" \
-		"$@"
-}
+# No docker flags from here on. scripts/linux.sh decides `-it` per call, from
+# that call's own stdout, and that matters below: the calls whose output is
+# captured or redirected into a file get no pty, so their bytes arrive intact.
+# One decision made once for the whole script got this wrong from a terminal —
+# the pty turned LF into CRLF throughout the runtime report, and GNU tar
+# refused to write an archive to it at all.
 
 # --------------------------------------------------------------------------
 # Build
@@ -110,7 +106,7 @@ PRODUCTS=(
 
 for product in "${PRODUCTS[@]}"; do
 	bold "Building ${product} (release, static Swift stdlib, amd64)"
-	run_in_container \
+	scripts/linux.sh \
 		swift build -c release \
 		--static-swift-stdlib \
 		--scratch-path "${SCRATCH}" \
@@ -120,10 +116,10 @@ done
 # `--show-bin-path` also compiles the "default target" when nothing else says
 # what to build, so the flag combination has to match one of the invocations
 # above or SwiftPM does a second, unrelated build to answer the question.
-BIN_PATH="$(run_in_container swift build -c release \
+BIN_PATH="$(scripts/linux.sh swift build -c release \
 	--static-swift-stdlib \
 	--scratch-path "${SCRATCH}" \
-	--show-bin-path | tr -d '\r')"
+	--show-bin-path)"
 
 for product in "${PRODUCTS[@]}"; do
 	if [[ ! -x "${BIN_PATH}/${product}" ]]; then
@@ -146,27 +142,27 @@ mkdir -p "${STAGE}/bin" "${STAGE}/scripts" "${STAGE}/packaging/systemd" "${STAGE
 # binutils but not the `file` package, and adding one apt line for a header
 # read is not worth the layer. `ldd` names every .so the loader will hunt for
 # on the Deck, and `objdump -T` filtered for GLIBC_ symbols names the *floor*
-# glibc version the binary requires. SteamOS 3.8 ships glibc 2.38 (unverified,
-# to be confirmed on the Deck); anything higher than that in this report is a
-# blocker for that host. All three run inside the container so no amd64 tool
-# is expected on the host.
+# glibc version the binary requires — GLIBC_2.38 for all five on 2026-09-18.
+# Whether the Deck's glibc meets it is not something this script can know;
+# step 0.5 of docs/linux-sync/steam-deck-session.md checks it on the Deck.
+# All three run inside the container so no amd64 tool is expected on the host.
 {
 	echo "# Skrepka x86_64 release — runtime probe"
 	echo "# Image:   ${IMAGE}"
-	echo "# Swift:   $(run_in_container swift --version 2>&1 | head -1)"
+	echo "# Swift:   $(scripts/linux.sh swift --version 2>&1 | head -1)"
 	echo "# Date:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	echo
 	for product in "${PRODUCTS[@]}"; do
 		echo "## ${product}"
 		echo "### elf header"
-		run_in_container bash -lc \
+		scripts/linux.sh bash -lc \
 			"readelf -h '${BIN_PATH}/${product}' | grep -E 'Class|Machine|Type'"
 		echo
 		echo "### ldd"
-		run_in_container ldd "${BIN_PATH}/${product}" || true
+		scripts/linux.sh ldd "${BIN_PATH}/${product}" || true
 		echo
 		echo "### highest GLIBC_ symbol version"
-		run_in_container bash -lc \
+		scripts/linux.sh bash -lc \
 			"objdump -T '${BIN_PATH}/${product}' | grep -oE 'GLIBC_[0-9.]+' | sort -V | uniq -c | tail -5" \
 			|| true
 		echo
@@ -191,14 +187,16 @@ bold "Runtime probe written to ${REPORT}"
 # through Plasma's GTK integration and any KDE spin has it, so the loader
 # finds libgtk-4.so.1 in the default search path. gtk4-layer-shell is the
 # one library the target box may lack.
+#
+# The container copies them straight into the stage through the bind mount,
+# as the host user, so no bytes cross docker's stdout at all. `cp -P` keeps the
+# two symlinks as the relative symlinks they are.
 LIBDIR_IN_IMAGE=/usr/lib/x86_64-linux-gnu
-LIB_TAR="${STAGE_ROOT}/lib-stage.tar"
-run_in_container bash -lc "cd ${LIBDIR_IN_IMAGE} && tar cf - \
-	libgtk4-layer-shell.so \
-	libgtk4-layer-shell.so.0 \
-	libgtk4-layer-shell.so.1.3.0" > "${LIB_TAR}"
-tar xf "${LIB_TAR}" -C "${STAGE}/lib"
-rm -f "${LIB_TAR}"
+scripts/linux.sh cp -P \
+	"${LIBDIR_IN_IMAGE}/libgtk4-layer-shell.so" \
+	"${LIBDIR_IN_IMAGE}/libgtk4-layer-shell.so.0" \
+	"${LIBDIR_IN_IMAGE}/libgtk4-layer-shell.so.1.3.0" \
+	"${REPO}/${STAGE}/lib/"
 
 # --------------------------------------------------------------------------
 # Stage: binaries, install.sh, unit, marker Package.swift
@@ -255,8 +253,8 @@ Running the palette demo
 
 The binary is linked with rpath $ORIGIN/../lib, so libgtk4-layer-shell is
 found beside it without exporting anything. gtk-4 itself has to come from
-the host — SteamOS Plasma sessions carry it. If the demo aborts on
-"gtk_init_check", the compositor has no Wayland display advertised in
+the host — SteamOS Plasma sessions carry it. If the demo prints
+"could not open display" and exits, no Wayland display is advertised in
 $WAYLAND_DISPLAY; launch it from Desktop Mode after logging in.
 DOCS
 
