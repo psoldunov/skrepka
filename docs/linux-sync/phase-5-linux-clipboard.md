@@ -83,6 +83,8 @@ Sources/SkrepkaLinuxPlatform/
     LinuxClipboardState.swift
     SessionProbe.swift              # what the session actually offers
     WakePipe.swift
+    LinuxSessionRunner.swift        # the command protocol and timing constants
+                                     # a backend's own thread is asked to act on
     Wayland/
       DataControlProtocolBinding.swift  # the seam the two spellings meet at
       DataControlReader.swift           # one reader, driving either protocol
@@ -107,8 +109,13 @@ Sources/SkrepkaLinuxPlatform/
     LinuxRepresentationMap.swift
     LinuxSnapshotBuilder.swift
     URIList.swift
+    LinuxSubmission.swift          # a clip handed over by a client (the Phase 8
+                                    # GNOME extension) rather than read off the
+                                    # clipboard, run through the same CaptureRules
   Diagnostics/
     LinuxCaptureProblem.swift
+    ClockCheck.swift               # whether the clock has been set by a time
+                                    # server — Phase 6's clock check, built here
 
 Sources/skrepka-clip-probe/main.swift   # the headless proof
 

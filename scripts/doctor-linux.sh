@@ -126,7 +126,7 @@ if ((!FAST)); then
 	# `.enabled(if: HeadlessSession.isAvailable(...))`, which is right on a
 	# native checkout without sway or Xvfb and wrong here: this container
 	# installs both on purpose, so a Dockerfile regression that dropped one
-	# would disable seventeen tests and still go green. Set for this run only,
+	# would disable eighteen tests and still go green. Set for this run only,
 	# so a bare `swift test` on a developer's machine still skips them.
 	check "test" env SKREPKA_REQUIRE_HEADLESS=1 swift test --scratch-path "${SCRATCH}"
 

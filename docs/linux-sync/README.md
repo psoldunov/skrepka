@@ -1,9 +1,9 @@
 # Linux Skrepka and LAN sync — implementation plan
 
-**Status, 2026-09-08: Phases 1, 2, 3, 5 and 6 built, Phase 4 done bar its
-`doctor-linux` polish, ten of the fourteen research questions answered.** All
-eight phases are in scope ([D-6](open-questions.md#d-6)). Ten decisions are
-settled. The four questions still open ([OQ-1](open-questions.md#oq-1) to
+**Status, 2026-09-18: Phases 1, 2, 3, 4, 5 and 6 built, ten of the fourteen
+research questions answered.** All eight phases are in scope
+([D-6](open-questions.md#d-6)). Eleven decisions are settled. The four
+questions still open ([OQ-1](open-questions.md#oq-1) to
 [OQ-4](open-questions.md#oq-4)) need hardware — a second Apple device, a real
 GNOME session, a real KWin session — rather than time.
 
@@ -30,7 +30,7 @@ records each of the twelve steps and what was actually run against it.
 it got two, inside the build image: a headless **Sway 1.9** advertising
 `zwlr_data_control_manager_v1`, and an **Xvfb** carrying XFIXES. So two of its
 three backends are integration-tested against live protocol traffic rather than
-demonstrated — 17 tests, with `wl-copy`, `wl-paste` and `xclip` as the other
+demonstrated — 18 tests, with `wl-copy`, `wl-paste` and `xclip` as the other
 end. `ExtDataControlBinding` has no compositor anywhere on this project and stays
 unit-tested only; the Steam Deck is the first thing to run it against.
 
@@ -60,20 +60,22 @@ What has landed is the Sway prototype for step 1, the picker's palette and key m
 [OQ-12](open-questions.md#oq-12)'s portable path IR; what has not is the picker's
 rows, the hotkey, the tray and Settings. One new question came out of it —
 [OQ-16](open-questions.md#oq-16), how the picker pastes into the app underneath
-— and it is the first entry on this list that is blocking rather than merely
-open.
+— and it was decided 2026-09-18, as
+[D-11](open-questions.md#d-11): Return puts the clip on the clipboard and
+closes the picker, and the user pastes with Ctrl+V.
 
-What is left of [Phase 4](phase-4-core-on-linux.md) is small: its storage week is
-done and `scripts/doctor-linux.sh` exists, so only the tooling notes in its
-step 8 remain.
+[Phase 4](phase-4-core-on-linux.md) is done. Its storage week landed and
+`scripts/doctor-linux.sh` exists; the tooling questions its step 8 left open
+are answered inside that script — swift-format is bundled, and SwiftLint and
+Periphery are optional.
 
 What exists today, and both quality gates are green over it:
 
 | | |
 |---|---|
 | `Sources/SkrepkaSync/` | Phase 1 complete — 96 files, model, canonical-CBOR wire codec (canonical on decode as well as encode: non-shortest heads and out-of-order map keys are refused), merge engine. No networking, no `SkrepkaCore` dependency, green on Linux |
-| `Sources/SkrepkaCore/` | compiles on Linux: 71 of 79 files. `ClipboardSource`, the `PasteboardAccess` split, the CryptoKit and logging shims, whole-file guards on the eight that cannot — `PasteboardAccess` is not among them, since only its AppKit initialiser is fenced and the enum itself ports |
-| `scripts/linux.sh` | runs any command inside the Linux image — Swift 6.3.3 aarch64, the same version the macOS toolchain ships |
+| `Sources/SkrepkaCore/` | compiles on Linux: 59 of 83 files — 38 with no platform guard, `SkrepkaLog.swift` on both via `#if canImport(os)`, and 20 Linux-only under `Store/SQLite/`. The other 24 carry a macOS-only whole-file guard (8 AppKit, 15 SwiftData, 1 CoreGraphics) — `PasteboardAccess` is not among them, since only its AppKit initialiser is fenced and the enum itself ports |
+| `scripts/linux.sh` | runs any command inside the Linux image — Swift 6.3.3 aarch64, the version the macOS toolchain shipped until Xcode 27 moved it to 6.4 |
 | `scripts/doctor-linux.sh` | the Linux quality gate, Phase 4's step 8, delivered early because everything after Phase 1 needs it |
 | `Sources/SkrepkaSync/Pairing/` + `Transport/` + `Discovery/` | Phase 2 — self-signed P-256 identity, the short authentication string, pinned-certificate TLS 1.3 over swift-nio, and Bonjour discovery. `LoopbackSyncTests` pairs, exchanges indexes and fetches a payload on **both** platforms |
 | `Sources/SkrepkaCore/Store/` | Phase 2 — three-entity schema, tombstones, the sync surface, and the merge apply path |
@@ -91,8 +93,8 @@ What exists today, and both quality gates are green over it:
 | `Sources/SkrepkaDaemon/` | Phase 6 — the composition root, `FileTrustStore` (the `0600`-at-creation identity file), the session-loss rebuild, and the D-Bus service |
 | `Sources/SkrepkaCLI/` + `Sources/skrepka-cli/` | Phase 6 — `list`, `copy`, `pair`, `peers`, `doctor`, with `--json` from the start |
 | `packaging/systemd/` + `scripts/install.sh` | Phase 6 — the user unit and the no-root installer [D-10](open-questions.md#d-10) forces. Phase 8 hardens both rather than inventing a second layout |
-| `scripts/doctor.sh` | **555 tests / 74 suites green** |
-| `scripts/doctor-linux.sh` | **706 tests / 97 suites green, SwiftLint included** — 17 of them driving a headless Sway and an Xvfb started by the test |
+| `scripts/doctor.sh` | **556 tests / 74 suites green** under Xcode 27.0 and Swift 6.4 (run 2026-09-18). The Linux image is still Swift 6.3.3 — `swift:6.4-noble` is not published yet — so the two compilers differ until it is |
+| `scripts/doctor-linux.sh` | **708 tests / 98 suites green, SwiftLint included** (run 2026-09-18) — 18 of them driving a headless Sway and an Xvfb started by the test |
 
 Two things the plan assumed and that turned out to be false, both recorded in
 [`open-questions.md`](open-questions.md): `SwiftCBOR` is unsuitable and the codec
@@ -177,8 +179,8 @@ mid-phase leaves a half-ported target that nothing builds.
 
 ## Decisions already taken
 
-Nine on 2026-09-05 and one on 2026-09-07, recorded in full in
-[`open-questions.md`](open-questions.md):
+Nine on 2026-09-05, one on 2026-09-07, and one on 2026-09-18, recorded in full
+in [`open-questions.md`](open-questions.md):
 
 | # | Decision | Lands in |
 |---|---|---|
@@ -192,8 +194,10 @@ Nine on 2026-09-05 and one on 2026-09-07, recorded in full in
 | D-8 | One machine, expendable history — migration is not a constraint | [Phase 2](phase-2-plumbing.md) |
 | D-9 | The Mac app stays native; the Linux port never degrades it | [Phase 2](phase-2-plumbing.md), [Phase 4](phase-4-core-on-linux.md) |
 | D-10 | A Steam Deck OLED is the test rig, Desktop Mode only; a user-scope `install.sh` is how builds reach it | [Phase 5](phase-5-linux-clipboard.md), [Phase 6](phase-6-linux-daemon.md), [Phase 7](phase-7-linux-gui.md), [Phase 8](phase-8-gnome-packaging.md) |
+| D-11 | The picker does not synthesise a paste on Wayland; Return puts the clip on the clipboard and the user presses Ctrl+V | [Phase 7](phase-7-linux-gui.md) |
 
-Ten of the fourteen research questions were answered on 2026-09-05.
+Ten of the fourteen research questions were answered on 2026-09-05, and OQ-16
+was decided on 2026-09-18, as D-11.
 
 ## Gates
 
@@ -212,7 +216,7 @@ other still needs hardware.
 
 The four questions still open — [OQ-1](open-questions.md#oq-1) to
 [OQ-4](open-questions.md#oq-4) — are in
-[`open-questions.md`](open-questions.md) alongside the ten decisions, which
+[`open-questions.md`](open-questions.md) alongside the eleven decisions, which
 are settled, and the ten answers. Nothing is waiting on a judgement call; what
 is left is work, verification, and hardware. One of the three missing pieces
 arrived on 2026-09-07: [OQ-4](open-questions.md#oq-4) needed a real KWin session
@@ -338,6 +342,12 @@ sharing one scratch directory forces a full rebuild on every switch. The image
 is pinned to Swift **6.3.3**, the same version the macOS toolchain ships, because
 "compiles on Linux" is only a useful claim when the two compilers agree on the
 language.
+
+**Amended 2026-09-18:** they no longer agree. Xcode 27.0 ships Swift 6.4, and
+`swift:6.4-noble` is not yet published, so the image stays on 6.3.3 until it is.
+The bump goes in `SWIFT_VERSION` in `docker/Dockerfile.linux` and
+`scripts/linux-image.sh`, followed by a `scripts/doctor-linux.sh` run — Swift
+6.4 may raise on Linux what it raised on macOS.
 
 ## Quality gate
 

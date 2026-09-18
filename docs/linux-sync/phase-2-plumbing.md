@@ -59,6 +59,15 @@ Tests/SkrepkaCoreTests/
   HistoryStoreSyncTests.swift
 ```
 
+Where those four tests actually live moved since this was planned: they are
+now in the shared contract suites `Tests/SkrepkaCoreTests/HistoryStoringSyncTests.swift`,
+`HistoryStoringTests.swift`, `HistoryStoringTombstoneTests.swift` and
+`Tests/SkrepkaSyncTests/HistoryStoringContractTests.swift`, run against every
+`HistoryStoring` conformance rather than the SwiftData store alone.
+`HistoryStoreSyncTests.swift` still exists, but covers only the representation
+index — the one thing the SQLite schema has no equivalent of, so it cannot be
+asked as a shared conformance test.
+
 ## Work
 
 ### 1. Storage
@@ -132,7 +141,7 @@ is the only honest place for the rule.
 **No toggle** ([D-7](open-questions.md#d-7)): concealed items never cross the
 wire in v1, and there is no preference to change that. So the filter is
 unconditional and `syncIndex` needs no parameter for it — which is also what
-makes `HistoryStoreSyncTests.syncIndexOmitsConcealed` a one-case test rather
+makes `HistoryStoringSyncTests.syncIndexOmitsConcealed` a one-case test rather
 than a two-case one.
 
 If the feature is ever wanted, D-7 records why encrypting them and syncing
@@ -284,10 +293,10 @@ Phase 1 folded into `id=`.
 
 | Test | Asserts |
 |---|---|
-| `HistoryStoreSyncTests.syncIndexOmitsConcealed` | unconditionally — there is no preference that lets them through (D-7) |
-| `HistoryStoreSyncTests.deleteWritesATombstone` | and `clear(keepingPinned:)` writes a batch |
-| `HistoryStoreSyncTests.retentionWritesNoTombstone` | the most important test in the phase |
-| `HistoryStoreSyncTests.applyRemoteIsIdempotent` | applying the same plan twice changes nothing the second time |
+| `HistoryStoringSyncTests.syncIndexOmitsConcealed` | unconditionally — there is no preference that lets them through (D-7) |
+| `HistoryStoringTests.deleteWritesATombstone` | and `clear(keepingPinned:)` writes a batch |
+| `HistoryStoringTests.retentionWritesNoTombstone` | the most important test in the phase |
+| `HistoryStoringSyncTests.applyRemoteIsIdempotent` | applying the same plan twice changes nothing the second time |
 | `ShortAuthStringTests.bothSidesDeriveTheSameString` | with the key order swapped |
 | `ShortAuthStringTests.timestampChangesTheString` | replay protection, asserted rather than assumed |
 | `PairingSessionTests.rejectsMismatchedInTunnelIdentity` | the anti-downgrade rule |

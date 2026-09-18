@@ -74,18 +74,22 @@ packaging/
   debian/{control,rules,changelog,skrepka.install}
   rpm/skrepka.spec
   systemd/skrepkad.service      # from Phase 6
-  install.sh                    # the user-scope installer, curl-able
-  uninstall.sh
   desktop/dev.soldunov.Skrepka.desktop
   desktop/dev.soldunov.Skrepka.Settings.desktop
   README.md                     # why not Flatpak — see below
 ```
 
+The user-scope installer is not a Phase 8 deliverable in the sense of a new
+file: `scripts/install.sh` already exists, from Phase 6, with `--uninstall`
+rather than a separate script. This phase hardens it in place rather than
+inventing a second layout — see [the README's summary of what
+exists](README.md).
+
 ## Work
 
 ### 0. The user-scope installer
 
-`packaging/install.sh`, fetched with `curl` and run without `sudo`. It writes
+`scripts/install.sh`, fetched with `curl` and run without `sudo`. It writes
 only inside `$HOME` and it is the only way a build reaches an immutable
 distribution.
 
@@ -150,8 +154,8 @@ Rules the script has to follow:
   is the case for building the **headless static build** (musl, Static Linux
   SDK) as the installer's default payload: it is the half that is guaranteed to
   run on a machine whose system libraries nobody controls.
-- **`uninstall.sh` removes what it wrote and leaves the database**, matching the
-  uninstall row of the test matrix.
+- **`install.sh --uninstall` removes what it wrote and leaves the database**,
+  matching the uninstall row of the test matrix.
 
 ### 1. The extension
 
@@ -256,7 +260,7 @@ bugs a throwaway `orb create` machine will not:
 | **an OS update, then relaunch** | nothing was written outside `$HOME`, so nothing was wiped |
 | `install.sh` run twice | upgrades in place, one unit, one entry, history and pairings intact |
 | a mangled download | rejected against the checksum, nothing made executable |
-| `uninstall.sh` | removes what it wrote, leaves the database |
+| `install.sh --uninstall` | removes what it wrote, leaves the database |
 
 The OS-update row is the one that only this rig can run, and it is the whole
 argument for the installer. If anything Skrepka wrote lives outside `$HOME`, an
@@ -302,7 +306,7 @@ than two package formats, it works everywhere, and the project's own test rig
 uses it — three good reasons to let `.deb` and `.rpm` rot. Decide that
 deliberately if it happens. A `curl | sh` install is a worse default for users
 who have a package manager: nothing tells them an update exists, and nothing
-removes it cleanly if they never find `uninstall.sh`.
+removes it cleanly if they never find `install.sh --uninstall`.
 
 **Shipping a shell script that runs unreviewed.** `curl … | sh` is the install
 UX users expect and it is also the one that gets a project blamed for somebody

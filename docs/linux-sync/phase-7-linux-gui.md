@@ -67,6 +67,12 @@ Sources/SkrepkaCore/Branding/
 prototypes/                     # step 1, kept or deleted deliberately
 ```
 
+The `Picker/` names above were the plan; see "What has landed" below for what
+actually shipped — `PaletteWindow.swift` rather than `PickerWindow.swift`, with
+the key map and metrics split into their own tested files. `PickerList`,
+`PickerRow` and `SearchEntry` are still planned: the window has its foundation,
+not its rows.
+
 ### What has landed, 2026-09-08
 
 Step 1 of the "Work" list has a Sway prototype; its toolkit direction and
@@ -80,6 +86,7 @@ Sources/CGtk4/{shim.h,module.modulemap}          GTK4 + gtk4-layer-shell, one mo
 Sources/SkrepkaLinuxUI/
   Backend/GtkSession.swift                       gtk_init, the main loop, layer-shell probe
   Picker/PaletteWindow.swift                     the overlay: layer-shell, keys, list, search
+  Picker/PaletteWindow+Signals.swift             GTK signal handlers, split out of the window
   Picker/PickerCommand.swift                     the key map, tested
   Picker/Keysym.swift                            X11 keysyms and GDK modifier bits
   Picker/PaletteMetrics.swift                    sizing, and the 1280×800 fit, tested
@@ -125,8 +132,9 @@ dropped key there is the harness, not the picker.
    introducing the protocol before its second conformance has something to draw
    into is exactly what [D-9](open-questions.md#d-9) defers.
 
-And [OQ-16](open-questions.md#oq-16) needs deciding before step 2 is finished,
-because it changes what Return does.
+And [OQ-16](open-questions.md#oq-16) is decided, as
+[D-11](open-questions.md#d-11): Return puts the clip on the clipboard and
+closes the picker, and the user pastes with Ctrl+V.
 
 ## Work
 
@@ -263,11 +271,15 @@ and that is a convention question rather than a port.
 > `PickerKeyMap.command(keysym:modifiers:pageJump:)`, transcribed from the macOS
 > picker's `handle(keyPress:)` so the two cannot drift.
 
-> **Note before starting the rest of this step:** "Return pastes into the app
-> underneath" has no mechanism behind it on Wayland. See
-> [OQ-16](open-questions.md#oq-16), raised while building step 1 — the two
+> **Decided 2026-09-18, as [D-11](open-questions.md#d-11):** "Return pastes
+> into the app underneath" has no mechanism behind it on Wayland — the two
 > Wayland-native ways to synthesise a keystroke are each implemented by exactly
-> one of the two target compositors, in opposite directions.
+> one of the two target compositors, in opposite directions (see
+> [OQ-16](open-questions.md#oq-16)). Return instead puts the clip on the
+> clipboard, in the chosen [`PasteStyle`](../../Sources/SkrepkaCore/Picker/PasteStyle.swift)
+> (Shift+Return for plain text), and closes the picker; the user pastes with
+> Ctrl+V. The wlroots virtual-keyboard/KDE RemoteDesktop path comes later,
+> behind a setting.
 
 Read `Sources/Skrepka/Picker/` first. The row layout, the empty state, the
 footer hints and the metrics are all decided there, and the Linux picker should
@@ -338,10 +350,10 @@ genuine win, because it proves the two platforms draw the same mark.
 On KDE — the Steam Deck in Desktop Mode — **and** on Sway:
 
 1. Hotkey opens the picker over the frontmost app, which keeps its caret.
-2. Typing filters. Arrows navigate. Return pastes into the app underneath —
-   **subject to [OQ-16](open-questions.md#oq-16)**, which found that no paste
-   mechanism works on both KWin and Sway. This criterion may have to become
-   "Return puts the clip on the clipboard"; that is a decision, not a bug.
+2. Typing filters. Arrows navigate. Return copies the selected clip to the
+   clipboard, in the chosen paste style, and closes the picker — the user
+   pastes with Ctrl+V. Decided as [D-11](open-questions.md#d-11): no mechanism
+   works on both KWin and Sway, so v1 does not synthesise the paste itself.
 3. The tray icon appears, its menu works, and the mark is the right mark.
 4. Settings changes take effect without a restart.
 5. Pairing can be completed entirely from the GUI.
