@@ -33,7 +33,7 @@ final class XClipboardSession {
         case stop
         /// Own `CLIPBOARD` and serve these bytes, keyed by target name. `nil`
         /// relinquishes ownership.
-        case setSelection([String: Data]?)
+        case setSelection([String: Data]?, as: SelectionWrite)
     }
 
     let state: LinuxClipboardState
@@ -97,6 +97,8 @@ final class XClipboardSession {
 
     /// What Skrepka serves while it owns `CLIPBOARD`, keyed by target name.
     var ownedPayload: [String: Data] = [:]
+    /// Skrepka's own ownership changes the server has not reported back yet.
+    var pendingEchoes = PendingEchoes()
     /// The same, resolved to atoms, so a `SelectionRequest` is a lookup rather
     /// than a round trip per request.
     var ownedByAtom: [Atom: Data] = [:]

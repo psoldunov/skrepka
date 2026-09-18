@@ -82,9 +82,11 @@ public actor DataControlReader: ClipboardSource {
     /// Skrepka keeps serving it until another client takes the selection —
     /// which is what a Wayland data source is: not a write, but an offer that
     /// stays live. Returns as soon as the request is queued; the loop performs
-    /// it on its next pass.
-    public func setSelection(_ payload: [String: Data]?) {
-        runner.setSelection(payload)
+    /// it on its next pass — which is why `write` travels with the payload
+    /// rather than being left to a pause around this call: the compositor's
+    /// echo arrives after this has returned.
+    public func setSelection(_ payload: [String: Data]?, as write: SelectionWrite) {
+        runner.setSelection(payload, as: write)
     }
 
     /// Why the session stopped, when it stopped for a reason.

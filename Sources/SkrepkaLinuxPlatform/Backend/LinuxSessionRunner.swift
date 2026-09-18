@@ -9,7 +9,7 @@ import Synchronization
 /// requirement of the same shape.
 protocol LinuxSessionCommand: Sendable {
     static var stop: Self { get }
-    static func setSelection(_ payload: [String: Data]?) -> Self
+    static func setSelection(_ payload: [String: Data]?, as write: SelectionWrite) -> Self
 }
 
 /// How long a reader waits for its session, in one place.
@@ -174,8 +174,8 @@ final class LinuxSessionRunner<Command: LinuxSessionCommand>: Sendable {
     }
 
     /// Queues a selection change and wakes the loop to perform it.
-    func setSelection(_ payload: [String: Data]?) {
-        commands.append(.setSelection(payload))
+    func setSelection(_ payload: [String: Data]?, as write: SelectionWrite) {
+        commands.append(.setSelection(payload, as: write))
         storage.withLock { $0.wakeup }?.signal()
     }
 

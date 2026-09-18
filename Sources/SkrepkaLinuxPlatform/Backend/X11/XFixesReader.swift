@@ -64,8 +64,11 @@ public actor XFixesReader: ClipboardSource {
     /// client takes the selection — which also means the contents vanish if
     /// Skrepka exits, unless a clipboard manager saved them, and Skrepka is not
     /// yet acting as one on Linux.
-    public func setSelection(_ payload: [String: Data]?) {
-        runner.setSelection(payload)
+    ///
+    /// - Parameter write: whether the server's report of this ownership change
+    ///   is published as a capture — see ``SelectionWrite``.
+    public func setSelection(_ payload: [String: Data]?, as write: SelectionWrite) {
+        runner.setSelection(payload, as: write)
     }
 
     public var failure: String? { runner.failure }

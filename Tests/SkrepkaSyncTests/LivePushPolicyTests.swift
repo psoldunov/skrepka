@@ -91,59 +91,109 @@ struct LivePushPolicyTests {
 
     @Test("Concealed content is never pushed")
     func concealedContentIsNeverPushed() {
-        #expect(
-            !LivePushGate.isPushable(
-                contentHash: "abc",
-                isConcealed: true,
-                recentlyReceived: RecentHashes(),
-                at: Date()
-            )
-        )
+        var gate = LivePushGate()
+        let admitted = gate.admitCopy("abc", isConcealed: true, at: Date())
+        #expect(!admitted)
     }
 
-    /// The phase's `livePushSuppressesEcho`, asserted over the hash set rather
-    /// than the pause window — the window is a race this cannot observe, and the
-    /// set is the guard that exists for when the window is missed.
+    /// The phase's `livePushSuppressesEcho`, asserted over the gate rather than
+    /// the pause window — the window is a race this cannot observe, and the
+    /// gate is the guard that exists for when the window is missed.
     @Test("A hash just accepted from a peer is not pushed back")
     func aReceivedHashIsNotRebroadcast() {
         let now = Date()
-        var received = RecentHashes()
-        received.remember("from-the-peer", at: now)
+        var gate = LivePushGate()
+        gate.noteReceived("from-the-peer", at: now)
 
-        #expect(
-            !LivePushGate.isPushable(
-                contentHash: "from-the-peer",
-                isConcealed: false,
-                recentlyReceived: received,
-                at: now
-            )
-        )
-        // Something else copied in the same moment is unaffected: the guard is
-        // about one clipping, not about a quiet period.
-        #expect(
-            LivePushGate.isPushable(
-                contentHash: "typed-here",
-                isConcealed: false,
-                recentlyReceived: received,
-                at: now
-            )
-        )
+        let admitted = gate.admitCopy("from-the-peer", isConcealed: false, at: now)
+        #expect(!admitted)
     }
 
-    @Test("Suppression lapses, so a deliberate re-copy still syncs")
-    func suppressionLapses() {
+    /// Something else copied in the same moment is unaffected: the guard is
+    /// about one clipping, not about a quiet period.
+    @Test("Something else copied beside a push is pushed")
+    func somethingElseIsPushed() {
         let now = Date()
-        var received = RecentHashes()
-        received.remember("shared", at: now)
-        let later = now.addingTimeInterval(RecentHashes.defaultLifetime + 1)
+        var gate = LivePushGate()
+        gate.noteReceived("from-the-peer", at: now)
 
-        #expect(
-            LivePushGate.isPushable(
-                contentHash: "shared",
-                isConcealed: false,
-                recentlyReceived: received,
-                at: later
-            )
-        )
+        let admitted = gate.admitCopy("typed-here", isConcealed: false, at: now)
+        #expect(admitted)
+    }
+
+    /// The hash window alone lapses after thirty seconds. That was the whole
+    /// guard once, and it let through any echo slower than that — a pasteboard
+    /// relayed by Universal Clipboard, a Linux compositor echoing a write back.
+    /// The hand-over is what holds past it.
+    @Test("A handed-over hash stays suppressed past the window while nothing else is copied")
+    func handoffOutlivesTheWindow() {
+        let now = Date()
+        var gate = LivePushGate()
+        gate.noteReceived("shared", at: now)
+
+        let echo = gate.admitCopy("shared", isConcealed: false, at: later(than: now))
+        #expect(!echo)
+        // Its own echo, heard twice, does not end the hand-over either.
+        let secondEcho = gate.admitCopy("shared", isConcealed: false, at: later(than: now))
+        #expect(!secondEcho)
+    }
+
+    /// Copying anything else ends the hand-over, so the old content copied
+    /// again afterwards is a copy the user made and goes out like one.
+    @Test("A re-copy after another copy is pushed")
+    func aRecopyAfterAnotherCopyIsPushed() {
+        let now = Date()
+        var gate = LivePushGate()
+        gate.noteReceived("shared", at: now)
+
+        let other = gate.admitCopy("typed-here", isConcealed: false, at: later(than: now))
+        let recopy = gate.admitCopy("shared", isConcealed: false, at: later(than: now))
+        #expect(other)
+        #expect(recopy)
+    }
+
+    /// A password copied after a push is a copy even though nothing records
+    /// it: the clipboard no longer holds what the peer sent.
+    @Test("A copy the capture rules refused ends the hand-over")
+    func aRefusedCopyEndsTheHandoff() {
+        let now = Date()
+        var gate = LivePushGate()
+        gate.noteReceived("shared", at: now)
+
+        gate.noteUnrecordedCopy()
+        let recopy = gate.admitCopy("shared", isConcealed: false, at: later(than: now))
+        #expect(recopy)
+    }
+
+    /// The handed-over content coming back and failing to store is still the
+    /// hand-over coming back, not the user moving on.
+    @Test("The handed-over content going unrecorded keeps the hand-over")
+    func theHandoffUnrecordedKeepsIt() {
+        let now = Date()
+        var gate = LivePushGate()
+        gate.noteReceived("shared", at: now)
+
+        gate.noteUnrecordedCopy("shared")
+        let echo = gate.admitCopy("shared", isConcealed: false, at: later(than: now))
+        #expect(!echo)
+    }
+
+    /// The hash window still stands behind the hand-over: a burst of pushes
+    /// replaces the hand-over with the newest, and the older ones are covered
+    /// only by the window.
+    @Test("An older push in a burst is still suppressed by the window")
+    func theWindowBacksUpABurst() {
+        let now = Date()
+        var gate = LivePushGate()
+        gate.noteReceived("first", at: now)
+        gate.noteReceived("second", at: now)
+
+        let older = gate.admitCopy("first", isConcealed: false, at: now)
+        #expect(!older)
+    }
+
+    /// Past the thirty-second window the gate keeps only the hand-over.
+    private func later(than now: Date) -> Date {
+        now.addingTimeInterval(RecentHashes.defaultLifetime + 1)
     }
 }

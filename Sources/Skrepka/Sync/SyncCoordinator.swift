@@ -169,8 +169,9 @@ final class SyncCoordinator {
     var links: [SyncDeviceID: PeerLink] = [:]
     var progress: [SyncDeviceID: PeerProgress] = [:]
 
-    /// Hashes a peer pushed here recently, so none of them is pushed back.
-    var recentlyReceived = RecentHashes()
+    /// What peers pushed here, so none of it is pushed back, and the rule that
+    /// concealed content never leaves.
+    var livePushGate = LivePushGate()
 
     /// Whether a pairing this device started is between its first `await` and
     /// its sheet.

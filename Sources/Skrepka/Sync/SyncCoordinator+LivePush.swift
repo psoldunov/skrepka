@@ -13,18 +13,16 @@ extension SyncCoordinator {
     /// watcher of its own — one watcher, one `changeCount`, one source of truth
     /// about what was copied.
     ///
-    /// The two rules that stop a push looping or leaking are in
-    /// ``LivePushGate``, which is where they can be tested; what is decided here
-    /// is only which peers a pushable clipping goes to.
+    /// The rules that stop a push looping or leaking are in ``LivePushGate``,
+    /// which is where they can be tested; what is decided here is only which
+    /// peers a pushable clipping goes to.
+    ///
+    /// The gate hears about every capture, before `isEnabled` is asked — see
+    /// ``LivePushGate/admitCopy(_:isConcealed:at:)`` for why.
     func offerLivePush(_ item: ClipItem) {
-        guard isEnabled,
-            LivePushGate.isPushable(
-                contentHash: item.contentHash,
-                isConcealed: item.isConcealed,
-                recentlyReceived: recentlyReceived,
-                at: Date()
-            )
-        else { return }
+        let admitted = livePushGate.admitCopy(
+            item.contentHash, isConcealed: item.isConcealed, at: Date())
+        guard isEnabled, admitted else { return }
         let targets = paired.keys.filter { livePushSetting(for: $0).isOn }
         guard !targets.isEmpty, let meta = meta(for: item) else { return }
 
@@ -33,6 +31,16 @@ extension SyncCoordinator {
             guard let link = links[deviceID] else { continue }
             Task { await link.push(meta, payloads: payloads) }
         }
+    }
+
+    /// Tells the gate about a copy that was not recorded — refused by the
+    /// capture rules, or lost to a store that failed.
+    ///
+    /// Nothing goes to peers, but it is still a copy, so it ends a hand-over
+    /// as a recorded one would — the same transition the daemon makes, see
+    /// ``LivePushGate/noteUnrecordedCopy(_:)``.
+    func noteUnrecordedCopy(_ contentHash: String? = nil) {
+        livePushGate.noteUnrecordedCopy(contentHash)
     }
 
     /// The item as a peer is told about it.
@@ -88,9 +96,8 @@ extension SyncCoordinator {
     /// `SyncResponder` stores before it calls the sink — so everything here is
     /// about the clipboard and nothing here can cost the row.
     ///
-    /// The hash is remembered **before** the write, not after: the write is what
-    /// the watcher might see, so a set updated afterwards would be updated after
-    /// the race it exists to lose.
+    /// The gate hears about the push **before** the write — see
+    /// ``LivePushGate/noteReceived(_:at:)``.
     ///
     /// **The clipboard write happens only for an item whose bytes came inline,
     /// and that is a known limitation of this phase rather than the intent.**
@@ -115,7 +122,7 @@ extension SyncCoordinator {
     /// true. Recorded under step 4 in `docs/linux-sync/phase-3-runbook.md`.
     func receiveLivePush(_ meta: SyncClipMeta, inline: [RepresentationKey: Data]) async {
         guard isEnabled, !meta.isConcealed, !inline.isEmpty else { return }
-        recentlyReceived.remember(meta.contentHash, at: Date())
+        livePushGate.noteReceived(meta.contentHash, at: Date())
         await livePushReceiver.write(meta, payloads: inline)
     }
 

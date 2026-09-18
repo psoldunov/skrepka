@@ -56,7 +56,7 @@ struct X11MultipleTests {
         displayName: String
     ) async throws {
         let payload = Data("multiple works".utf8)
-        await reader.setSelection(["UTF8_STRING": payload])
+        await reader.setSelection(["UTF8_STRING": payload], as: .copy)
         // The set is queued for the session's own loop, so ownership is not
         // instant. `xclip` asking and getting the bytes back is the same signal
         // every other owner test waits on.

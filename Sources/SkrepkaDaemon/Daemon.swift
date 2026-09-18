@@ -162,9 +162,10 @@ public actor Daemon {
     /// a peer that dials twice while the first is unanswered is retrying.
     var pending: [SyncDeviceID: PendingPairing] = [:]
 
-    /// Content this device learned from a peer in the last few seconds, so a
-    /// live push written to the clipboard is not captured and pushed back.
-    var recentlyReceived = RecentHashes()
+    /// What peers pushed here, so a live push written to the clipboard is not
+    /// captured and pushed back, and the rule that concealed content never
+    /// leaves.
+    var livePushGate = LivePushGate()
 
     // MARK: - Clipboard state
 

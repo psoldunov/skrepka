@@ -3,13 +3,20 @@ import Foundation
 /// Content hashes this device accepted from a peer a moment ago, so it never
 /// pushes one of them straight back.
 ///
-/// The belt to `ClipboardWatcher.pause()` / `resume()`'s braces. That pair is
-/// the primary echo suppressor and it is enough whenever the write lands inside
-/// the window it holds open; this covers the case where it does not — a slow
-/// pasteboard write, a capture check that began before the pause, a receive
-/// that arrives while the picker is holding the watcher. Without it, one missed
-/// window is not a duplicate row but a loop: A pushes to B, B captures it, B
-/// pushes back to A, forever.
+/// The backstop, not the main guard. A received write is kept out of capture
+/// where it is made — the Mac pauses its watcher around a synchronous
+/// pasteboard write, and the Linux sessions drop the echo of a
+/// `SelectionWrite.handoff` — and ``ClipboardHandoff`` refuses the handed-over
+/// hash for as long as nothing else is copied. What this still covers is a
+/// burst: a hand-over remembers only the newest push, so the older ones of a
+/// quick run are refused here, for thirty seconds. Without any of it, one
+/// missed echo is not a duplicate row but a loop: A pushes to B, B captures
+/// it, B pushes back to A, forever.
+///
+/// Exact hashes only, which is why it cannot be the main guard: an echo whose
+/// bytes changed on the round trip — a link that comes back from Linux as
+/// text, a multi-file copy that comes back as one file — carries a different
+/// hash and walks straight past.
 ///
 /// **Bounded by count and by age, and both bounds are load-bearing.** Every
 /// entry is put here by a remote peer, so an unbounded set is a slow leak with
@@ -19,7 +26,7 @@ import Foundation
 /// A value type with an injected instant rather than an actor reading the
 /// clock: the ageing rule is the part worth testing, and a test that cannot
 /// choose "now" cannot test a thirty-second window without waiting thirty
-/// seconds. The owner is `SyncCoordinator`, which is already `@MainActor`.
+/// seconds. Owned by ``LivePushGate`` beside the hand-over, one per device.
 public struct RecentHashes: Sendable, Hashable {
     /// Entries kept before the oldest is dropped.
     ///

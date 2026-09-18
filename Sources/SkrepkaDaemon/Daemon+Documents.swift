@@ -205,10 +205,10 @@ extension Daemon {
                 subject: entry.contentHash
             )
         }
-        // Not paused around this one, unlike a live push: a copy the user asked
-        // for is a copy, and hoisting it back to the top of the history is what
-        // every clipboard manager does.
-        await clipboard.setSelection(targets)
+        // `.copy`, unlike a live push's `.handoff`: a copy the user asked for is
+        // a copy, and hoisting it back to the top of the history is what every
+        // clipboard manager does.
+        await clipboard.setSelection(targets, as: .copy)
         return .succeeded(
             Self.copiedDetail(entry), subject: entry.contentHash)
     }

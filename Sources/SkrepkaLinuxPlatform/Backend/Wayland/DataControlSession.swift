@@ -37,7 +37,7 @@ final class DataControlSession: DataControlSessionEvents {
         case stop
         /// Take ownership of the selection and serve these bytes, keyed by MIME
         /// target. `nil` clears the selection.
-        case setSelection([String: Data]?)
+        case setSelection([String: Data]?, as: SelectionWrite)
     }
 
     let binding: any DataControlProtocolBinding
@@ -104,6 +104,8 @@ final class DataControlSession: DataControlSessionEvents {
     var ownedSource: OpaquePointer?
     /// What ``ownedSource`` serves, keyed by MIME target.
     var ownedPayload: [String: Data] = [:]
+    /// Skrepka's own writes the compositor has not reported back yet.
+    var pendingEchoes = PendingEchoes()
     var outbound: [OutboundTransfer] = []
 
     init(
@@ -150,7 +152,10 @@ final class DataControlSession: DataControlSessionEvents {
         guard let offer else {
             // The clipboard was cleared. Published rather than ignored: it is a
             // real change, and `CaptureRules` reads an empty snapshot as
-            // `.rejectedEmpty` rather than storing anything.
+            // `.rejectedEmpty` rather than storing anything. The one clear that
+            // is not a change is Skrepka replacing its own source — see
+            // `PendingEchoes.takeClear()`.
+            guard !pendingEchoes.takeClear() else { return }
             publish(
                 .contents(PasteboardSnapshot(representations: [:], declaredTypes: []))
             )
@@ -165,7 +170,13 @@ final class DataControlSession: DataControlSessionEvents {
             // source would work too, at the cost of a round trip through a pipe
             // per representation. What it does buy for free is never recording
             // Skrepka's own paste-back as if an application had made it.
-            publish(snapshot(fromOwnedPayloadOfferedAs: targets))
+            //
+            // Whether to publish is the report's write's to decide, not the
+            // current one's — see `PendingEchoes`. A handoff, or a copy a later
+            // write overtook, publishes nothing. The offer bookkeeping above
+            // has still been done, so the next selection destroys this offer
+            // like any other.
+            if pendingEchoes.takeReport() { publish(snapshot(fromOwnedPayloadOfferedAs: targets)) }
             return
         }
 
@@ -228,8 +239,13 @@ final class DataControlSession: DataControlSessionEvents {
     /// In-flight writes are *not* cancelled: a requestor that asked before the
     /// handover is still waiting on its pipe, and dropping it would leave that
     /// application with a truncated paste. They finish on their own.
+    ///
+    /// Every report of Skrepka's own writes arrived before this did — the
+    /// compositor sends events in the order it made the changes — so none is
+    /// left to wait for.
     func sourceWasCancelled() {
         releaseOwnedSource()
+        pendingEchoes.removeAll()
     }
 
     // MARK: - Publishing
@@ -243,14 +259,16 @@ final class DataControlSession: DataControlSessionEvents {
     ///
     /// Compared by MIME set rather than by identity because the protocol hands
     /// back a fresh offer object for our own source and gives no way to
-    /// correlate it with the source it came from. Getting this wrong in either
-    /// direction is a slowdown, never a fault: a false negative costs one
-    /// round trip through a pipe, and a false positive needs another client to
-    /// own the selection while offering exactly Skrepka's target set, which is
-    /// then indistinguishable from Skrepka's own by any means the protocol
-    /// offers.
+    /// correlate it with the source it came from — and compared with the
+    /// oldest write not yet reported, because that is the write the next
+    /// report belongs to. Getting this wrong in either direction is a slowdown,
+    /// never a fault: a false negative costs one round trip through a pipe,
+    /// and a false positive needs another client to take the selection, with
+    /// exactly Skrepka's target set, while a write of Skrepka's is still
+    /// unreported — which is then indistinguishable from Skrepka's own by any
+    /// means the protocol offers.
     func isOwnOffer(targets: [String]) -> Bool {
-        ownedSource != nil && !ownedPayload.isEmpty && Set(targets) == Set(ownedPayload.keys)
+        ownedSource != nil && pendingEchoes.isReport(offering: targets)
     }
 
     private func snapshot(fromOwnedPayloadOfferedAs targets: [String]) -> PasteboardRead {

@@ -95,10 +95,22 @@ IMAGE="${SKREPKA_LINUX_IMAGE:-${DEFAULT_IMAGE}}"
 TTY_ARGS=()
 [[ -t 0 && -t 1 ]] && TTY_ARGS=(-it)
 
+# `Package.resolved` is put back exactly as it was found, for the reason
+# doctor-linux.sh gives: the Linux manifest resolves a different graph — no
+# KeyboardShortcuts, plus dbus and its dependencies — and SwiftPM rewrites the
+# tracked lockfile to match. Any `swift` command run through here used to leave
+# that Linux lockfile staged for the next commit. Not `exec`, so the trap runs.
+RESOLVED_BACKUP=""
+if [[ -f Package.resolved ]]; then
+	RESOLVED_BACKUP="$(mktemp)"
+	cp Package.resolved "${RESOLVED_BACKUP}"
+	trap 'if [[ -n "${RESOLVED_BACKUP}" ]]; then cp "${RESOLVED_BACKUP}" Package.resolved; rm -f "${RESOLVED_BACKUP}"; fi' EXIT
+fi
+
 # SwiftPM writes into .build-linux and ~/.cache as the container's user. Running
 # as the host user keeps every artefact owned by whoever ran the script, so a
 # later macOS build is not blocked by root-owned files in the tree.
-exec docker run --rm ${TTY_ARGS[@]+"${TTY_ARGS[@]}"} \
+docker run --rm ${TTY_ARGS[@]+"${TTY_ARGS[@]}"} \
 	${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} \
 	-u "$(id -u):$(id -g)" \
 	-e HOME=/tmp/skrepka-linux-home \
