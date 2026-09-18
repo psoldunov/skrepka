@@ -1,6 +1,7 @@
 import DBUS
 import Foundation
 import SkrepkaIPC
+import SkrepkaSync
 import Testing
 
 @testable import SkrepkaDaemon
@@ -30,6 +31,7 @@ struct DaemonServiceInterfaceTests {
         SkrepkaInterface.Member.pairWith: (["s"], ["s"]),
         SkrepkaInterface.Member.confirmPairing: (["s", "b"], ["s"]),
         SkrepkaInterface.Member.unpair: (["s"], ["s"]),
+        SkrepkaInterface.Member.setLivePush: (["s", "s"], ["s"]),
         SkrepkaInterface.Member.syncNow: ([], ["s"]),
     ]
 
@@ -128,5 +130,23 @@ struct DaemonServiceArgumentTests {
         #expect(DaemonService.string(.string(""))?.isEmpty == true)
         #expect(DaemonService.string(.uint32(1)) == nil)
         #expect(DaemonService.string(nil) == nil)
+    }
+
+    /// The bus library does not compare a call's body with the declared
+    /// arguments, so the member has to.
+    @Test("SetLivePush takes exactly a selector and a choice, and refuses anything else")
+    func livePushArgumentsAreExact() {
+        let parsed = DaemonService.livePushArguments([
+            .string("ABCD"), .string(PeerDocument.LivePushChoiceName.off),
+        ])
+        #expect(parsed?.device == "ABCD")
+        #expect(parsed?.choice == .off)
+
+        // A third argument is refused rather than ignored.
+        #expect(DaemonService.livePushArguments([.string("ABCD"), .string("off"), .string("on")]) == nil)
+        #expect(DaemonService.livePushArguments([.string("ABCD")]) == nil)
+        #expect(DaemonService.livePushArguments([]) == nil)
+        #expect(DaemonService.livePushArguments([.string("ABCD"), .string("sometimes")]) == nil)
+        #expect(DaemonService.livePushArguments([.string("ABCD"), .boolean(true)]) == nil)
     }
 }

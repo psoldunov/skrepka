@@ -7,11 +7,11 @@ carries whatever landed in between.
 
 The Deck OLED is the [D-10](open-questions.md#d-10) test rig. Everything Skrepka
 built on Linux so far — Phase 5's clipboard backends, Phase 6's daemon and CLI,
-Phase 7's palette — has only been exercised inside a container against a
+Phase 7's palette and Settings window — has only been exercised inside a container against a
 headless sway. This is the checklist for the first run on a real KDE Plasma 6.4
 session, with a real Mac at the other end.
 
-A hundred minutes if nothing blocks, an afternoon if something does.
+Two hours if nothing blocks, an afternoon if something does.
 
 ## Read this first — two things that could stop the session
 
@@ -67,7 +67,10 @@ From the Mac, in the Skrepka worktree that produced the tarball:
    - **Pass:** it exits without an `error:` line and ends by listing
      `skrepka --help` and the two `systemctl` / `journalctl` commands. A yellow
      `⚠ … is not on your $PATH` is expected on a fresh Deck; follow what it
-     prints.
+     prints. It also installs `skrepka-settings` with a private copy of
+     `libgtk4-layer-shell` in `~/.local/lib/skrepka` and a "Skrepka Settings"
+     launcher entry, which section 5 uses. A yellow `⚠ … cannot find:` line
+     means a shared library the Settings window needs is missing; record it.
 4. `systemctl --user status skrepkad` shows `active (running)`.
    - **Pass:** the status is `active`; the journal has no repeated
      `on-failure` restarts.
@@ -193,7 +196,50 @@ command to stdout. See its file for what it is not.
 5. Reopen and hit Escape.
    - **Pass:** `command: dismiss`, palette closes.
 
-## 5. Record findings — 10 minutes
+## 5. Settings window on KWin — 20 minutes
+
+`skrepka-settings` is the GTK4 window for pairing, unpairing and managing the
+devices Skrepka shares history with. It talks to the running `skrepkad`, so
+start the daemon again first if section 2 left it stopped. It picks up where
+section 3 ended: the Mac is paired.
+
+1. Launch "Skrepka Settings" from the application launcher, or run
+   `skrepka-settings` in Konsole (`./bin/skrepka-settings` from the untarred
+   tarball also works).
+   - **Pass:** the window opens, shows this device's name and code, and lists
+     the Mac as paired.
+2. Unpair the Mac from the window: click **Unpair** on its row, then **Unpair**
+   again in the "Forget <name>?" dialog. Then, on the Mac, forget the Deck too.
+   - **Pass:** the Mac stays in the window's one "Devices" list, now with the
+     subtitle "On this network — <fingerprint>", and the Mac's Settings → Sync
+     no longer lists the Deck as paired.
+3. Deck dials. On the Mac, turn on "Allow new devices to pair". On the Deck,
+   click **Pair…** on the Mac's row. Compare the code on both screens and
+   click **Codes Match — Pair** on both.
+   - **Pass:** the codes match and both sides show the other as paired.
+4. Mac dials. Forget on both sides again. Turn on "Allow new devices to pair"
+   on the Deck, then click **Pair…** on the Deck's row in the Mac's Settings →
+   Sync. Do not touch the Deck's window.
+   - **Pass:** the Deck's window shows the pairing dialog on its own; the codes
+     match and you click **Codes Match — Pair** on the Deck and confirm on the
+     Mac; both sides show paired; and the Deck's "Allow new devices to pair"
+     switch turns itself off after the pairing.
+5. Live clipboard switch. In the window, turn the live clipboard off for the
+   Mac. Copy something in Kate.
+   - **Pass:** the Mac's clipboard does not change immediately, and the entry
+     appears in the Mac's history on the next half-minute exchange (about 30 s).
+     Turn the switch back on afterwards.
+6. Press **Sync Now**.
+   - **Pass:** the window shows a confirmation banner, e.g. "Asked 1 peer to
+     sync."
+7. `systemctl --user stop skrepkad`, then, with the window still open,
+   `systemctl --user start skrepkad`.
+   - **Pass, while stopped:** within a few seconds the window says "The Skrepka
+     daemon is not running." and "Start it with: systemctl --user start
+     skrepkad".
+   - **Pass, after:** it recovers without being reopened.
+
+## 6. Record findings — 10 minutes
 
 Everything above answers an open question or moves a phase closer to done.
 Write results into these files, in this order:
@@ -206,7 +252,8 @@ Write results into these files, in this order:
    list, item by item, with the actual behaviour observed.
 3. **[`phase-7-linux-gui.md`](phase-7-linux-gui.md)** — replace "**Not
    demonstrated: KDE.**" with the actual result of section 4, and update D-4's
-   provisional exit condition to settled or reverted.
+   provisional exit condition to settled or reverted. Put the Settings window
+   results from section 5 in the same file, next to the palette result.
 4. Attach the `runtime-report.txt` from the tarball to whichever finding
    depends on it — a Deck-side glibc mismatch belongs beside the finding it
    caused, not on its own.

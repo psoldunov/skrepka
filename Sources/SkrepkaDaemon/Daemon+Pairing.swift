@@ -228,13 +228,14 @@ extension Daemon {
         guard direction == PairingDirection.outgoing else {
             // Inbound: the far side is still inside its own dial and this
             // refusal is the answer it gets, so neither machine records the
-            // other. Nothing to warn about.
-            return .succeeded("refused", subject: subject)
+            // other. Nothing to warn about — and a client recognises that by
+            // this exact detail, so it is the shared constant.
+            return .succeeded(ActionDocument.refusedDetail, subject: subject)
         }
         // The journal entry is written by ``completeOutgoing(_:proposalID:accepted:)``,
         // which is also where an outgoing proposal nobody answered at all ends
         // up — one line for both, rather than one here and none for the timeout.
-        return .succeeded("refused. \(PairError.oneSidedWarning)", subject: subject)
+        return .succeeded("\(ActionDocument.refusedDetail). \(PairError.oneSidedWarning)", subject: subject)
     }
 
     /// Every proposal that arrives from now on.

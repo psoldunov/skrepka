@@ -92,6 +92,22 @@ public struct DaemonProxy: Sendable {
             ActionDocument.self, SkrepkaInterface.Member.unpair, .string(fingerprint))
     }
 
+    /// `choice` is one of ``PeerDocument/LivePushChoiceName``. Needs interface
+    /// version 2 — see ``interfaceVersion()``.
+    public func setLivePush(device: String, choice: String) async throws -> ActionDocument {
+        try await document(
+            ActionDocument.self, SkrepkaInterface.Member.setLivePush, .string(device), .string(choice))
+    }
+
+    /// This proxy, waiting `timeout` for each reply instead.
+    ///
+    /// For the one member whose honest answer can outlast
+    /// ``SkrepkaBus/callTimeout``: ``pair(with:)`` — see
+    /// ``SkrepkaBus/pairingCallTimeout``.
+    public func withTimeout(_ timeout: Duration) -> DaemonProxy {
+        DaemonProxy(connection: connection, session: session, timeout: timeout)
+    }
+
     // MARK: - Pairing
 
     public func openPairing(seconds: UInt32) async throws -> PairingWindowDocument {

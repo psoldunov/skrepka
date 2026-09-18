@@ -99,6 +99,7 @@ extension Daemon {
     private func peerDocument(deviceID: SyncDeviceID, paired: PairedPeer) async -> PeerDocument {
         let entry = progress[deviceID] ?? PeerProgress()
         let sighting = sighted[deviceID]
+        let livePush = await livePushSetting(for: deviceID)
         return PeerDocument(
             deviceID: deviceID.hex,
             fingerprint: deviceID.fingerprint,
@@ -113,8 +114,10 @@ extension Daemon {
             isSighted: sighting != nil,
             isAcceptingPairing: sighting?.advertisement.isAcceptingPairing ?? false,
             linkState: entry.state,
-            livePush: await isLivePushOn(for: deviceID),
-            lastSyncedAt: entry.lastSyncedAt
+            livePush: livePush.isOn,
+            lastSyncedAt: entry.lastSyncedAt,
+            livePushChoice: livePush.choice.rawValue,
+            livePushDefault: Self.wireName(livePush.reason)
         )
     }
 

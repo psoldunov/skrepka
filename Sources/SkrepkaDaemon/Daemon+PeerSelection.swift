@@ -10,10 +10,35 @@ import SkrepkaSync
 /// one place a mistake un-pairs the wrong machine, so it is worth reading on
 /// its own.
 extension Daemon {
+    /// The one paired device a selector names, or the answer that says why
+    /// there is not exactly one.
+    enum PairedMatch {
+        case found(PairedPeer)
+        case refused(ActionDocument)
+    }
+
     /// Forgets a paired device.
     public func unpair(fingerprint: String) async -> ActionDocument {
-        guard let wanted = Self.selector(fingerprint) else {
-            return .refused(Self.blankSelectorDetail)
+        let peer: PairedPeer
+        switch await pairedPeer(matching: fingerprint) {
+        case .found(let match): peer = match
+        case .refused(let answer): return answer
+        }
+        do {
+            try await trust.forgetPairedPeer(peer.deviceID)
+        } catch {
+            return .refused("could not forget it: \(error)")
+        }
+        await pairedSetMayHaveChanged()
+        return .succeeded("forgot \(peer.deviceName)", subject: peer.deviceID.fingerprint)
+    }
+
+    /// Resolves a selector against the paired set: a prefix of the device ID,
+    /// or the fingerprint exactly. Shared by every member that acts on a
+    /// paired device, so they cannot disagree about which one was meant.
+    func pairedPeer(matching selector: String) async -> PairedMatch {
+        guard let wanted = Self.selector(selector) else {
+            return .refused(.refused(Self.blankSelectorDetail))
         }
         let paired: [PairedPeer]
         do {
@@ -23,23 +48,19 @@ extension Daemon {
             // paired device matches that", which is a different answer from
             // "the store could not be read" and sends the user hunting for a
             // fingerprint that is fine.
-            return .refused("could not read the paired devices: \(error)")
+            return .refused(.refused("could not read the paired devices: \(error)"))
         }
         let matches =
             paired.filter { $0.deviceID.hex.hasPrefix(wanted) }
             + paired.filter { $0.deviceID.fingerprint.lowercased() == wanted }
         guard let peer = Set(matches.map(\.deviceID)).count == 1 ? matches.first : nil else {
-            return matches.isEmpty
-                ? .refused("no paired device matches \"\(fingerprint)\"")
-                : .refused("\"\(fingerprint)\" matches more than one paired device")
+            return .refused(
+                matches.isEmpty
+                    ? .refused("no paired device matches \"\(selector)\"")
+                    : .refused("\"\(selector)\" matches more than one paired device")
+            )
         }
-        do {
-            try await trust.forgetPairedPeer(peer.deviceID)
-        } catch {
-            return .refused("could not forget it: \(error)")
-        }
-        await pairedSetMayHaveChanged()
-        return .succeeded("forgot \(peer.deviceName)", subject: peer.deviceID.fingerprint)
+        return .found(peer)
     }
 
     static func sighting(

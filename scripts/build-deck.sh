@@ -93,7 +93,7 @@ fi
 # Each product on its own line, on purpose. `swift build --product A --product
 # B` accepts the repeated flag, builds only the LAST one and exits 0 — the
 # same trap docs/linux-sync/open-questions.md records under OQ-13 and the
-# reason scripts/install.sh calls swift build twice. --static-swift-stdlib
+# reason scripts/install.sh calls swift build once per product. --static-swift-stdlib
 # links the Swift standard library into each binary so the Deck needs no Swift
 # runtime installed; libc, gtk-4 and the rest still come from the target box.
 PRODUCTS=(
@@ -102,6 +102,7 @@ PRODUCTS=(
 	skrepka-clip-probe
 	skrepka-sync-probe
 	skrepka-palette-demo
+	skrepka-settings
 )
 
 for product in "${PRODUCTS[@]}"; do
@@ -134,7 +135,7 @@ done
 
 REPORT="${STAGE_ROOT}/runtime-report.txt"
 rm -rf "${STAGE_ROOT}"
-mkdir -p "${STAGE}/bin" "${STAGE}/scripts" "${STAGE}/packaging/systemd" "${STAGE}/lib"
+mkdir -p "${STAGE}/bin" "${STAGE}/scripts" "${STAGE}/packaging/systemd" "${STAGE}/packaging/desktop" "${STAGE}/lib"
 
 # `readelf -h` names the ELF class and machine — under emulation this is the
 # check that catches a silently-broken toolchain that produced arm64 slices
@@ -142,7 +143,7 @@ mkdir -p "${STAGE}/bin" "${STAGE}/scripts" "${STAGE}/packaging/systemd" "${STAGE
 # binutils but not the `file` package, and adding one apt line for a header
 # read is not worth the layer. `ldd` names every .so the loader will hunt for
 # on the Deck, and `objdump -T` filtered for GLIBC_ symbols names the *floor*
-# glibc version the binary requires — GLIBC_2.38 for all five on 2026-09-18.
+# glibc version the binary requires — GLIBC_2.38 for the first five on 2026-09-18.
 # Whether the Deck's glibc meets it is not something this script can know;
 # step 0.5 of docs/linux-sync/steam-deck-session.md checks it on the Deck.
 # All three run inside the container so no amd64 tool is expected on the host.
@@ -177,15 +178,20 @@ bold "Runtime probe written to ${REPORT}"
 
 # SteamOS 3.8 does not ship gtk4-layer-shell — it is an optional Arch package
 # (extra/gtk4-layer-shell) that no default install advertises — so the
-# palette demo would fail at load time with "libgtk4-layer-shell.so.0: cannot
-# open shared object file". The image built the .so from source under
-# /usr/lib/x86_64-linux-gnu/, and shipping it beside the binary with rpath
-# $ORIGIN/../lib is the smallest thing that works without asking the user to
-# unlock the read-only root.
+# palette demo and the Settings window would fail at load time with
+# "libgtk4-layer-shell.so.0: cannot open shared object file". The image built
+# the .so from source under /usr/lib/x86_64-linux-gnu/, and shipping it beside
+# the binaries with rpath $ORIGIN/../lib is the smallest thing that works
+# without asking the user to unlock the read-only root. skrepka-settings also
+# carries a second rpath, $ORIGIN/../lib/skrepka, for the installed copy:
+# scripts/install.sh finds the bundled library at ../lib next to the bin
+# directory it is given and copies it there.
 #
 # GTK itself is not bundled: gtk-4 is a plain KDE dependency on SteamOS
 # through Plasma's GTK integration and any KDE spin has it, so the loader
-# finds libgtk-4.so.1 in the default search path. gtk4-layer-shell is the
+# finds libgtk-4.so.1 in the default search path. It has to be 4.12 or newer,
+# the oldest with every call skrepka-settings and the palette demo make, and a
+# missing symbol surfaces at launch rather than in ldd. gtk4-layer-shell is the
 # one library the target box may lack.
 #
 # The container copies them straight into the stage through the bind mount,
@@ -210,10 +216,13 @@ done
 # install.sh looks for ${dirname($script)}/../Package.swift and
 # ${dirname($script)}/../packaging/systemd/skrepkad.service to recognise a
 # checkout; shipping the two makes the tarball self-contained without asking
-# the script to grow another mode.
+# the script to grow another mode. It reads the Settings launcher entry from
+# ${REPOSITORY}/packaging/desktop/, so that ships at the same relative path.
 cp "${REPO}/scripts/install.sh" "${STAGE}/scripts/install.sh"
 chmod 0755 "${STAGE}/scripts/install.sh"
 cp "${REPO}/packaging/systemd/skrepkad.service" "${STAGE}/packaging/systemd/skrepkad.service"
+cp "${REPO}/packaging/desktop/dev.soldunov.Skrepka.Settings.desktop" \
+	"${STAGE}/packaging/desktop/dev.soldunov.Skrepka.Settings.desktop"
 cp "${REPO}/Package.swift" "${STAGE}/Package.swift"
 
 cat > "${STAGE}/README.txt" << 'DOCS'
@@ -229,10 +238,15 @@ What is in this tarball
   bin/skrepka-sync-probe      a headless sync peer (Phase 6 smoke test)
   bin/skrepka-palette-demo    a hand-driven picker smoke test
                               (Phase 7 step 1 validation)
-  lib/libgtk4-layer-shell.so* the layer-shell library the palette demo needs
-                              at runtime, in case the host does not have one
+  bin/skrepka-settings        the Settings window: pair, unpair and manage the
+                              devices Skrepka shares clipboard history with
+  lib/libgtk4-layer-shell.so* the layer-shell library the palette demo and the
+                              Settings window need at runtime, in case the
+                              host does not have one
   scripts/install.sh          the installer
   packaging/systemd/skrepkad.service   the systemd USER unit install.sh writes
+  packaging/desktop/dev.soldunov.Skrepka.Settings.desktop
+                              the launcher entry install.sh writes
   Package.swift               a marker install.sh looks for; not built
 
 Installing on the Steam Deck
@@ -242,9 +256,22 @@ Installing on the Steam Deck
     cd skrepka-linux-x86_64
     ./scripts/install.sh --from-build ./bin
 
-The installer places skrepkad and skrepka into ~/.local/bin, and the systemd
-user unit into ~/.config/systemd/user. Nothing is written outside $HOME and
-nothing needs root.
+The installer places skrepkad, skrepka and skrepka-settings into ~/.local/bin,
+the systemd user unit into ~/.config/systemd/user, a private copy of
+libgtk4-layer-shell into ~/.local/lib/skrepka, and a launcher entry named
+"Skrepka Settings" into ~/.local/share/applications. Those are the defaults: an
+absolute XDG_BIN_HOME, XDG_CONFIG_HOME or XDG_DATA_HOME moves its part to
+wherever it points. Nothing needs root.
+
+Running the Settings window
+---------------------------
+
+    ./bin/skrepka-settings
+
+Runs in place from the untarred tarball, the same way the palette demo does. Once
+installed, open "Skrepka Settings" from the application launcher instead. It
+talks to the running skrepkad, so the daemon has to be up, and it needs the
+host's GTK to be 4.12 or newer.
 
 Running the palette demo
 ------------------------

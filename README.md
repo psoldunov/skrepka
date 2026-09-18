@@ -42,6 +42,14 @@ has no in-app updater, so `brew upgrade --cask skrepka` is the whole update
 path — and `brew uninstall --zap --cask skrepka` is the one that takes the
 clipboard history with it.
 
+On Linux there is no app bundle: `scripts/install.sh` puts the daemon
+(`skrepkad`) and the CLI (`skrepka`) under `~/.local`, needing no root. It adds
+the GTK4 Settings window (`skrepka-settings`, with a launcher entry) only when
+the build has one: the Steam Deck tarball does, and a build from source does
+only where the GTK 4.12 or newer and gtk4-layer-shell development packages are
+installed. Without them it installs the daemon and the CLI alone. See
+[packaging/README.md](packaging/README.md).
+
 [CHANGELOG.md](CHANGELOG.md) says what each version changed.
 
 ## Build and run

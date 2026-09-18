@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-18T15:16:35.761Z",
+	"generatedAt": "2026-09-18T17:08:29.212Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -86,9 +86,10 @@
 			},
 			{
 				"kind": "region",
-				"label": "Linux GUI foundation",
+				"label": "Linux GUI — GTK4",
 				"wraps": [
 					"linux-picker",
+					"linux-settings",
 					"gtk-session"
 				]
 			}
@@ -153,6 +154,23 @@
 				"type": "frontend"
 			},
 			{
+				"id": "linux-settings",
+				"label": "Linux Settings window",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaLinuxUI/Settings"
+					},
+					{
+						"path": "Sources/skrepka-settings"
+					},
+					{
+						"path": "packaging/desktop"
+					}
+				],
+				"sublabel": "skrepka-settings — pair both ways, unpair, live clipboard per device; pure SyncModel, one-call-at-a-time DaemonLink",
+				"type": "security"
+			},
+			{
 				"id": "gtk-session",
 				"label": "GTK session & C bridge",
 				"sources": [
@@ -163,7 +181,24 @@
 						"path": "Sources/CGtk4"
 					}
 				],
-				"sublabel": "main loop/layer-shell probe and C shim",
+				"sublabel": "main loop, layer-shell probe, C shim; eventfd inbox carries Sendable values onto the loop thread",
+				"type": "backend"
+			},
+			{
+				"id": "linux-daemon",
+				"label": "Linux daemon & D-Bus interface",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaDaemon"
+					},
+					{
+						"path": "Sources/SkrepkaIPC"
+					},
+					{
+						"path": "Sources/SkrepkaCLI"
+					}
+				],
+				"sublabel": "skrepkad exports dev.soldunov.Skrepka1 (v2, SetLivePush); answers one call at a time; the skrepka CLI is its other client",
 				"type": "backend"
 			},
 			{
@@ -542,7 +577,7 @@
 						"path": "Tests/SkrepkaLinuxUITests"
 					}
 				],
-				"sublabel": "Swift Testing; one HistoryStoring suite across every conformance; Linux picker key/metric coverage",
+				"sublabel": "Swift Testing; one HistoryStoring suite across every conformance; Linux picker key/metrics, Settings model, pairing flow and daemon-link ordering",
 				"type": "backend"
 			},
 			{
@@ -553,7 +588,7 @@
 						"path": "scripts"
 					}
 				],
-				"sublabel": "doctor, doctor-linux, probe-runbook, linux, build-deck, bundle, notarize",
+				"sublabel": "doctor, doctor-linux, probe-runbook, linux, build-deck, install, bundle, notarize",
 				"type": "backend"
 			},
 			{
@@ -1102,10 +1137,43 @@
 				"to": "models"
 			},
 			{
+				"from": "linux-settings",
+				"id": "e-linuxsettings-gtksession",
+				"label": "widgets, signals, main-loop inbox",
+				"to": "gtk-session"
+			},
+			{
+				"from": "linux-settings",
+				"id": "e-linuxsettings-daemon",
+				"label": "session bus: Peers, PairWith, ConfirmPairing, Unpair, SetLivePush",
+				"to": "linux-daemon",
+				"variant": "security"
+			},
+			{
+				"from": "linux-daemon",
+				"id": "e-linuxdaemon-session",
+				"label": "one link per paired peer",
+				"to": "sync-session",
+				"variant": "emphasis"
+			},
+			{
+				"from": "linux-daemon",
+				"id": "e-linuxdaemon-sqlite",
+				"label": "history and paired peers",
+				"to": "sqlite-store"
+			},
+			{
 				"from": "tests",
 				"id": "e-tests-linuxpicker",
 				"label": "key map + metrics",
 				"to": "linux-picker",
+				"variant": "dashed"
+			},
+			{
+				"from": "tests",
+				"id": "e-tests-linuxsettings",
+				"label": "sync model, pairing flow, one call at a time",
+				"to": "linux-settings",
 				"variant": "dashed"
 			},
 			{
@@ -1155,6 +1223,13 @@
 				"id": "e-scripts-peer",
 				"label": "build-deck.sh: the x86_64 tarball for the Steam Deck",
 				"to": "peer",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-linuxsettings",
+				"label": "install.sh: binary, private layer-shell, launcher entry",
+				"to": "linux-settings",
 				"variant": "dashed"
 			}
 		],

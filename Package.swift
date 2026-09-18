@@ -261,6 +261,10 @@ let package = Package(
     // ships it in the tarball so Phase 7 step 1 can be walked through on KWin
     // without depending on the daemon.
     package.products.append(.executable(name: "skrepka-palette-demo", targets: ["skrepka-palette-demo"]))
+    // The Settings window: this device, the devices it is paired with and can
+    // see, pairing in both directions, and live push per device. A product so
+    // `scripts/install.sh` and `scripts/build-deck.sh` can name it.
+    package.products.append(.executable(name: "skrepka-settings", targets: ["skrepka-settings"]))
     package.targets.append(contentsOf: [
         // libwayland-client itself. `providers:` is what turns a missing
         // package into a message naming it rather than a link failure;
@@ -357,9 +361,13 @@ let package = Package(
         // `--cflags` but for `--libs` only under `--static`, so CGtk4
         // contributes -lgtk4-layer-shell and nothing else. Link the GTK/GLib
         // symbols used by the Swift and inline-C code explicitly.
+        //
+        // `SkrepkaIPC` because the windows here are clients of the daemon in
+        // another process, like the CLI — and not `SkrepkaDaemon`, for the
+        // reason the CLI does not depend on it either.
         .target(
             name: "SkrepkaLinuxUI",
-            dependencies: ["SkrepkaCore", "CGtk4"],
+            dependencies: ["SkrepkaCore", "SkrepkaIPC", "CGtk4"],
             swiftSettings: sharedSwiftSettings,
             linkerSettings: [
                 .linkedLibrary("gtk-4"),
@@ -370,7 +378,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SkrepkaLinuxUITests",
-            dependencies: ["SkrepkaLinuxUI", "SkrepkaCore"],
+            dependencies: ["SkrepkaLinuxUI", "SkrepkaCore", "SkrepkaIPC", "CGtk4"],
             swiftSettings: sharedSwiftSettings
         ),
         // Phase 6: the daemon's D-Bus surface, and nothing else.
@@ -451,6 +459,27 @@ let package = Package(
             swiftSettings: sharedSwiftSettings,
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/../lib"])
+            ]
+        ),
+        // The Settings window's entry point — everything else is in
+        // `SkrepkaLinuxUI/Settings/`, where the tests can reach it.
+        //
+        // Two rpaths, for the one library a Linux box may lack: SteamOS ships
+        // no gtk4-layer-shell, and this links it through CGtk4 even though the
+        // window never uses layer-shell. `$ORIGIN/../lib` finds the copy the
+        // Deck tarball carries beside `bin/`, as the palette demo does;
+        // `$ORIGIN/../lib/skrepka` finds the private copy `scripts/install.sh`
+        // puts beside an installed `~/.local/bin`. A system copy, where there is
+        // one, is found after both without either.
+        .executableTarget(
+            name: "skrepka-settings",
+            dependencies: ["SkrepkaLinuxUI"],
+            swiftSettings: sharedSwiftSettings,
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/../lib",
+                    "-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/../lib/skrepka",
+                ])
             ]
         ),
         .testTarget(

@@ -135,6 +135,7 @@ struct PairingRefusalTests {
 
         #expect(answer.ok)
         #expect(answer.detail.contains(PairError.oneSidedWarning))
+        #expect(answer.detail.hasPrefix(ActionDocument.refusedDetail))
     }
 
     /// And not on the inbound path, where the far side is still inside its own
@@ -152,6 +153,9 @@ struct PairingRefusalTests {
 
         #expect(answer.ok)
         #expect(answer.detail.contains(PairError.oneSidedWarning) == false)
+        // Exactly the constant: the Settings window tells a plain refusal from
+        // a warning by comparing against it.
+        #expect(answer.detail == ActionDocument.refusedDetail)
     }
 
     /// The dial deadline says the same thing, because a dial abandoned mid-flight
