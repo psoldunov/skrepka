@@ -23,6 +23,10 @@ their source app and a ⌘N shortcut on each row](docs/images/picker.png)
 macOS 26.0 or later, Apple silicon or one of the four Intel Macs that run
 macOS 26. Xcode 26 to build.
 
+The Linux preview needs an x86_64 machine with systemd and a Wayland or X11
+session, and GTK 4.12 or newer for the Settings window. It has been tested on
+headless compositors but not yet on real hardware.
+
 ## Install
 
 ```sh
@@ -42,15 +46,31 @@ has no in-app updater, so `brew upgrade --cask skrepka` is the whole update
 path — and `brew uninstall --zap --cask skrepka` is the one that takes the
 clipboard history with it.
 
-On Linux there is no app bundle: `scripts/install.sh` puts the daemon
-(`skrepkad`) and the CLI (`skrepka`) under `~/.local`, needing no root. It adds
-the GTK4 Settings window (`skrepka-settings`, with a launcher entry) only when
-the build has one: the Steam Deck tarball does, and a build from source does
-only where the GTK 4.12 or newer and gtk4-layer-shell development packages are
-installed. Without them it installs the daemon and the CLI alone. See
-[packaging/README.md](packaging/README.md).
-
 [CHANGELOG.md](CHANGELOG.md) says what each version changed.
+
+### Linux (preview)
+
+On an x86_64 Linux machine — a Steam Deck in Desktop Mode included — run this
+in a terminal on the machine itself:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
+```
+
+It downloads the build from the latest release and checks it against the
+published SHA-256. Then it installs the daemon (`skrepkad`), the CLI (`skrepka`)
+and the GTK4 Settings window (`skrepka-settings`, with a launcher entry) under
+`~/.local`, and starts the daemon as a systemd user service. It needs no root.
+
+- `bash -s -- --version v0.2.0` after the pipe pins a release.
+- `bash -s -- --uninstall` removes everything except your history and this
+  device's sync identity.
+- The Settings window needs GTK 4.12 or newer from the host.
+
+To build from a checkout instead, on any architecture, run
+`scripts/setup-linux.sh`. It needs a Swift 6.3 toolchain. It builds the Settings
+window only where the GTK 4.12 and gtk4-layer-shell development packages are
+installed. See [packaging/README.md](packaging/README.md).
 
 ## Build and run
 

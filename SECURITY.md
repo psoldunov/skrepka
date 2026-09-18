@@ -8,12 +8,13 @@ what is in scope rather than leaving you to guess.
 
 | Version | Supported |
 | --- | --- |
-| Latest release ([0.1.4](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
+| Latest release ([0.2.0](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
 | Any earlier release | ❌ |
 | `master` | Best effort — fixes land here first |
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` (or a fresh
-download) is the whole patch path. There are no backports to older tags.
+download) is the whole patch path on a Mac, and re-running `install.sh` is the
+whole patch path on Linux. There are no backports to older tags.
 
 ## Reporting a vulnerability
 
@@ -34,7 +35,7 @@ Please include:
   execution, an app the user already installed, physical access, nothing at all
 - Steps to reproduce, ideally against a build from `master`
 - The Skrepka version, macOS version, and whether the Mac is Apple silicon or
-  Intel
+  Intel — or, on Linux, the distribution, the desktop, and Wayland or X11
 - Any proof-of-concept, with your own clipboard contents redacted
 
 ### What to expect
@@ -76,6 +77,17 @@ encrypted at rest.** This device's sync private key lives in the login Keychain
 under the service `dev.soldunov.skrepka.sync` and is never synchronised to
 iCloud.
 
+On Linux — a preview since 0.2.0 — `skrepkad` runs as a systemd user service
+and keeps history in SQLite at `~/.local/share/skrepka/skrepka.sqlite3`. This
+device's sync private key is the file `device.key` beside it, not a keyring
+entry: the daemon creates the directory `0700` and the key `0600`, and no
+installer touches either. The CLI and the Settings window reach the daemon over
+the session D-Bus, which any process running as you can call. Sync on Linux is
+**on unless the daemon is started with `--no-sync`**: it advertises itself over
+Avahi and serves history to devices already pinned from the start, while
+pairing a new one still needs the pairing window opened and the code confirmed
+on both screens, exactly as on a Mac.
+
 ### In scope
 
 - Recorded content that carried a privacy marker Skrepka honours —
@@ -95,6 +107,9 @@ iCloud.
   around its Accessibility grant
 - Code-signing, notarization or Gatekeeper problems with a published build,
   including the Homebrew cask
+- `install.sh` writing anywhere but the paths it documents, touching
+  `~/.local/share/skrepka`, installing a tarball whose checksum does not match,
+  or `--uninstall` removing anything but the files it names
 - Path traversal, injection or memory-safety issues in decoding pasteboard
   payloads — a malicious app controls exactly what it puts on the pasteboard
 
@@ -127,6 +142,15 @@ will be closed with a pointer to this section:
   A proposal for an encrypted store is a feature request, not a vulnerability.
 - **Anyone with your unlocked Mac can open the picker.** By design — it is a
   keystroke away on purpose.
+- **On Linux, any process in your session can ask the daemon for history over
+  D-Bus.** The session bus is per-user, and a process running as you can read
+  `skrepka.sqlite3` directly anyway; the D-Bus interface grants nothing the
+  file permissions did not.
+- **The Linux release is checked against a checksum from the same release.**
+  `install.sh` refuses a truncated or corrupted download, but someone who could
+  replace the release's files could replace both. The tarball is not signed.
+  Build from source with `scripts/setup-linux.sh` if that is your threat
+  model.
 - **A password manager that sets no `org.nspasteboard.*` marker gets recorded.**
   Skrepka honours the markers that exist and offers a per-app exclusion list as
   the backstop. Tell the password manager's authors too.
@@ -152,4 +176,6 @@ will be closed with a pointer to this section:
 Released builds are universal, signed with a Developer ID identity and
 notarized by Apple, so they open with no Gatekeeper detour. If you would rather
 not trust a binary, `scripts/notarize.sh` and `scripts/bundle.sh` build the
-same thing from source — see [CONTRIBUTING.md](CONTRIBUTING.md).
+same thing from source — see [CONTRIBUTING.md](CONTRIBUTING.md). On Linux,
+`scripts/setup-linux.sh` builds the daemon, the CLI and the Settings window from
+a checkout and installs them the same way the release installer does.

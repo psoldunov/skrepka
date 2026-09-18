@@ -125,8 +125,12 @@ deferral leaves open: KWin may disagree with something Sway accepts.
 
 ## Phase 8, when Phase 7 is further along
 
-1. Harden `scripts/install.sh`: release download with checksum, version pin,
-   `uname -m` mapping, desktop entries, GTK4 library check. *4–6 hours.*
+1. ~~Harden `scripts/install.sh`: release download with checksum, version pin,
+   `uname -m` mapping, desktop entries, GTK4 library check.~~ Done for 0.2.0:
+   the release download, checksum, version pin, x86_64 check and a pre-install
+   run of `skrepkad --version` are the new root `install.sh`, and building from
+   a checkout moved to `scripts/setup-linux.sh`. Desktop entries and the GTK4
+   library warning were already there.
 2. Write the Flatpak-is-out reason into `packaging/README.md`. *30 minutes.*
 3. Scaffold `gnome-extension/` against `dev.soldunov.Skrepka1`. *1–2 days.*
 4. Skeletons for `packaging/debian/` and `packaging/rpm/`. *1 day.*

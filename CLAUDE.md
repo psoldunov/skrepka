@@ -13,7 +13,7 @@ scripts/notarize.sh   # build, sign, notarize, staple — for builds you send ou
 scripts/doctor.sh     # the quality gate — run after every change
 scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
 scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols from its XML
-scripts/install.sh    # install skrepkad, skrepka and skrepka-settings into ~/.local — Linux only
+scripts/setup-linux.sh  # build skrepkad, skrepka and skrepka-settings, install into ~/.local — Linux only
 ```
 
 The Linux side has its own gate and its own entry points, and neither is
@@ -22,9 +22,18 @@ reachable from a Mac without the container:
 ```
 scripts/linux.sh <command>   # run anything inside the Linux build image
 scripts/doctor-linux.sh      # the Linux quality gate
+scripts/build-deck.sh        # the x86_64 release tarball + .sha256 for a GitHub release
 ```
 
-`scripts/install.sh` is the no-root install path for the Linux daemon
+`install.sh`, at the repository root, is the release installer — what a user
+runs, with `curl … | bash`, to download the x86_64 tarball from a GitHub
+release, check its SHA-256 and install it. It owns every rule about where files
+go, how the unit is enabled and what `--uninstall` removes.
+`scripts/setup-linux.sh` is the developer's path: it builds from a checkout and
+hands the result to `install.sh --from-dir`, so the two cannot drift. Change
+file placement in `install.sh`, building in `setup-linux.sh`.
+
+Together they are the no-root install path for the Linux daemon
 (`skrepkad`) and its CLI (`skrepka`): binaries into `~/.local/bin`, a systemd
 **user** unit into `~/.config/systemd/user`, and — when the build has it — the
 GTK4 Settings window (`skrepka-settings`) with a launcher entry and, from the
@@ -87,7 +96,8 @@ Change the mark in one place.
 
 Every script that runs Swift on the Mac pins `DEVELOPER_DIR` to
 `/Applications/Xcode.app/Contents/Developer`. The Linux ones — `linux.sh`,
-`linux-image.sh`, `doctor-linux.sh`, `build-deck.sh`, `install.sh` — do not:
+`linux-image.sh`, `doctor-linux.sh`, `build-deck.sh`, `setup-linux.sh`,
+`install.sh` — do not:
 their Swift runs inside the build image or on a Linux host, with no Xcode to pin.
 Do not build with a bare `swift build`: `xcode-select -p` points at
 CommandLineTools, whose toolchain ships no `libSwiftDataMacros.dylib`, so `@Model`

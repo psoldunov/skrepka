@@ -80,8 +80,10 @@ packaging/
 ```
 
 The user-scope installer is not a Phase 8 deliverable in the sense of a new
-file: `scripts/install.sh` already exists, from Phase 6, with `--uninstall`
-rather than a separate script. This phase hardens it in place rather than
+file: it already exists, from Phase 6, with `--uninstall` rather than a
+separate script. Since 0.2.0 it is `install.sh` at the repository root, which
+downloads and checks a release, and `scripts/setup-linux.sh` builds from a
+checkout and hands off to it. This phase hardens it in place rather than
 inventing a second layout — see [the README's summary of what
 exists](README.md).
 
@@ -89,7 +91,7 @@ exists](README.md).
 
 ### 0. The user-scope installer
 
-`scripts/install.sh`, fetched with `curl` and run without `sudo`. It writes
+`install.sh`, fetched with `curl` and run without `sudo`. It writes
 only inside `$HOME` and it is the only way a build reaches an immutable
 distribution.
 

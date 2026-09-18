@@ -143,7 +143,7 @@ Sources/SkrepkaDaemon/              # the daemon, as a library so it can be test
 Sources/skrepkad/main.swift
 Sources/SkrepkaCLI/                 # the CLI, likewise
 Sources/skrepka-cli/main.swift
-packaging/systemd/skrepkad.service  scripts/install.sh
+packaging/systemd/skrepkad.service  scripts/install.sh  # since 0.2.0: install.sh + scripts/setup-linux.sh
 ```
 
 Four differences from the plan, each with a reason:

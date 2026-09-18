@@ -1,9 +1,11 @@
 # Steam Deck bring-up: first hardware session
 
 **Status, 2026-09-18: deferred.** The owner put Linux hardware testing on hold
-the day this checklist was written. It is ready to run as it stands. When
-testing resumes, rebuild the tarball first (`scripts/build-deck.sh`) so it
-carries whatever landed in between.
+the day this checklist was written. It is ready to run as it stands. Since 0.2.0
+the Deck installs straight from a GitHub release, so no ssh and no copy from
+the Mac are needed. When testing resumes and master has moved past the latest
+release, cut a release first (or see section 1's fallback) so the Deck gets
+whatever landed in between.
 
 The Deck OLED is the [D-10](open-questions.md#d-10) test rig. Everything Skrepka
 built on Linux so far — Phase 5's clipboard backends, Phase 6's daemon and CLI,
@@ -37,43 +39,71 @@ The Deck's storage root is read-only and the session is not the graphical shell
 you install into. All of these run from Desktop Mode's Konsole.
 
 1. Hold **Steam → Power → Switch to Desktop**. In Desktop Mode, open Konsole.
-2. Set a user password so `sudo` and `sshd` work: `passwd`.
-   - **Pass:** `passwd: password updated successfully`.
-3. Enable ssh for the copy step:
-   `sudo systemctl enable --now sshd`, then `ip -4 addr | grep inet` for the
-   address to scp to.
+2. Nothing to do for the install itself: it needs no password, no `sudo` and
+   no ssh.
+3. *Optional.* Enable ssh, only if you want to drive section 3 from the Mac's
+   terminal: `passwd` to set a user password, `sudo systemctl enable --now
+   sshd`, then `ip -4 addr | grep inet` for the address.
    - **Pass:** `ss -ltn | grep :22` shows a listener.
 4. Check Avahi is running: `systemctl is-active avahi-daemon`.
    - **Pass:** it prints `active`.
    - **Fail:** anything else — `inactive`, `failed`. Stop at step 3 of section
      3 and record the state.
 5. Check glibc, then the libraries: `ldd --version | head -1`, then
-   `ldconfig -p | grep <soname>` for each `.so` line in the tarball's
-   `runtime-report.txt`. `libgtk4-layer-shell.so.0` is expected to be missing,
+   `ldconfig -p | grep <soname>` for each `.so` line in
+   `runtime-report.txt` — it ships inside the tarball, so do this after
+   section 1's download. `libgtk4-layer-shell.so.0` is expected to be missing,
    because the tarball bundles it.
    - **Pass:** glibc is 2.38 or newer, and every other soname resolves to a path.
 
-## 1. Copy and install — 5 minutes
+## 1. Download and install — 5 minutes
 
-From the Mac, in the Skrepka worktree that produced the tarball:
+All on the Deck, in Konsole. The tarballs are downloaded and kept, rather
+than installed with the one-line `curl … | bash`, for two reasons:
+- Sections 2 and 5 run the probe and the palette demo, which ship in the
+  release's second asset, `skrepka-linux-x86_64-tools.tar.gz`.
+- Step 0.5 reads the `runtime-report.txt` in the main one.
 
-1. `scripts/build-deck.sh` — produces `build/deck/skrepka-linux-x86_64.tar.gz`
-   and `build/deck/runtime-report.txt`. See the report before copying;
-   `runtime-report.txt` is the only source of truth for which glibc floor the
-   tarball assumes.
-2. `scp build/deck/skrepka-linux-x86_64.tar.gz deck@<deck-ip>:~/`.
-3. On the Deck:
-   `tar xzf skrepka-linux-x86_64.tar.gz && cd skrepka-linux-x86_64 && ./scripts/install.sh --from-build ./bin`.
-   - **Pass:** it exits without an `error:` line and ends by listing
-     `skrepka --help` and the two `systemctl` / `journalctl` commands. A yellow
-     `⚠ … is not on your $PATH` is expected on a fresh Deck; follow what it
-     prints. It also installs `skrepka-settings` with a private copy of
-     `libgtk4-layer-shell` in `~/.local/lib/skrepka` and a "Skrepka Settings"
-     launcher entry, which section 5 uses. A yellow `⚠ … cannot find:` line
-     means a shared library the Settings window needs is missing; record it.
-4. `systemctl --user status skrepkad` shows `active (running)`.
+Both unpack into `skrepka-linux-x86_64/`, so every `./bin/…` below runs from
+that one directory.
+
+1. Download both tarballs and their checksums, and check them:
+
+   ```
+   base=https://github.com/psoldunov/skrepka/releases/latest/download
+   for f in skrepka-linux-x86_64.tar.gz skrepka-linux-x86_64-tools.tar.gz; do
+     curl -fLO "$base/$f" && curl -fLO "$base/$f.sha256"
+   done
+   sha256sum -c skrepka-linux-x86_64.tar.gz.sha256 skrepka-linux-x86_64-tools.tar.gz.sha256
+   ```
+
+   - **Pass:** both lines end in `OK`.
+2. `tar xzf skrepka-linux-x86_64.tar.gz && tar xzf skrepka-linux-x86_64-tools.tar.gz && cd skrepka-linux-x86_64 && ./install.sh`.
+   Run from inside the untarred directory, `install.sh` installs that build and
+   downloads nothing.
+   - **Pass:** it prints the daemon's version and exits without an `error:`
+     line. It ends by listing `skrepka --help` and the two `systemctl` /
+     `journalctl` commands.
+   - A yellow `⚠ … is not on your $PATH` is expected on a fresh Deck; follow
+     what it prints.
+   - It also installs `skrepka-settings` with a private copy of
+     `libgtk4-layer-shell` in `~/.local/lib/skrepka`, and a "Skrepka Settings"
+     launcher entry. Section 5 uses both.
+   - A yellow `⚠ … cannot find:` line means a shared library the Settings
+     window needs is missing; record it.
+   - **Fail:** `skrepkad from this build cannot run on this machine` means the
+     glibc floor in "Read this first" is not met. Record the loader's message
+     it prints.
+3. `systemctl --user status skrepkad` shows `active (running)`.
    - **Pass:** the status is `active`; the journal has no repeated
      `on-failure` restarts.
+
+**When master is ahead of the latest release,** build on the Mac with
+`scripts/build-deck.sh` and carry both tarballs in `build/deck/` over any way
+you like: a USB stick, a file share, or `scp` if you enabled ssh in
+0.3. Then continue from step 2. `./install.sh --tarball FILE` also installs a
+tarball without untarring it first, checking `FILE.sha256` when it sits beside
+it.
 
 ## 2. Clipboard probe on Plasma 6.4 — 15 minutes
 
@@ -104,9 +134,10 @@ so both binaries do not fight over the clipboard.
 
 ## 3. Daemon and pairing with the Mac — 30 minutes
 
-The Mac side runs Skrepka.app from `scripts/run.sh`. Do this section over ssh
-from the Mac so both terminals are visible — all but step 5, which cuts the
-network and the ssh session with it.
+The Mac side runs Skrepka.app from `scripts/run.sh`. If you enabled ssh in
+step 0.3, driving the Deck from the Mac keeps both terminals visible — all but
+step 5, which cuts the network and the ssh session with it. Konsole on the Deck
+works just as well.
 
 1. On the Mac: `scripts/run.sh`. Confirm the menu-bar icon is present.
 2. On the Deck: `skrepka doctor`, then `skrepka peers`.

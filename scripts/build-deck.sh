@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 #
-# Builds an x86_64 release tarball for the Steam Deck — Skrepka's Linux
-# executables, their systemd user unit and the installer that lands them under
-# $HOME. Runs inside the amd64 variant of the build image because Swift on
-# Linux is not a cross compiler and the Deck's Zen 2 is not aarch64.
+# Builds the x86_64 Linux release assets a GitHub release carries:
 #
-#   scripts/build-deck.sh                       full build + tarball
+#   build/deck/skrepka-linux-x86_64.tar.gz        what install.sh installs:
+#                                                 skrepkad, skrepka,
+#                                                 skrepka-settings, the unit,
+#                                                 the launcher entry, install.sh
+#   build/deck/skrepka-linux-x86_64-tools.tar.gz  the probes and the palette
+#                                                 demo, for hardware bring-up
+#   a .sha256 beside each                         what install.sh checks
+#
+# The Steam Deck is the machine they are built for. Runs in the amd64 variant of
+# the build image because Swift on Linux is not a cross compiler and the Deck's
+# Zen 2 is not aarch64.
+#
+#   scripts/build-deck.sh                       full build + tarballs + checksums
 #
 # Every command that runs in the image goes through scripts/linux.sh with
 # SKREPKA_LINUX_ARCH=amd64, so the image tag, the --platform, the bind mount,
@@ -32,6 +41,12 @@ STAGE_ROOT="build/deck"
 STAGE_NAME="skrepka-linux-x86_64"
 STAGE="${STAGE_ROOT}/${STAGE_NAME}"
 TARBALL="${STAGE_ROOT}/${STAGE_NAME}.tar.gz"
+# The tools tarball unpacks into a directory of the same name, so untarring it
+# beside the release adds the probes to the same bin/ the session doc runs
+# them from.
+TOOLS_ROOT="${STAGE_ROOT}/tools"
+TOOLS_STAGE="${TOOLS_ROOT}/${STAGE_NAME}"
+TOOLS_TARBALL="${STAGE_ROOT}/${STAGE_NAME}-tools.tar.gz"
 
 # The Deck is x86_64, so both scripts this one calls are told amd64. An
 # SKREPKA_LINUX_IMAGE exported for scripts/linux.sh names the host's own image
@@ -93,17 +108,25 @@ fi
 # Each product on its own line, on purpose. `swift build --product A --product
 # B` accepts the repeated flag, builds only the LAST one and exits 0 — the
 # same trap docs/linux-sync/open-questions.md records under OQ-13 and the
-# reason scripts/install.sh calls swift build once per product. --static-swift-stdlib
+# reason scripts/setup-linux.sh calls swift build once per product. --static-swift-stdlib
 # links the Swift standard library into each binary so the Deck needs no Swift
 # runtime installed; libc, gtk-4 and the rest still come from the target box.
-PRODUCTS=(
+#
+# Split in two because every binary carries its own static copy of the Swift
+# runtime, Foundation and ICU data — about 100 MB each before compression. The
+# release tarball holds only what install.sh installs; the bring-up tools ride
+# in a second one that only a hardware session downloads.
+INSTALLED_PRODUCTS=(
 	skrepkad
 	skrepka
+	skrepka-settings
+)
+TOOL_PRODUCTS=(
 	skrepka-clip-probe
 	skrepka-sync-probe
 	skrepka-palette-demo
-	skrepka-settings
 )
+PRODUCTS=("${INSTALLED_PRODUCTS[@]}" "${TOOL_PRODUCTS[@]}")
 
 for product in "${PRODUCTS[@]}"; do
 	bold "Building ${product} (release, static Swift stdlib, amd64)"
@@ -135,7 +158,8 @@ done
 
 REPORT="${STAGE_ROOT}/runtime-report.txt"
 rm -rf "${STAGE_ROOT}"
-mkdir -p "${STAGE}/bin" "${STAGE}/scripts" "${STAGE}/packaging/systemd" "${STAGE}/packaging/desktop" "${STAGE}/lib"
+mkdir -p "${STAGE}/bin" "${STAGE}/packaging/systemd" "${STAGE}/packaging/desktop" "${STAGE}/lib" \
+	"${TOOLS_STAGE}/bin"
 
 # `readelf -h` names the ELF class and machine — under emulation this is the
 # check that catches a silently-broken toolchain that produced arm64 slices
@@ -143,7 +167,7 @@ mkdir -p "${STAGE}/bin" "${STAGE}/scripts" "${STAGE}/packaging/systemd" "${STAGE
 # binutils but not the `file` package, and adding one apt line for a header
 # read is not worth the layer. `ldd` names every .so the loader will hunt for
 # on the Deck, and `objdump -T` filtered for GLIBC_ symbols names the *floor*
-# glibc version the binary requires — GLIBC_2.38 for the first five on 2026-09-18.
+# glibc version the binary requires — GLIBC_2.38 for all six on 2026-09-18.
 # Whether the Deck's glibc meets it is not something this script can know;
 # step 0.5 of docs/linux-sync/steam-deck-session.md checks it on the Deck.
 # All three run inside the container so no amd64 tool is expected on the host.
@@ -184,8 +208,8 @@ bold "Runtime probe written to ${REPORT}"
 # the binaries with rpath $ORIGIN/../lib is the smallest thing that works
 # without asking the user to unlock the read-only root. skrepka-settings also
 # carries a second rpath, $ORIGIN/../lib/skrepka, for the installed copy:
-# scripts/install.sh finds the bundled library at ../lib next to the bin
-# directory it is given and copies it there.
+# install.sh finds the bundled library in lib/ beside bin/ and copies it
+# there.
 #
 # GTK itself is not bundled: gtk-4 is a plain KDE dependency on SteamOS
 # through Plasma's GTK integration and any KDE spin has it, so the loader
@@ -205,56 +229,81 @@ scripts/linux.sh cp -P \
 	"${REPO}/${STAGE}/lib/"
 
 # --------------------------------------------------------------------------
-# Stage: binaries, install.sh, unit, marker Package.swift
+# Stage: binaries, install.sh, unit, launcher entry, report
 # --------------------------------------------------------------------------
 
-for product in "${PRODUCTS[@]}"; do
+for product in "${INSTALLED_PRODUCTS[@]}"; do
 	cp "${BIN_PATH}/${product}" "${STAGE}/bin/${product}"
 	chmod 0755 "${STAGE}/bin/${product}"
 done
+for product in "${TOOL_PRODUCTS[@]}"; do
+	cp "${BIN_PATH}/${product}" "${TOOLS_STAGE}/bin/${product}"
+	chmod 0755 "${TOOLS_STAGE}/bin/${product}"
+done
+# The palette demo finds gtk4-layer-shell through $ORIGIN/../lib as well, and
+# the tools tarball has to work unpacked on its own.
+cp -RP "${STAGE}/lib" "${TOOLS_STAGE}/lib"
 
-# install.sh looks for ${dirname($script)}/../Package.swift and
-# ${dirname($script)}/../packaging/systemd/skrepkad.service to recognise a
-# checkout; shipping the two makes the tarball self-contained without asking
-# the script to grow another mode. It reads the Settings launcher entry from
-# ${REPOSITORY}/packaging/desktop/, so that ships at the same relative path.
-cp "${REPO}/scripts/install.sh" "${STAGE}/scripts/install.sh"
-chmod 0755 "${STAGE}/scripts/install.sh"
+# Debug info off, symbols kept. A release build on Linux carries full DWARF,
+# which is about a third of each binary; --strip-debug drops that and leaves the
+# symbol table, so a crash backtrace still names its functions. Stripped in the
+# amd64 container, whose binutils understand the x86_64 ELF on any host.
+bold "Stripping debug info"
+scripts/linux.sh strip --strip-debug "${STAGE}/bin/"* "${TOOLS_STAGE}/bin/"*
+
+# The stage is the payload layout install.sh documents: bin/, lib/ and
+# packaging/ side by side. install.sh ships at its top, where it recognises the
+# directory it sits in as a payload, so an untarred release installs with
+# ./install.sh and no download — and piped from curl, the same script downloads
+# this tarball and installs from it the same way.
+cp "${REPO}/install.sh" "${STAGE}/install.sh"
+chmod 0755 "${STAGE}/install.sh"
 cp "${REPO}/packaging/systemd/skrepkad.service" "${STAGE}/packaging/systemd/skrepkad.service"
 cp "${REPO}/packaging/desktop/dev.soldunov.Skrepka.Settings.desktop" \
 	"${STAGE}/packaging/desktop/dev.soldunov.Skrepka.Settings.desktop"
-cp "${REPO}/Package.swift" "${STAGE}/Package.swift"
+# In the tarball as well as beside it: the Deck session reads it on the Deck.
+cp "${REPORT}" "${STAGE}/runtime-report.txt"
 
 cat > "${STAGE}/README.txt" << 'DOCS'
 Skrepka — Linux x86_64 release
 ==============================
+
+The quickest install needs none of this: in a terminal on the machine itself
+(Konsole, in the Deck's Desktop Mode), run
+
+    curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
+
+which downloads this same tarball from the latest release, checks it and
+installs it. What follows is for installing from the tarball by hand.
 
 What is in this tarball
 -----------------------
 
   bin/skrepkad                the clipboard-history daemon
   bin/skrepka                 the CLI
-  bin/skrepka-clip-probe      a headless clipboard probe (Phase 5 bring-up)
-  bin/skrepka-sync-probe      a headless sync peer (Phase 6 smoke test)
-  bin/skrepka-palette-demo    a hand-driven picker smoke test
-                              (Phase 7 step 1 validation)
   bin/skrepka-settings        the Settings window: pair, unpair and manage the
                               devices Skrepka shares clipboard history with
-  lib/libgtk4-layer-shell.so* the layer-shell library the palette demo and the
-                              Settings window need at runtime, in case the
-                              host does not have one
-  scripts/install.sh          the installer
+  lib/libgtk4-layer-shell.so* the layer-shell library the Settings window needs
+                              at runtime, in case the host does not have one
+  install.sh                  the installer
   packaging/systemd/skrepkad.service   the systemd USER unit install.sh writes
   packaging/desktop/dev.soldunov.Skrepka.Settings.desktop
                               the launcher entry install.sh writes
-  Package.swift               a marker install.sh looks for; not built
+  runtime-report.txt          the shared libraries and glibc version each binary
+                              needs, recorded when it was built
 
-Installing on the Steam Deck
-----------------------------
+The probes and the palette demo are a separate asset,
+skrepka-linux-x86_64-tools.tar.gz. Untar it in the same place as this one and
+they land in this bin/.
+
+Installing from the tarball
+---------------------------
 
     tar xzf skrepka-linux-x86_64.tar.gz
     cd skrepka-linux-x86_64
-    ./scripts/install.sh --from-build ./bin
+    ./install.sh
+
+./install.sh --uninstall reverses it.
 
 The installer places skrepkad, skrepka and skrepka-settings into ~/.local/bin,
 the systemd user unit into ~/.config/systemd/user, a private copy of
@@ -268,10 +317,27 @@ Running the Settings window
 
     ./bin/skrepka-settings
 
-Runs in place from the untarred tarball, the same way the palette demo does. Once
-installed, open "Skrepka Settings" from the application launcher instead. It
-talks to the running skrepkad, so the daemon has to be up, and it needs the
-host's GTK to be 4.12 or newer.
+Runs in place from the untarred tarball. Once installed, open "Skrepka
+Settings" from the application launcher instead. It talks to the running
+skrepkad, so the daemon has to be up, and it needs the host's GTK to be 4.12 or
+newer.
+DOCS
+
+cat > "${TOOLS_STAGE}/TOOLS.txt" << 'DOCS'
+Skrepka — Linux x86_64 bring-up tools
+=====================================
+
+Not needed to use Skrepka. These are for testing it on new hardware, as
+docs/linux-sync/steam-deck-session.md does.
+
+  bin/skrepka-clip-probe      a headless clipboard probe (Phase 5 bring-up)
+  bin/skrepka-sync-probe      a headless sync peer (Phase 6 smoke test)
+  bin/skrepka-palette-demo    a hand-driven picker smoke test
+                              (Phase 7 step 1 validation)
+  lib/libgtk4-layer-shell.so* what the palette demo needs, if the host lacks it
+
+Untar it next to skrepka-linux-x86_64.tar.gz: both unpack into
+skrepka-linux-x86_64/, so the tools land beside the release's own binaries.
 
 Running the palette demo
 ------------------------
@@ -291,15 +357,36 @@ DOCS
 
 # `--sort=name` and a deterministic `--mtime` would be nice for reproducible
 # tarballs; GNU tar has --sort but BSD tar (macOS) does not, and this script
-# runs on both. A plain tar is enough for a hand-carried release.
-tar czf "${TARBALL}" -C "${STAGE_ROOT}" "${STAGE_NAME}"
+# runs on both. COPYFILE_DISABLE and --no-xattrs keep macOS's AppleDouble
+# `._` files and extended attributes out of it: GNU tar on the Deck would
+# otherwise unpack the first as junk files and warn about the second.
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "${TARBALL}" -C "${STAGE_ROOT}" "${STAGE_NAME}"
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "${TOOLS_TARBALL}" -C "${TOOLS_ROOT}" "${STAGE_NAME}"
 
-SIZE=$(du -h "${TARBALL}" | awk '{print $1}')
-green "✓ ${TARBALL} (${SIZE})"
+# The checksum install.sh downloads beside the tarball, in `sha256sum` format
+# with the bare asset name, so it can also be checked by hand with
+# `sha256sum -c` from the directory both were downloaded into.
+write_checksum() {
+	local name
+	name="$(basename "$1")"
+	if command -v sha256sum > /dev/null 2>&1; then
+		(cd "${STAGE_ROOT}" && sha256sum "${name}") > "$1.sha256"
+	else
+		(cd "${STAGE_ROOT}" && shasum -a 256 "${name}") > "$1.sha256"
+	fi
+}
+write_checksum "${TARBALL}"
+write_checksum "${TOOLS_TARBALL}"
+
+green "✓ ${TARBALL} ($(du -h "${TARBALL}" | awk '{print $1}'))"
+green "✓ ${TOOLS_TARBALL} ($(du -h "${TOOLS_TARBALL}" | awk '{print $1}'))"
+green "✓ a .sha256 beside each"
 echo
 echo "Runtime report:  ${REPORT}"
 echo "Stage:           ${STAGE}"
 echo
-echo "Copy to the Deck and untar:"
-echo "  scp ${TARBALL} deck@<deck-address>:~/"
-echo "  ssh deck@<deck-address> 'tar xzf ${STAGE_NAME}.tar.gz && cd ${STAGE_NAME} && ./scripts/install.sh --from-build ./bin'"
+echo "Attach all four files to the GitHub release. Then, on the Deck, in Konsole:"
+echo "  curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash"
+echo
+echo "Before the release is published, copy the tarball over any way you like and"
+echo "run ./install.sh from inside it once untarred."
