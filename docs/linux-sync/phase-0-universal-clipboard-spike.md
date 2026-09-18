@@ -25,6 +25,14 @@ nothing. A `strings` pass over the on-disk AppKit binary also found nothing, but
 that is inconclusive — the dyld shared cache means the on-disk binary is a stub.
 So the header search is exhausted and only a running machine can answer it.
 
+**Update 2026-09-18:** there is now a candidate, `com.apple.is-remote-clipboard`.
+It is in the dyld shared cache, on nspasteboard.org and in Maccy. A first probe
+run saw no copies arrive at all, so the candidate is still unobserved and OQ-1
+is still open. See [OQ-1](open-questions.md#oq-1) for the evidence and the run.
+OQ-2 is untouched. The loops in design §3.4 were closed the same day without
+the marker, so the marker's remaining job is narrower: telling a relayed copy
+apart from a local one.
+
 **[OQ-2](open-questions.md#oq-2) — bytes or a promise?** If the receiving
 pasteboard is populated lazily, then `PasteboardReader.read` calling
 `item.data(forType:)` on every `changeCount` bump forces a Continuity fetch over

@@ -180,9 +180,8 @@ extension Daemon {
     /// stores before it calls the sink — so everything here is about the
     /// clipboard and nothing here can cost the row.
     ///
-    /// The hash is remembered **before** the write, not after: the write is
-    /// what the watcher might see, so a set updated afterwards would be updated
-    /// after the race it exists to lose.
+    /// The gate hears about the push **before** the write — see
+    /// ``SkrepkaSync/LivePushGate/noteReceived(_:at:)``.
     ///
     /// **A push whose bytes did not come inline writes nothing**, which is the
     /// same limitation the macOS side has: `LivePushPayload.inline` sends
@@ -192,25 +191,30 @@ extension Daemon {
     /// the user loses is the handoff, not the clipping.
     func receiveLivePush(_ meta: SyncClipMeta, inline: [RepresentationKey: Data]) async {
         guard !isStopping, !meta.isConcealed, !inline.isEmpty else { return }
-        recentlyReceived.remember(meta.contentHash, at: Date())
+        livePushGate.noteReceived(meta.contentHash, at: Date())
         notifyHistoryChanged()
         await writeToClipboard(inline)
     }
 
-    /// Writes wire-keyed bytes to the session's clipboard.
+    /// Writes wire-keyed bytes to the session's clipboard, as a handoff.
     ///
-    /// The watcher is paused around the write, which is the primary echo
-    /// suppression; `recentlyReceived` is the backstop for the window between
-    /// the two. Both, because either alone has a gap: a pause that is missed
-    /// because the backend delivered the change first would recapture, and a
-    /// hash set alone would not stop the capture, only the push.
+    /// **No pause around the write, because a pause cannot cover it.**
+    /// `setSelection` only queues a command for the session's loop; the
+    /// compositor or the X server echoes the write back some time later, and a
+    /// watcher paused and resumed around the queueing was running again by
+    /// then — so every push this machine received used to be captured as a
+    /// local copy. For a link, a multi-file copy or RTFD-only rich text the
+    /// round trip also changes the checksum, so the hash backstop missed it
+    /// too, and the item went back to every peer as a new row.
+    ///
+    /// ``SkrepkaLinuxPlatform/SelectionWrite/handoff`` is what stops it now:
+    /// the session remembers why it owns the selection and publishes nothing
+    /// for its own echo, so the watcher never sees a change to capture.
     func writeToClipboard(_ payloads: [RepresentationKey: Data]) async {
         guard let clipboard else { return }
         let targets = LinuxClipboardWriter.targets(for: payloads)
         guard !targets.isEmpty else { return }
-        await watcher?.pause()
-        await clipboard.setSelection(targets)
-        await watcher?.resume()
+        await clipboard.setSelection(targets, as: .handoff)
     }
 }
 

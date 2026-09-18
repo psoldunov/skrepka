@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-18T13:07:40.043Z",
+	"generatedAt": "2026-09-18T15:16:35.761Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -294,7 +294,7 @@
 						"path": "Sources/Skrepka/Sync/SyncCoordinator+LivePush.swift"
 					}
 				],
-				"sublabel": "pause → write → resume, plus a bounded recently-received set",
+				"sublabel": "current-host-only write inside pause → resume; the live-push gate refuses the echo",
 				"type": "backend"
 			},
 			{
@@ -445,7 +445,7 @@
 						"path": "Sources/SkrepkaSync/Model"
 					}
 				],
-				"sublabel": "device id, LWW register, clip meta, limits, live-push policy",
+				"sublabel": "device id, LWW register, clip meta, limits, live-push policy and echo gate",
 				"type": "backend"
 			},
 			{

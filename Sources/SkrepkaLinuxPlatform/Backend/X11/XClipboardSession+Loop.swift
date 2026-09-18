@@ -241,22 +241,12 @@ extension XClipboardSession {
         guard let atoms, notification.selection == atoms.clipboard else { return }
         note(time: notification.timestamp)
 
-        // Skrepka's own writes come back as these too, and recording them would
-        // put every paste-back into history as a fresh copy. The freedesktop
-        // clipboard-manager convention makes this unavoidable rather than
-        // incidental: an owner is asked to reacquire the selection whenever its
-        // content changes, precisely so XFIXES watchers notice — and Skrepka is
-        // both the owner doing that and a watcher noticing.
+        // Skrepka's own writes come back as these too. Reading them back
+        // through a conversion would be a round trip for bytes already here,
+        // and what the echo means depends on why Skrepka wrote — both are
+        // ``publishOwnSelection()``'s.
         guard notification.owner != window else {
-            publish(
-                .contents(
-                    LinuxSnapshotBuilder.snapshot(
-                        offeredTargets: Array(ownedPayload.keys),
-                        payloads: ownedPayload,
-                        concealedHintSecret: false
-                    )
-                )
-            )
+            publishOwnSelection()
             return
         }
 
@@ -272,7 +262,7 @@ extension XClipboardSession {
         for command in commands {
             switch command {
             case .stop: shouldStop = true
-            case .setSelection(let payload): takeSelection(payload)
+            case .setSelection(let payload, let write): takeSelection(payload, as: write)
             }
         }
     }

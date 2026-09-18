@@ -1,5 +1,6 @@
 import CX11
 import Foundation
+import SkrepkaCore
 
 extension XClipboardSession {
     /// Takes ownership of `CLIPBOARD`, or gives it up.
@@ -8,18 +9,22 @@ extension XClipboardSession {
     /// merely appear to succeed". A `SetSelectionOwner` against a timestamp the
     /// server considers stale is ignored silently, and an owner that did not
     /// check would serve a clipboard nobody was asking it about.
-    func takeSelection(_ payload: [String: Data]?) {
+    ///
+    /// `write` is queued in ``pendingEchoes``, because the server reports this
+    /// ownership change through XFIXES on a later pass of the loop — possibly
+    /// after another write — and ``publishOwnSelection()`` judges that report
+    /// by the write it answers.
+    func takeSelection(_ payload: [String: Data]?, as write: SelectionWrite) {
         guard let display, let atoms else { return }
 
         guard let payload, !payload.isEmpty else {
             XSetSelectionOwner(display, atoms.clipboard, X11.none, lastServerTime)
-            ownedPayload = [:]
-            ownedByAtom = [:]
-            ownedSince = 0
+            forgetOwnership()
             return
         }
 
         ownedPayload = payload
+        pendingEchoes.took(write, offering: payload.keys)
         ownedByAtom = [:]
         for (name, bytes) in payload {
             ownedByAtom[XInternAtom(display, name, 0)] = bytes
@@ -28,9 +33,7 @@ extension XClipboardSession {
         let time = lastServerTime
         XSetSelectionOwner(display, atoms.clipboard, window, time)
         guard XGetSelectionOwner(display, atoms.clipboard) == window else {
-            ownedPayload = [:]
-            ownedByAtom = [:]
-            ownedSince = 0
+            forgetOwnership()
             return
         }
         ownedSince = time
@@ -43,7 +46,40 @@ extension XClipboardSession {
     /// continue to service the ongoing transfer until it is complete." Dropping
     /// them would leave the other application with a truncated paste.
     func handleSelectionClear() {
+        forgetOwnership()
+    }
+
+    /// Skrepka's own ownership, reported back through XFIXES.
+    ///
+    /// The freedesktop clipboard-manager convention makes the report
+    /// unavoidable rather than incidental: an owner is asked to reacquire the
+    /// selection whenever its content changes, precisely so XFIXES watchers
+    /// notice — and Skrepka is both the owner doing that and a watcher
+    /// noticing. The bytes are already here, so a copy is published from them
+    /// rather than read back through a conversion.
+    ///
+    /// Whether to publish is the reported write's to decide, not the current
+    /// one's — see ``PendingEchoes``. A handoff publishes nothing: a peer's
+    /// push is already in history, and a change here is what the watcher would
+    /// capture and push back. Nor does a copy a later write overtook.
+    func publishOwnSelection() {
+        guard pendingEchoes.takeReport() else { return }
+        publish(
+            .contents(
+                LinuxSnapshotBuilder.snapshot(
+                    offeredTargets: Array(ownedPayload.keys),
+                    payloads: ownedPayload,
+                    concealedHintSecret: false
+                )
+            )
+        )
+    }
+
+    /// Everything that describes a selection Skrepka no longer owns, and every
+    /// report still due for it: none of them is for what the clipboard holds.
+    private func forgetOwnership() {
         ownedPayload = [:]
+        pendingEchoes.removeAll()
         ownedByAtom = [:]
         ownedSince = 0
     }

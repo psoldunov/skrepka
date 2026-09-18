@@ -18,55 +18,6 @@ import Testing
 /// explicit display name instead of setting `DISPLAY` in this process.
 @Suite("X11 XFIXES", .serialized, .enabled(if: HeadlessSession.isAvailable(.xvfb)))
 struct X11BackendTests {
-    /// Gives a backend an X server, and takes both away afterwards — reader
-    /// first, and *awaited*, before the server goes.
-    ///
-    /// Not `defer`, on either half. `defer` cannot `await`, so the only shape
-    /// it allows is `defer { Task { await reader.stop() } }`, which merely
-    /// spawns the teardown and returns: Xvfb is then killed while the reader
-    /// still has a live connection to it. ``XFixesReader/stop()`` waits rather
-    /// than signals for exactly that reason.
-    private func withSession<T>(
-        _ label: String,
-        _ body: (HeadlessSession, XFixesReader) async throws -> T
-    ) async throws -> T {
-        let session = try HeadlessSession(.xvfb, label: label)
-        try session.start()
-
-        let reader = XFixesReader(displayName: session.x11Display)
-        do {
-            try await reader.start()
-        } catch {
-            session.stop()
-            throw error
-        }
-
-        do {
-            let value = try await body(session, reader)
-            await reader.stop()
-            session.stop()
-            return value
-        } catch {
-            await reader.stop()
-            session.stop()
-            throw error
-        }
-    }
-
-    private func waitForChange(
-        past previous: Int,
-        on reader: XFixesReader,
-        timeout: Duration = .seconds(5)
-    ) async -> Int? {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while ContinuousClock.now < deadline {
-            let current = await reader.changeCount()
-            if current > previous { return current }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        return nil
-    }
-
     @Test("the probe picks XFIXES when there is no Wayland session")
     func probePicksX11() async throws {
         let session = try HeadlessSession(.xvfb, label: "probe")
@@ -85,10 +36,10 @@ struct X11BackendTests {
     /// ``LinuxRepresentationMap``.
     @Test("a copy under the X11 text atom is captured as text")
     func capturesUTF8String() async throws {
-        try await withSession("text") { session, reader in
+        try await BackendHarness.withX11("text") { session, reader in
             let before = await reader.changeCount()
             #expect(session.copy("hello from xclip"))
-            #expect(await waitForChange(past: before, on: reader) != nil)
+            #expect(await BackendHarness.waitForChange(past: before, on: reader) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -117,10 +68,10 @@ struct X11BackendTests {
     /// that the backend delivered the bytes.
     @Test("a MIME-named target reaches the snapshot, even where the rules drop it")
     func capturesMIMETarget() async throws {
-        try await withSession("html") { session, reader in
+        try await BackendHarness.withX11("html") { session, reader in
             let before = await reader.changeCount()
             #expect(session.copy("<i>x</i>", mimeType: "text/html"))
-            #expect(await waitForChange(past: before, on: reader) != nil)
+            #expect(await BackendHarness.waitForChange(past: before, on: reader) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -137,14 +88,15 @@ struct X11BackendTests {
     /// than reading one property.
     @Test("a payload too large for one property arrives whole")
     func capturesIncrementally() async throws {
-        try await withSession("incr") { session, reader in
+        try await BackendHarness.withX11("incr") { session, reader in
             // Past the 256 KiB chunk both ends cap at, so the transfer is
             // several chunks however the other end sizes them.
             let text = String(repeating: "0123456789abcdef", count: 64 * 1024)
             let before = await reader.changeCount()
             let copied = session.copy(text)
             #expect(copied)
-            #expect(await waitForChange(past: before, on: reader, timeout: .seconds(20)) != nil)
+            #expect(
+                await BackendHarness.waitForChange(past: before, on: reader, timeout: .seconds(20)) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -158,8 +110,8 @@ struct X11BackendTests {
     /// mandatory of every selection owner; `xclip -o -t TARGETS` is what asks.
     @Test("a selection Skrepka owns advertises the required targets")
     func advertisesRequiredTargets() async throws {
-        try await withSession("targets") { session, reader in
-            await reader.setSelection(["UTF8_STRING": Data("owned".utf8)])
+        try await BackendHarness.withX11("targets") { session, reader in
+            await reader.setSelection(["UTF8_STRING": Data("owned".utf8)], as: .copy)
 
             var targets: String?
             let deadline = ContinuousClock.now.advanced(by: .seconds(5))
@@ -179,8 +131,8 @@ struct X11BackendTests {
 
     @Test("a selection Skrepka owns can be pasted by another application")
     func servesSelection() async throws {
-        try await withSession("write") { session, reader in
-            await reader.setSelection(["UTF8_STRING": Data("served by skrepka".utf8)])
+        try await BackendHarness.withX11("write") { session, reader in
+            await reader.setSelection(["UTF8_STRING": Data("served by skrepka".utf8)], as: .copy)
 
             var pasted: String?
             let deadline = ContinuousClock.now.advanced(by: .seconds(5))
@@ -197,9 +149,9 @@ struct X11BackendTests {
     /// between chunks.
     @Test("a large owned selection is served incrementally")
     func servesIncrementally() async throws {
-        try await withSession("send-incr") { session, reader in
+        try await BackendHarness.withX11("send-incr") { session, reader in
             let text = String(repeating: "abcdefgh", count: 128 * 1024)
-            await reader.setSelection(["UTF8_STRING": Data(text.utf8)])
+            await reader.setSelection(["UTF8_STRING": Data(text.utf8)], as: .copy)
 
             var pasted: String?
             let deadline = ContinuousClock.now.advanced(by: .seconds(20))
@@ -219,10 +171,10 @@ struct X11BackendTests {
     /// back through a conversion, or report them as somebody else's copy.
     @Test("Skrepka's own selection comes back as its own bytes")
     func ownSelectionShortCircuits() async throws {
-        try await withSession("self") { _, reader in
+        try await BackendHarness.withX11("self") { _, reader in
             let before = await reader.changeCount()
-            await reader.setSelection(["UTF8_STRING": Data("mine".utf8)])
-            #expect(await waitForChange(past: before, on: reader) != nil)
+            await reader.setSelection(["UTF8_STRING": Data("mine".utf8)], as: .copy)
+            #expect(await BackendHarness.waitForChange(past: before, on: reader) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -234,7 +186,7 @@ struct X11BackendTests {
 
     @Test("changes arrive as notifications, so nothing has to poll")
     func notifies() async throws {
-        try await withSession("notify") { session, reader in
+        try await BackendHarness.withX11("notify") { session, reader in
             guard let stream = await reader.changeNotifications() else {
                 Issue.record("XFIXES delivers real events, so this must not be nil")
                 return

@@ -154,7 +154,7 @@ enum ClipProbe {
                 }
                 payload[target] = bytes
             }
-            await running.setSelection(payload)
+            await running.setSelection(payload, as: .copy)
             print("serving \(payload.count) targets — ^C to release the selection")
             // Both platforms' clipboards are ownership rather than storage: the
             // bytes live in this process and are served on request, so exiting

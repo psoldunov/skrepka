@@ -23,61 +23,6 @@ import Testing
 /// process.
 @Suite("Wayland data control", .serialized, .enabled(if: HeadlessSession.isAvailable(.sway)))
 struct WaylandBackendTests {
-    /// Gives a backend a compositor, and takes both away afterwards — reader
-    /// first, and *awaited*, before the compositor goes.
-    ///
-    /// Not `defer`, on either half. `defer` cannot `await`, so the only shape
-    /// it allows is `defer { Task { await reader.stop() } }`, which merely
-    /// spawns the teardown and returns: the compositor is then killed while the
-    /// reader is still unbinding from its seat. ``DataControlReader/stop()``
-    /// waits rather than signals precisely so that cannot happen, and these
-    /// suites are `.serialized` on the same assumption.
-    private func withSession<T>(
-        _ label: String,
-        _ body: (HeadlessSession, DataControlReader) async throws -> T
-    ) async throws -> T {
-        let session = try HeadlessSession(.sway, label: label)
-        try session.start()
-
-        let reader = DataControlReader(.wlrDataControl, displayName: session.waylandSocketPath)
-        do {
-            try await reader.start()
-        } catch {
-            session.stop()
-            throw error
-        }
-
-        do {
-            let value = try await body(session, reader)
-            await reader.stop()
-            session.stop()
-            return value
-        } catch {
-            await reader.stop()
-            session.stop()
-            throw error
-        }
-    }
-
-    /// Waits for the reader's change counter to move past a known value.
-    ///
-    /// The counter rather than the notification stream, because the stream is
-    /// what `ClipboardWatcher` consumes and a test that drained it would be
-    /// competing with the thing it is meant to be proving.
-    private func waitForChange(
-        past previous: Int,
-        on reader: DataControlReader,
-        timeout: Duration = .seconds(5)
-    ) async -> Int? {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while ContinuousClock.now < deadline {
-            let current = await reader.changeCount()
-            if current > previous { return current }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        return nil
-    }
-
     @Test("the probe finds wlr-data-control on a headless Sway")
     func probeFindsWlr() async throws {
         let session = try HeadlessSession(.sway, label: "probe")
@@ -95,10 +40,10 @@ struct WaylandBackendTests {
 
     @Test("a copy from another application is captured as text")
     func capturesText() async throws {
-        try await withSession("text") { session, reader in
+        try await BackendHarness.withWayland("text") { session, reader in
             let before = await reader.changeCount()
             #expect(session.copy("hello from wl-copy"))
-            let after = await waitForChange(past: before, on: reader)
+            let after = await BackendHarness.waitForChange(past: before, on: reader)
             #expect(after != nil)
 
             let read = await reader.read(sourceBundleID: nil)
@@ -116,10 +61,10 @@ struct WaylandBackendTests {
 
     @Test("a copy of HTML is captured as rich text")
     func capturesHTML() async throws {
-        try await withSession("html") { session, reader in
+        try await BackendHarness.withWayland("html") { session, reader in
             let before = await reader.changeCount()
             #expect(session.copy("<b>bold</b>", mimeType: "text/html"))
-            #expect(await waitForChange(past: before, on: reader) != nil)
+            #expect(await BackendHarness.waitForChange(past: before, on: reader) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -145,10 +90,10 @@ struct WaylandBackendTests {
     /// target per invocation, so no version of it could set up that clipboard.
     @Test("the KDE hint is honoured by value, over a real pipe")
     func honoursPasswordHint() async throws {
-        try await withSession("secret") { session, reader in
+        try await BackendHarness.withWayland("secret") { session, reader in
             let before = await reader.changeCount()
             #expect(session.copy("secret", mimeType: PrivacyMarkers.kdePasswordManagerHint))
-            #expect(await waitForChange(past: before, on: reader) != nil)
+            #expect(await BackendHarness.waitForChange(past: before, on: reader) != nil)
 
             guard case .contents(let rejected) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -164,7 +109,7 @@ struct WaylandBackendTests {
             // application labelled.
             let marked = await reader.changeCount()
             #expect(session.copy("public", mimeType: PrivacyMarkers.kdePasswordManagerHint))
-            #expect(await waitForChange(past: marked, on: reader) != nil)
+            #expect(await BackendHarness.waitForChange(past: marked, on: reader) != nil)
 
             guard case .contents(let stored) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -176,7 +121,7 @@ struct WaylandBackendTests {
 
     @Test("a large payload survives the pipe intact")
     func capturesLargePayload() async throws {
-        try await withSession("large") { session, reader in
+        try await BackendHarness.withWayland("large") { session, reader in
             // Comfortably past a pipe's 64 KiB buffer, so the transfer takes
             // several passes of the poll loop and a deadlock would show.
             let text = String(repeating: "0123456789abcdef", count: 64 * 1024)
@@ -185,7 +130,8 @@ struct WaylandBackendTests {
             // every operand, and a megabyte of them buries the whole test log.
             let copied = session.copy(text)
             #expect(copied)
-            #expect(await waitForChange(past: before, on: reader, timeout: .seconds(10)) != nil)
+            #expect(
+                await BackendHarness.waitForChange(past: before, on: reader, timeout: .seconds(10)) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -199,11 +145,14 @@ struct WaylandBackendTests {
     /// paste. Asserted with `wl-paste`, which knows nothing about Skrepka.
     @Test("a selection Skrepka owns can be pasted by another application")
     func servesSelection() async throws {
-        try await withSession("write") { session, reader in
-            await reader.setSelection([
-                "text/plain;charset=utf-8": Data("served by skrepka".utf8),
-                "text/plain": Data("served by skrepka".utf8),
-            ])
+        try await BackendHarness.withWayland("write") { session, reader in
+            await reader.setSelection(
+                [
+                    "text/plain;charset=utf-8": Data("served by skrepka".utf8),
+                    "text/plain": Data("served by skrepka".utf8),
+                ],
+                as: .copy
+            )
             // The set is queued for the loop, so the paste is retried until the
             // compositor has actually been told.
             var pasted: String?
@@ -221,10 +170,10 @@ struct WaylandBackendTests {
     /// bytes Skrepka put there rather than an empty snapshot.
     @Test("Skrepka's own selection is served from what it already holds")
     func ownSelectionShortCircuits() async throws {
-        try await withSession("self") { _, reader in
+        try await BackendHarness.withWayland("self") { _, reader in
             let before = await reader.changeCount()
-            await reader.setSelection(["text/plain;charset=utf-8": Data("mine".utf8)])
-            #expect(await waitForChange(past: before, on: reader) != nil)
+            await reader.setSelection(["text/plain;charset=utf-8": Data("mine".utf8)], as: .copy)
+            #expect(await BackendHarness.waitForChange(past: before, on: reader) != nil)
 
             guard case .contents(let snapshot) = await reader.read(sourceBundleID: nil) else {
                 Issue.record("expected readable contents")
@@ -239,7 +188,7 @@ struct WaylandBackendTests {
     /// capture nothing in the app, because the watcher runs no timer here.
     @Test("changes arrive as notifications, so nothing has to poll")
     func notifies() async throws {
-        try await withSession("notify") { session, reader in
+        try await BackendHarness.withWayland("notify") { session, reader in
             guard let stream = await reader.changeNotifications() else {
                 Issue.record("a Wayland backend must offer notifications")
                 return

@@ -420,7 +420,7 @@ its answer, the date, and where it was verified.
 
 | # | Question | Status | Blocks |
 |---|---|---|---|
-| [OQ-1](#oq-1) | Is a Continuity pasteboard change detectable? | **open** — needs a second Apple device | Phase 0 |
+| [OQ-1](#oq-1) | Is a Continuity pasteboard change detectable? | **open** — a candidate marker, `com.apple.is-remote-clipboard`, is known but not yet observed (2026-09-18) | Phase 0 |
 | [OQ-2](#oq-2) | Bytes or a promise? | **open** — needs a second Apple device | Phase 0, and a possible shipping bug |
 | [OQ-3](#oq-3) | Does GNOME show a sharing indicator for a clipboard-only RemoteDesktop session? | **open, deferred** — needs a real GNOME session, and the project has none ([D-10](#d-10)) | nothing — it reopens a rejected option |
 | [OQ-4](#oq-4) | Does KWin apply sway's sandbox filter? | **open, and now answerable** — the [Steam Deck](README.md#the-test-hardware) is a real KWin session ([D-10](#d-10)) | nothing — it changes an explanation |
@@ -472,6 +472,37 @@ content.
 clips, and the cross-system loop in design §3.4 becomes closable rather than
 merely bounded. **If there is not:** the platform rule stands as written — live
 push never runs between two Apple devices.
+
+**Amended 2026-09-18 — a candidate marker, still not observed.**
+`com.apple.is-remote-clipboard` is the likely answer, on three pieces of
+evidence, each checked on 2026-09-18:
+
+- nspasteboard.org lists it under Apple, added on 2025-04-17.
+- Maccy declares it as `NSPasteboard.PasteboardType.universalClipboard`, and its
+  README tells users to add it to the ignored pasteboard types to skip Universal
+  Clipboard copies.
+- The string is in this Mac's dyld shared cache — twice in
+  `dyld_shared_cache_arm64e.01`, once in `.05`, macOS 26.6.2 (25G83). So the
+  `strings` pass above was looking in the stub, as it suspected.
+
+It is still absent from `NSPasteboard.h`, and Apple does not document it, so it
+stays **unverified** until a remote-originated change is seen carrying it.
+
+A probe ran on 2026-09-18 on macOS 26.6.2. It polls `changeCount` and prints the
+first item's declared types and the marker's bytes. A local `pbcopy` write
+declared only `public.utf8-plain-text` and no marker, as expected. None of the
+six test copies registered — three from the second Mac, three on this one — and
+the change count did not move for the whole run. The run therefore shows nothing
+about Universal Clipboard either way. Before the next attempt, check that Handoff
+is on for both Macs and that both are signed into the same Apple ID and are on
+the same network.
+
+The loops in design §3.4 no longer wait on this answer; the same day's echo
+fix closes them without a marker. What a confirmed marker still buys: a Mac can
+mark a Universal Clipboard delivery as remote, refuse to live-push it, and
+refuse to record a relayed file. A relayed file arrives under a path local to
+the receiving Mac, so its hash differs, and history sync brings it back to the
+sender as a second row.
 
 <a id="oq-2"></a>
 ### OQ-2 — Bytes, or a promise?

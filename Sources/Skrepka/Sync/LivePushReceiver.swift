@@ -12,12 +12,20 @@ import os
 /// one and not the other, and other clipboard managers then attribute the
 /// content to Skrepka.
 ///
-/// **The pause/resume dance is the primary echo suppressor.**
+/// **Paused around the write, and the pause is enough here.**
 /// `ClipboardWatcher.pause()` stops the watcher acting on a change, and
 /// `resume()` re-reads `changeCount` so whatever happened while paused is
 /// discarded — the same pair `AppCoordinator.choose(_:style:)` already uses so
-/// that pasting an entry is not re-recorded. `SyncCoordinator.recentlyReceived`
-/// is the second, for the case where the window is missed.
+/// that pasting an entry is not re-recorded. It works on the Mac because the
+/// pasteboard write is synchronous: the change has happened by the time
+/// `resume()` reads the count. (Linux's writes are queued, which is why the
+/// daemon marks them as a handoff instead of pausing.) Behind it,
+/// `SyncCoordinator.livePushGate` refuses to push the content back if a
+/// capture of it gets through anyway.
+///
+/// **Kept on this Mac.** The write is marked current-host-only, so Universal
+/// Clipboard does not relay it to another Mac — which, running Skrepka, would
+/// capture it as its own copy and push it back.
 @MainActor
 struct LivePushReceiver {
     /// Why a push was not written. Logged rather than shown: the user did not
@@ -88,7 +96,11 @@ struct LivePushReceiver {
                 // identifiers.
                 sourceBundleID: meta.sourceBundleID,
                 target: nil,
-                shouldPaste: false
+                shouldPaste: false,
+                // Universal Clipboard would relay this to the user's other
+                // Macs, and one running Skrepka would capture it as its own
+                // copy and push it back out — see `PasteService.Request`.
+                staysOnThisMac: true
             )
         )
         await watcher.resume()

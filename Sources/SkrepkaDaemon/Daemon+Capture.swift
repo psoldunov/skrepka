@@ -187,31 +187,33 @@ extension Daemon {
     ///
     /// Store first, push after — the same order `AppCoordinator` uses. A push
     /// of something that failed to store would be a peer holding a clip this
-    /// device does not.
+    /// device does not. Neither kind of copy that goes unrecorded is offered,
+    /// but the gate still hears of both, so a hand-over ends on them.
     func record(_ decision: CaptureDecision) async {
         guard let item = decision.item else {
+            if decision.isRefusedCopy { livePushGate.noteUnrecordedCopy() }
             if decision.isNoteworthyRejection {
                 logger.notice("\(decision.rejectionLogMessage ?? "nothing was captured")")
             }
             return
         }
-        guard await store.capture(item) else { return }
+        guard await store.capture(item) else {
+            livePushGate.noteUnrecordedCopy(item.contentHash)
+            return
+        }
         lastCapturedAt = Date()
         notifyHistoryChanged()
         await offerLivePush(item)
     }
 
     /// Hands what was just copied to every peer live push is on for.
+    ///
+    /// The gate hears about every capture before any other guard — see
+    /// ``LivePushGate/admitCopy(_:isConcealed:at:)`` for why.
     func offerLivePush(_ item: ClipItem) async {
-        guard let runtime, !links.isEmpty else { return }
-        guard
-            LivePushGate.isPushable(
-                contentHash: item.contentHash,
-                isConcealed: item.isConcealed,
-                recentlyReceived: recentlyReceived,
-                at: Date()
-            )
-        else { return }
+        let admitted = livePushGate.admitCopy(
+            item.contentHash, isConcealed: item.isConcealed, at: Date())
+        guard admitted, let runtime, !links.isEmpty else { return }
         guard let meta = meta(for: item, originDeviceID: runtime.deviceID) else { return }
 
         let payloads = Self.wirePayloads(item)

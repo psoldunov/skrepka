@@ -16,8 +16,8 @@ extension DataControlSession {
             switch command {
             case .stop:
                 shouldStop = true
-            case .setSelection(let payload):
-                takeSelection(payload)
+            case .setSelection(let payload, let write):
+                takeSelection(payload, as: write)
             }
         }
     }
@@ -27,15 +27,25 @@ extension DataControlSession {
     /// A fresh source every time: the protocol says a source that has been
     /// passed to `set_selection` may not be passed to another, and reusing one
     /// is a `used_source` protocol error that kills the connection.
-    func takeSelection(_ payload: [String: Data]?) {
+    ///
+    /// `write` is queued in ``pendingEchoes``, because the compositor's echo of
+    /// this selection arrives on a later pass of the loop — possibly after
+    /// another write — and is judged by the write it answers; see
+    /// ``didReceiveSelection(_:)``. A clear, or a source that could not be
+    /// made, will never be reported, and empties the queue instead.
+    func takeSelection(_ payload: [String: Data]?, as write: SelectionWrite) {
         guard let device, let manager else { return }
         releaseOwnedSource()
 
         guard let payload, !payload.isEmpty else {
+            pendingEchoes.removeAll()
             binding.setSelection(device: device, source: nil)
             return
         }
-        guard let source = binding.makeSource(manager: manager) else { return }
+        guard let source = binding.makeSource(manager: manager) else {
+            pendingEchoes.removeAll()
+            return
+        }
         binding.attachSourceListener(source, session: opaqueSelf)
         // Sorted so the advertised order is the same on every run, which is
         // what makes `isOwnOffer(targets:)` and the tests deterministic.
@@ -44,6 +54,7 @@ extension DataControlSession {
         }
         ownedSource = source
         ownedPayload = payload
+        pendingEchoes.took(write, offering: payload.keys)
         binding.setSelection(device: device, source: source)
     }
 
@@ -52,6 +63,9 @@ extension DataControlSession {
     /// In-flight writes are deliberately not cancelled here: a requestor that
     /// asked before the handover is still waiting on its pipe, and dropping it
     /// would leave that application with a truncated paste.
+    ///
+    /// ``pendingEchoes`` is left alone: this runs at the start of every
+    /// write, and the reports of earlier writes are still on their way.
     func releaseOwnedSource() {
         guard let source = ownedSource else { return }
         binding.destroySource(source)

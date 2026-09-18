@@ -77,6 +77,39 @@ B's watcher captures → B pushes back to A. Echo suppression catches this only
 while its window is warm; Continuity latency can be seconds. Bounded by
 de-duplication, but it is churn with no upside.
 
+**Amended 2026-09-18 — the loops through a sync write are closed.** With two
+Macs and a Linux box, the thirty-second `RecentHashes` window proved not to be
+enough. Three changes close the loops:
+
+- **A Mac's sync write stays on that Mac.** `LivePushReceiver` writes with
+  `NSPasteboardContentsCurrentHostOnly`, which `NSPasteboard.h` describes as
+  "should not be available to other devices". Universal Clipboard never relays a
+  received push to the other Mac, so that Mac never captures it as its own copy.
+  A paste the user picks from history is written normally and still reaches
+  their other devices.
+- **Linux drops the echo of its own write.** `setSelection` only queues a
+  command. The compositor or the X server echoes the write back after the
+  watcher has resumed, so the daemon's pause and resume never covered it. For a
+  link or a multi-file copy the round trip also changed the hash. A live push is
+  now written as `SelectionWrite.handoff`. The session queues each write in
+  `PendingEchoes` and judges each echo by the write it answers, not by the
+  newest one: a handoff publishes nothing, and neither does a copy that a later
+  write overtook, so older content is never recorded and pushed over a newer
+  clipboard.
+- **The gate remembers the hand-over.** Each device keeps one `LivePushGate`,
+  which holds a `ClipboardHandoff`: the hash a peer last put on its clipboard.
+  The gate refuses that hash until something else is copied, with no time
+  limit. A copy the capture rules refuse, such as a password, counts too.
+  `RecentHashes` sits in the same gate as the backstop for the older pushes of
+  a burst. The gate hears about a copy and judges it in the same call, so no
+  caller can get that order wrong.
+
+**Still open:** B still treats a copy that Universal Clipboard delivers from A as
+its own. It can live-push it on to a Linux peer. A relayed file also arrives
+under a path local to B, so its hash differs, and it comes back to A through
+history sync as a second row. Closing that needs the marker in
+[OQ-1](linux-sync/open-questions.md#oq-1).
+
 ### The rule this produces
 
 > **Live push is scoped by platform. Never push the live clipboard between two
@@ -522,6 +555,12 @@ is not re-recorded, and `resume()` re-reads `changeCount` to discard whatever
 happened while paused. Receiving a live push does the same dance: pause → write
 to the pasteboard → resume. On top of that, keep a short-lived set of recently
 received content hashes so a hash just accepted is never re-broadcast.
+
+**Amended 2026-09-18:** the pause works only where the write is synchronous,
+which is the Mac. On Linux the write is queued, and its echo arrives after the
+watcher has resumed. So Linux marks a received write as a handoff, and the
+session drops its echo instead. The short-lived hash set is now a backstop
+behind a hand-over memory that does not expire. §3.4 has the whole story.
 
 **Size discipline:** inline the bytes for payloads under 256 KB; above that push
 metadata and let the peer fetch lazily, so a 20 MB screenshot never blocks the

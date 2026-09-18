@@ -23,6 +23,12 @@ struct PasteService {
     ///
     /// - `target` is the app that was frontmost when the picker opened.
     /// - `shouldPaste` is false when the user prefers to paste themselves.
+    /// - `staysOnThisMac` keeps the write out of Universal Clipboard. A sync
+    ///   write sets it: the content is already on every peer Skrepka syncs
+    ///   with, and relaying it on to another Mac that runs Skrepka makes that
+    ///   Mac capture it as a fresh copy and push it back — a loop that ends
+    ///   with older content overwriting a newer clipboard. A paste the user
+    ///   picked leaves it off, so it still reaches their other devices.
     struct Request {
         let contents: ClipContents
         let plainText: String
@@ -30,6 +36,7 @@ struct PasteService {
         let sourceBundleID: String?
         let target: NSRunningApplication?
         let shouldPaste: Bool
+        let staysOnThisMac: Bool
     }
 
     func deliver(_ request: Request) async -> Outcome {
@@ -61,7 +68,14 @@ struct PasteService {
             ? request.contents.payload.plainTextOnly(request.plainText)
             : request.contents.payload
         let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
+        if request.staysOnThisMac {
+            // `NSPasteboardContentsCurrentHostOnly`: "the pasteboard contents
+            // should not be available to other devices" (`NSPasteboard.h`).
+            // Clears the pasteboard as `clearContents()` does.
+            pasteboard.prepareForNewContents(with: .currentHostOnly)
+        } else {
+            pasteboard.clearContents()
+        }
 
         let item = NSPasteboardItem()
         for (type, data) in effective.representations {

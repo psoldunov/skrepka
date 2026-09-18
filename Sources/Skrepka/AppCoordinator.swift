@@ -180,6 +180,7 @@ final class AppCoordinator {
                 self?.refreshHealth()
                 guard let item = decision.item else {
                     Self.logRejection(decision)
+                    if decision.isRefusedCopy { self?.sync.noteRefusedCopy() }
                     continue
                 }
                 await store.capture(item)
@@ -249,7 +250,9 @@ final class AppCoordinator {
                     style: style,
                     sourceBundleID: item.sourceBundleID,
                     target: target,
-                    shouldPaste: shouldPaste
+                    shouldPaste: shouldPaste,
+                    // The user's own pick: it reaches their other devices.
+                    staysOnThisMac: false
                 )
             )
             await watcher.resume()

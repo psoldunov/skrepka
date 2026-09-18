@@ -16,10 +16,13 @@ public enum ClipboardBackend {
         /// by selection-target name on X11 — which are the same strings for
         /// every target that matters, because X11 toolkits have advertised MIME
         /// type names as atoms for twenty years.
-        public func setSelection(_ payload: [String: Data]?) async {
+        ///
+        /// - Parameter write: whether the write's own echo is a capture — see
+        ///   ``SelectionWrite``.
+        public func setSelection(_ payload: [String: Data]?, as write: SelectionWrite) async {
             switch source {
-            case let reader as DataControlReader: await reader.setSelection(payload)
-            case let reader as XFixesReader: await reader.setSelection(payload)
+            case let reader as DataControlReader: await reader.setSelection(payload, as: write)
+            case let reader as XFixesReader: await reader.setSelection(payload, as: write)
             default: break
             }
         }

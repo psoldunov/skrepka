@@ -63,4 +63,17 @@ public enum CaptureDecision: Sendable, Equatable {
         case .captured, .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedEmpty: false
         }
     }
+
+    /// Whether something was copied that the rules declined to record.
+    ///
+    /// True for every rejection but ``rejectedEmpty``: a password, an excluded
+    /// app's copy, an oversized item and an unreadable one are each content
+    /// that replaced what the clipboard held, which a live-push hand-over has
+    /// to hear about. An empty clipboard is not a copy of anything.
+    public var isRefusedCopy: Bool {
+        switch self {
+        case .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedTooLarge, .rejectedUnreadable: true
+        case .captured, .rejectedEmpty: false
+        }
+    }
 }
