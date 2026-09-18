@@ -1,5 +1,10 @@
 # Steam Deck bring-up: first hardware session
 
+**Status, 2026-09-18: deferred.** The owner put Linux hardware testing on hold
+the day this checklist was written. It is ready to run as it stands. When
+testing resumes, rebuild the tarball first (`scripts/build-deck.sh`) so it
+carries whatever landed in between.
+
 The Deck OLED is the [D-10](open-questions.md#d-10) test rig. Everything Skrepka
 built on Linux so far — Phase 5's clipboard backends, Phase 6's daemon and CLI,
 Phase 7's palette — has only been exercised inside a container against a

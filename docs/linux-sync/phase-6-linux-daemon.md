@@ -13,6 +13,12 @@ is not worth setting up until Phase 7's GUI exists**, so those steps wait for
 that rather than for this phase. Nothing here is blocked on them; Phase 7 can
 start.
 
+**Amended 2026-09-18:** the runbook is now deferred along with all Linux
+hardware testing, by the owner's decision — no longer waiting on Phase 7's GUI,
+but on the owner picking hardware testing back up. It is ready to run when that
+happens: section 3 of [`steam-deck-session.md`](steam-deck-session.md) walks the
+"done when" list below against a real Mac.
+
 Two things in the deliverables below were **not** built, both deliberately and
 both recorded here rather than quietly dropped:
 

@@ -309,6 +309,10 @@ in Desktop Mode. Both update channels exercise `ExtDataControlBinding` — see t
 corrected table under *Preconditions* — so running both is no longer worth the
 reinstall. The `wlr` binding is covered by the headless Sway instead.
 
+**Amended 2026-09-18:** those runs are deferred with all Linux hardware testing,
+by the owner's decision. Section 2 of
+[`steam-deck-session.md`](steam-deck-session.md) is the KDE run, ready to go.
+
 **Deferred, not dropped:** that the probe reports the right
 `DiagnosticsProblem` under GNOME Wayland rather than silently capturing nothing.
 There is no GNOME machine ([OQ-3](open-questions.md#oq-3)), so this phase closes

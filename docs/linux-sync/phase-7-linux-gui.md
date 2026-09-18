@@ -18,6 +18,12 @@ Hotkey → picker → select → pasted, on KDE and on Sway, with a working tray
   Phase 6.** Not Qt, not XWayland-only. Step 1 below is how the decision gets
   made with code rather than on paper; its current raw GTK4 direction is not a
   final toolkit selection.
+  **Amended 2026-09-18:** that validation is deferred with all Linux hardware
+  testing, by the owner's decision. Work continues on the raw GTK4 direction
+  against the headless Sway, and `skrepka-palette-demo` plus section 4 of
+  [`steam-deck-session.md`](steam-deck-session.md) are the KDE check, ready to
+  run. Until it runs, every step built on GTK4 carries the risk that KWin
+  disagrees.
 - [OQ-12](open-questions.md#oq-12) answered, because the mark has to render.
 - **A KDE session to build against: the Steam Deck, in Desktop Mode**
   ([D-10](open-questions.md#d-10)). It supplies `xdg-desktop-portal-kde` for the

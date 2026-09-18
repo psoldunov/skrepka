@@ -16,6 +16,20 @@ scope in every phase. GNOME work still gets built as planned — only its
 *testing* is deferred until a GNOME machine exists. See
 [the test hardware](#the-test-hardware).
 
+**Amended 2026-09-18: all Linux hardware testing is deferred by the owner's
+decision.** The kit is ready and waits: `scripts/build-deck.sh` builds the
+x86_64 tarball, and [`steam-deck-session.md`](steam-deck-session.md) is the
+session, start to finish. Four things wait on that session and nothing else:
+
+1. Phase 5's live run of `ExtDataControlBinding`.
+2. Phase 6's hardware runbook.
+3. Phase 7 step 1's KDE check, so [D-4](open-questions.md#d-4)'s exit status
+   stays provisional.
+4. [OQ-4](open-questions.md#oq-4).
+
+Development does not wait. Phase 7's remaining steps are built and tested
+against the headless Sway, as Phase 5's were.
+
 [Phase 3](phase-3-macos-sync.md) is built and its automatable half is verified:
 `SyncCoordinator`, live push both ways, the pairing sheet, the Sync settings pane
 and `skrepka-sync-probe`. Nine of its twelve runbook steps are now driven by

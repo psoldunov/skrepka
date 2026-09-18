@@ -6,17 +6,24 @@ The same day's follow-up work is recorded under [Done today](#done-today).
 
 ---
 
-## Next: the first Steam Deck session
+## Next: Phase 7, against the headless Sway
 
-1. On the Mac: `scripts/build-deck.sh`. *About 20 minutes the first time
-   (emulated amd64 build), less after.*
+Linux hardware testing is **deferred** (owner's decision, 2026-09-18). Phase 7
+carries on without it — see [Phase 7](#phase-7-the-linux-picker) below.
+
+**Deferred: the Steam Deck session.** It is ready, and it is about 2 hours:
+
+1. On the Mac: `scripts/build-deck.sh`. *About 20 minutes the first time.*
 2. On the Deck: follow [`steam-deck-session.md`](steam-deck-session.md),
    sections 0 → 5. *90 minutes if nothing blocks.*
 3. Record the results where section 5 says. *10 minutes.*
 
-That one session closes four things: the Phase 6 hardware runbook, Phase 7
-step 1 on KDE (which D-4's exit status waits on), the first live run of
-`ExtDataControlBinding`, and [OQ-4](open-questions.md#oq-4).
+Four things wait on it:
+
+1. The Phase 6 hardware runbook.
+2. Phase 7 step 1 on KDE, so D-4 stays provisional.
+3. The first live run of `ExtDataControlBinding`.
+4. [OQ-4](open-questions.md#oq-4).
 
 ---
 
@@ -54,8 +61,8 @@ toolchain did.
 | 1 Sync core | ✅ Complete | — |
 | 2 Plumbing | ✅ Complete | — |
 | 4 Core on Linux | ✅ Complete | — |
-| 5 Linux clipboard | ✅ Complete | `ext` Wayland binding never run live → Deck |
-| 6 Linux daemon | ✅ Complete in code | hardware runbook → Deck |
+| 5 Linux clipboard | ✅ Complete | `ext` Wayland binding never run live — Deck, deferred |
+| 6 Linux daemon | ✅ Complete in code | hardware runbook — Deck, deferred |
 | 3 macOS sync | 🟡 Nearly done | real two-Mac test; live push over 256 KB |
 | 7 Linux GUI | 🟡 About 20% | rows, daemon link, hotkey, tray, Settings |
 | 8 GNOME + packaging | 🟡 About 10% | extension, `.deb`/`.rpm`, desktop entries |
@@ -71,7 +78,10 @@ when it is, bump `SWIFT_VERSION` and re-run the Linux gate.
 
 ---
 
-## After the Deck session: Phase 7
+## Phase 7: the Linux picker
+
+Everything below builds and tests against the headless Sway. The one risk the
+deferral leaves open: KWin may disagree with something Sway accepts.
 
 **Now**
 
