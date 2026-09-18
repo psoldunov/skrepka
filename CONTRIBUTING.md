@@ -35,7 +35,8 @@ decisions already taken and the fourteen questions still open.
   `libSwiftDataMacros.dylib`, so every `@Model` in `Sources/SkrepkaCore/Store/`
   fails to expand. Every script in `scripts/` that runs Swift on the Mac pins
   `DEVELOPER_DIR` to `/Applications/Xcode.app/Contents/Developer` for exactly
-  this reason; the Linux ones run theirs in the build image instead. Never
+  this reason; the Linux ones run theirs in the build image, or natively on a
+  Linux host, with no Xcode to pin. Never
   build with a bare `swift build`, which also invalidates `.build/` and forces
   a full rebuild each time you switch toolchains.
 - SwiftLint and Periphery:
