@@ -181,7 +181,8 @@ extension Daemon {
     /// clipboard and nothing here can cost the row.
     ///
     /// The gate hears about the push **before** the write — see
-    /// ``SkrepkaSync/LivePushGate/noteReceived(_:at:)``.
+    /// ``SkrepkaSync/LivePushGate/noteReceived(_:at:)`` — and only when there
+    /// is a write, which ``writeToClipboard(_:handingOver:)`` decides.
     ///
     /// **A push whose bytes did not come inline writes nothing**, which is the
     /// same limitation the macOS side has: `LivePushPayload.inline` sends
@@ -191,9 +192,8 @@ extension Daemon {
     /// the user loses is the handoff, not the clipping.
     func receiveLivePush(_ meta: SyncClipMeta, inline: [RepresentationKey: Data]) async {
         guard !isStopping, !meta.isConcealed, !inline.isEmpty else { return }
-        livePushGate.noteReceived(meta.contentHash, at: Date())
         notifyHistoryChanged()
-        await writeToClipboard(inline)
+        await writeToClipboard(inline, handingOver: meta.contentHash)
     }
 
     /// Writes wire-keyed bytes to the session's clipboard, as a handoff.
@@ -210,10 +210,17 @@ extension Daemon {
     /// ``SkrepkaLinuxPlatform/SelectionWrite/handoff`` is what stops it now:
     /// the session remembers why it owns the selection and publishes nothing
     /// for its own echo, so the watcher never sees a change to capture.
-    func writeToClipboard(_ payloads: [RepresentationKey: Data]) async {
+    ///
+    /// **The gate hears of the handoff only once the write is certain to be
+    /// made.** No session to write to — GNOME Wayland, where the Shell
+    /// extension submits clips instead — or no target the payload converts to
+    /// leaves the clipboard as it was, and a hand-over recorded anyway would
+    /// refuse the next local copy of the same content for nothing.
+    func writeToClipboard(_ payloads: [RepresentationKey: Data], handingOver contentHash: String) async {
         guard let clipboard else { return }
         let targets = LinuxClipboardWriter.targets(for: payloads)
         guard !targets.isEmpty else { return }
+        livePushGate.noteReceived(contentHash, at: Date())
         await clipboard.setSelection(targets, as: .handoff)
     }
 }

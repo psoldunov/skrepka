@@ -33,13 +33,14 @@ extension SyncCoordinator {
         }
     }
 
-    /// Tells the gate about a copy the capture rules refused.
+    /// Tells the gate about a copy that was not recorded — refused by the
+    /// capture rules, or lost to a store that failed.
     ///
-    /// Nothing goes to peers, but the clipboard no longer holds what a peer
-    /// last handed over, so the hand-over ends here as it would for a copy
-    /// that was recorded.
-    func noteRefusedCopy() {
-        livePushGate.noteUnrecordedCopy()
+    /// Nothing goes to peers, but it is still a copy, so it ends a hand-over
+    /// as a recorded one would — the same transition the daemon makes, see
+    /// ``LivePushGate/noteUnrecordedCopy(_:)``.
+    func noteUnrecordedCopy(_ contentHash: String? = nil) {
+        livePushGate.noteUnrecordedCopy(contentHash)
     }
 
     /// The item as a peer is told about it.

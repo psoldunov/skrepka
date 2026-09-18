@@ -33,8 +33,12 @@ extension DataControlSession {
     /// another write — and is judged by the write it answers; see
     /// ``didReceiveSelection(_:)``. A clear, or a source that could not be
     /// made, will never be reported, and empties the queue instead.
+    ///
+    /// Destroying the source this write replaces clears the selection before
+    /// the write is reported, so the write is queued as expecting that clear.
     func takeSelection(_ payload: [String: Data]?, as write: SelectionWrite) {
         guard let device, let manager else { return }
+        let replacesOwnSource = ownedSource != nil
         releaseOwnedSource()
 
         guard let payload, !payload.isEmpty else {
@@ -54,7 +58,7 @@ extension DataControlSession {
         }
         ownedSource = source
         ownedPayload = payload
-        pendingEchoes.took(write, offering: payload.keys)
+        pendingEchoes.took(write, offering: payload.keys, afterClearing: replacesOwnSource)
         binding.setSelection(device: device, source: source)
     }
 

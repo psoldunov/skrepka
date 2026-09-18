@@ -17,6 +17,8 @@
 ///   than the clipboard's to every peer — when the later write is a peer's
 ///   handoff, the very overwrite the handoff path exists to prevent.
 /// - **A `.handoff` is never published.**
+/// - **The empty selection ahead of a replacing write's report is not
+///   published either** — see ``takeClear()``.
 ///
 /// Measured in the Linux image on 2026-09-18 rather than assumed: an X server
 /// reports every `SetSelectionOwner` Skrepka makes, including one that
@@ -32,6 +34,8 @@ struct PendingEchoes: Sendable {
     private struct Pending: Sendable {
         let write: SelectionWrite
         let targets: Set<String>
+        /// Whether an empty selection is still due ahead of this write's report.
+        let clearIsDue: Bool
     }
 
     /// Writes kept before the oldest is dropped. One report per write drains
@@ -42,9 +46,17 @@ struct PendingEchoes: Sendable {
     private var pending: [Pending] = []
 
     /// Skrepka just took the selection for `write`, offering `targets`.
-    mutating func took(_ write: SelectionWrite, offering targets: some Sequence<String>) {
+    ///
+    /// `afterClearing` is whether taking it destroyed a source Skrepka was
+    /// serving, which a Wayland compositor reports as an empty selection ahead
+    /// of this write's own. An X server reports a re-take with no clear.
+    mutating func took(
+        _ write: SelectionWrite,
+        offering targets: some Sequence<String>,
+        afterClearing: Bool = false
+    ) {
         if pending.count >= Self.capacity { pending.removeFirst() }
-        pending.append(Pending(write: write, targets: Set(targets)))
+        pending.append(Pending(write: write, targets: Set(targets), clearIsDue: afterClearing))
     }
 
     /// No report still due can be for content the clipboard holds.
@@ -60,6 +72,19 @@ struct PendingEchoes: Sendable {
     func isReport(offering targets: [String]) -> Bool {
         guard let oldest = pending.first else { return false }
         return oldest.targets == Set(targets)
+    }
+
+    /// An empty selection arrived: whether it is the clear Skrepka's own write
+    /// caused by destroying the source it replaced, rather than a real one.
+    ///
+    /// Absorbed at most once per write, and only ahead of that write's report,
+    /// so a compositor that skips the clear leaves nothing behind to swallow a
+    /// real one later. A real clear that lands in the same gap loses nothing by
+    /// it: the pending write overwrote it before anybody could read it.
+    mutating func takeClear() -> Bool {
+        guard let oldest = pending.first, oldest.clearIsDue else { return false }
+        pending[0] = Pending(write: oldest.write, targets: oldest.targets, clearIsDue: false)
+        return true
     }
 
     /// The report of the oldest pending write arrived: whether to publish it.

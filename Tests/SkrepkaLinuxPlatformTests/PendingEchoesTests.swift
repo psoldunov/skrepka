@@ -93,6 +93,59 @@ struct PendingEchoesTests {
         #expect(echoes.isReport(offering: Self.text))
     }
 
+    /// A Wayland compositor clears the selection when Skrepka destroys the
+    /// source a write replaces, and only then reports the write. Published, that
+    /// clear was a change the clipboard never settled on.
+    @Test("The clear ahead of a replacing write's report is absorbed, once")
+    func theReplacementClearIsAbsorbedOnce() {
+        var echoes = PendingEchoes()
+        echoes.took(.handoff, offering: Self.text, afterClearing: true)
+        let replacement = echoes.takeClear()
+        let second = echoes.takeClear()
+        #expect(replacement)
+        #expect(!second)
+        #expect(echoes.isReport(offering: Self.text))
+        let report = echoes.takeReport()
+        #expect(!report)
+    }
+
+    @Test("A clear is real when no write replaced a source of Skrepka's")
+    func aClearWithNothingReplacedIsReal() {
+        var echoes = PendingEchoes()
+        let idle = echoes.takeClear()
+        echoes.took(.copy, offering: Self.text)
+        let pending = echoes.takeClear()
+        #expect(!idle)
+        #expect(!pending)
+    }
+
+    /// A compositor that reports the write without the clear must not leave
+    /// the expectation behind to swallow a real clear later.
+    @Test("A clear expected but never sent is forgotten with its write's report")
+    func anUnsentClearDiesWithItsReport() {
+        var echoes = PendingEchoes()
+        echoes.took(.copy, offering: Self.text, afterClearing: true)
+        let report = echoes.takeReport()
+        let later = echoes.takeClear()
+        #expect(report)
+        #expect(!later)
+    }
+
+    /// In a burst, each replacing write's clear lands after the previous
+    /// write's report, so it is judged by the write it precedes.
+    @Test("Each write in a burst absorbs the clear ahead of its own report")
+    func aBurstAbsorbsOneClearPerReplacement() {
+        var echoes = PendingEchoes()
+        echoes.took(.copy, offering: Self.text)
+        echoes.took(.handoff, offering: Self.text, afterClearing: true)
+        let copyReport = echoes.takeReport()
+        let clear = echoes.takeClear()
+        let handoffReport = echoes.takeReport()
+        #expect(!copyReport)
+        #expect(clear)
+        #expect(!handoffReport)
+    }
+
     /// A report that never came must not grow the queue for good. Past the
     /// ceiling the oldest go, and the newest write still publishes.
     @Test("The queue is bounded, and the newest copy survives the bound")

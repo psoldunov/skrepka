@@ -81,6 +81,53 @@ struct HandoffWriteTests {
         #expect(CaptureRules().decide(snapshot).item?.text == "copied after")
     }
 
+    /// Replacing a source Skrepka is serving makes a Wayland compositor clear
+    /// the selection before it reports the new one. That clear used to be
+    /// published as an empty clipboard, so a handoff over Skrepka's own copy
+    /// moved the counter after all.
+    @Test(
+        "a handoff over Skrepka's own copy on Wayland is not a change",
+        .enabled(if: HeadlessSession.isAvailable(.sway))
+    )
+    func waylandHandoffOverOwnCopyIsNotAChange() async throws {
+        try await BackendHarness.withWayland("handoff-over-copy") { session, reader in
+            try await assertHandoffOverOwnCopyMovesNothing(
+                session: session, reader: reader, target: Self.waylandText
+            )
+        }
+    }
+
+    @Test(
+        "a handoff over Skrepka's own copy on X11 is not a change",
+        .enabled(if: HeadlessSession.isAvailable(.xvfb))
+    )
+    func x11HandoffOverOwnCopyIsNotAChange() async throws {
+        try await BackendHarness.withX11("handoff-over-copy") { session, reader in
+            try await assertHandoffOverOwnCopyMovesNothing(
+                session: session, reader: reader, target: Self.x11Text
+            )
+        }
+    }
+
+    /// Copies, waits for the copy's own report, then hands a payload over on
+    /// top of it. The paste orders the handoff's events before the check, as
+    /// in ``assertOnlyTheNextCopyCounts(session:reader:target:)``.
+    private func assertHandoffOverOwnCopyMovesNothing(
+        session: HeadlessSession,
+        reader: some HeadlessReader,
+        target: String
+    ) async throws {
+        let before = await reader.changeCount()
+        await reader.setSelection([target: Data("copied here".utf8)], as: .copy)
+        #expect(await BackendHarness.waitForChange(past: before, on: reader) == before + 1)
+
+        await reader.setSelection([target: Data("handed over".utf8)], as: .handoff)
+        #expect(await BackendHarness.pasteUntil("handed over", from: session) == "handed over")
+        // Long enough for a late event to land if the handoff produced one.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(await reader.changeCount() == before + 1)
+    }
+
     // MARK: - Still a clipboard
 
     @Test(

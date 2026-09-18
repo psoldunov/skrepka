@@ -152,7 +152,10 @@ final class DataControlSession: DataControlSessionEvents {
         guard let offer else {
             // The clipboard was cleared. Published rather than ignored: it is a
             // real change, and `CaptureRules` reads an empty snapshot as
-            // `.rejectedEmpty` rather than storing anything.
+            // `.rejectedEmpty` rather than storing anything. The one clear that
+            // is not a change is Skrepka replacing its own source — see
+            // `PendingEchoes.takeClear()`.
+            guard !pendingEchoes.takeClear() else { return }
             publish(
                 .contents(PasteboardSnapshot(representations: [:], declaredTypes: []))
             )

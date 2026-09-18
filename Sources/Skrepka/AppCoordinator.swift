@@ -180,14 +180,15 @@ final class AppCoordinator {
                 self?.refreshHealth()
                 guard let item = decision.item else {
                     Self.logRejection(decision)
-                    if decision.isRefusedCopy { self?.sync.noteRefusedCopy() }
+                    if decision.isRefusedCopy { self?.sync.noteUnrecordedCopy() }
                     continue
                 }
-                await store.capture(item)
-                // The same stream, not a second watcher: one `changeCount`, one
-                // source of truth about what was copied. Live push is offered
-                // after the store has it, so a peer never learns about a
-                // clipping this machine failed to keep.
+                // The same stream, not a second watcher. Offered once stored, so
+                // a peer never learns of a clipping this machine failed to keep.
+                guard await store.capture(item) else {
+                    self?.sync.noteUnrecordedCopy(item.contentHash)
+                    continue
+                }
                 self?.sync.offerLivePush(item)
             }
         }

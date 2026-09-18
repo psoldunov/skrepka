@@ -839,7 +839,7 @@
 			{
 				"from": "coordinator",
 				"id": "e-coordinator-synccoord",
-				"label": "starts, stops, and offers each capture",
+				"label": "starts, stops, and offers each stored capture",
 				"to": "sync-coordinator",
 				"variant": "emphasis"
 			},
