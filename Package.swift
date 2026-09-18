@@ -257,13 +257,13 @@ let package = Package(
     // A hand-driven Steam Deck bring-up binary: opens the picker over whatever
     // compositor is running, with canned rows and no history store, and prints
     // every key command it fields. A product only so `swift build --product`
-    // can name it; `scripts/install.sh` never installs it. `scripts/build-deck.sh`
-    // ships it in the tarball so Phase 7 step 1 can be walked through on KWin
+    // can name it; `install.sh` never installs it. `scripts/build-deck.sh`
+    // ships it in the tools tarball so Phase 7 step 1 can be walked through on KWin
     // without depending on the daemon.
     package.products.append(.executable(name: "skrepka-palette-demo", targets: ["skrepka-palette-demo"]))
     // The Settings window: this device, the devices it is paired with and can
     // see, pairing in both directions, and live push per device. A product so
-    // `scripts/install.sh` and `scripts/build-deck.sh` can name it.
+    // `scripts/setup-linux.sh` and `scripts/build-deck.sh` can name it.
     package.products.append(.executable(name: "skrepka-settings", targets: ["skrepka-settings"]))
     package.targets.append(contentsOf: [
         // libwayland-client itself. `providers:` is what turns a missing
@@ -468,7 +468,7 @@ let package = Package(
         // no gtk4-layer-shell, and this links it through CGtk4 even though the
         // window never uses layer-shell. `$ORIGIN/../lib` finds the copy the
         // Deck tarball carries beside `bin/`, as the palette demo does;
-        // `$ORIGIN/../lib/skrepka` finds the private copy `scripts/install.sh`
+        // `$ORIGIN/../lib/skrepka` finds the private copy `install.sh`
         // puts beside an installed `~/.local/bin`. A system copy, where there is
         // one, is found after both without either.
         .executableTarget(

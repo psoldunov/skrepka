@@ -1377,7 +1377,7 @@ both target machines.
 
 1. **`ydotool`/uinput.** The only mechanism that is genuinely
    compositor-agnostic, because it is below the compositor. Costs a `/dev/uinput`
-   permission: root, or a udev rule the user installs, which `scripts/install.sh`
+   permission: root, or a udev rule the user installs, which `install.sh`
    is explicitly a *no-root* installer and would have to stop being.
 2. **Two code paths** — `zwp_virtual_keyboard_manager_v1` on wlroots, the
    RemoteDesktop portal on KWin. No root. Costs two implementations of the same

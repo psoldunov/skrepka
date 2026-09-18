@@ -3,10 +3,88 @@
 Every released version, newest first. Dates are the day the release was
 published. Each heading links to the tag it was cut from; the
 [releases page](https://github.com/psoldunov/skrepka/releases) carries the same
-notes alongside the notarized `Skrepka.zip` for that version.
+notes alongside the notarized `Skrepka.zip` for that version and, from 0.2.0,
+the Linux tarballs with their checksums.
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
-download — is the whole update path.
+download — is the whole update path on a Mac. On Linux, re-running `install.sh`
+is.
+
+## [0.2.0](https://github.com/psoldunov/skrepka/releases/tag/v0.2.0) — 2026-09-18
+
+Skrepka runs on Linux — as a preview — and a Linux box can share clipboard
+history with a Mac.
+
+### Added
+
+- **A Linux daemon and CLI, as a preview.** `skrepkad` keeps clipboard history
+  on Linux the way the Mac app does. It is a systemd user service. It records
+  what you copy and skips anything a password manager marks secret with
+  `x-kde-passwordManagerHint`, which KeePassXC and `wl-copy --sensitive` set.
+  It syncs with paired devices over the same protocol as the Mac, with the same
+  TLS 1.3 pinning and the same on-screen code. `skrepka` drives it from a
+  terminal: `list`, `copy`, `pair`, `peers`, `sync`, `unpair` and `doctor`.
+  - It reads and writes the clipboard on Wayland, through the wlroots and `ext`
+    data-control protocols, and on X11.
+  - The wlroots and X11 backends are tested against a headless Sway and Xvfb,
+    not only in unit tests.
+  - There is no Linux picker yet. `skrepka copy` puts an entry back on the
+    clipboard.
+- **A Settings window on Linux.** `skrepka-settings` is a GTK4 window, listed in
+  the launcher as "Skrepka Settings", and mirrors the Mac's Sync pane:
+  - this device's name and code;
+  - the "Allow new devices to pair" switch;
+  - every paired and sighted device, with Pair…, Unpair, Sync Now and a
+    per-device live-clipboard switch;
+  - a pairing dialog that works in both directions.
+
+  It needs GTK 4.12 or newer.
+- **One command installs Skrepka on Linux.** In a terminal on the machine
+  itself — Konsole in the Steam Deck's Desktop Mode, for one — run:
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
+  ```
+
+  This downloads the x86_64 build from the latest release, checks it against
+  the published SHA-256 and installs it under `~/.local`. It also installs a
+  systemd user unit and a launcher entry, and starts the daemon. It needs no
+  root, and SteamOS's read-only system is left untouched. `--version` pins a
+  release, and `--uninstall` removes everything except your history and this
+  device's sync identity. Building from a checkout is now
+  `scripts/setup-linux.sh`.
+
+### Fixed
+
+- **An image that arrives from a paired device shows as a picture.** A synced
+  screenshot drew as a kind symbol on a text-height row, because no thumbnail
+  crosses the wire and none was drawn on arrival. Skrepka now renders one from
+  the bytes that came with it, off the main thread, for rows learned whole and
+  rows filled in by a later fetch. A rich-text or link clipping that happens to
+  carry a PNG still draws no picture, the same as it does locally.
+- **A live push no longer echoes back.** With three devices, a push could
+  return to its sender as a fresh copy and overwrite a newer clipboard with
+  older content. Three changes close that loop:
+  - A Mac writes a received push for this Mac only, so Universal Clipboard
+    never relays it to another Mac.
+  - A Linux daemon recognises its own write when the compositor or X server
+    reports it back.
+  - A hash a peer just sent is refused until something else is copied, with no
+    time limit.
+
+### Known limitations
+
+- **Linux has not been run on real hardware yet.** Everything above is tested
+  in containers against headless compositors. The first session on a Steam Deck
+  — KDE Plasma on Wayland — is still to come. Treat Mac-to-Linux sync as a
+  preview and [report](https://github.com/psoldunov/skrepka/issues) what
+  breaks.
+- **The Linux daemon has sync on unless it is started with `--no-sync`.** It
+  advertises itself on the local network from the first run. A new device still
+  cannot pair without the pairing window opened and the code confirmed on both
+  screens.
+- **The Linux build is x86_64 only.** On other architectures, clone the
+  repository and run `scripts/setup-linux.sh` to build from source.
 
 ## [0.1.4](https://github.com/psoldunov/skrepka/releases/tag/v0.1.4) — 2026-09-07
 

@@ -1228,7 +1228,7 @@
 			{
 				"from": "scripts",
 				"id": "e-scripts-linuxsettings",
-				"label": "install.sh: binary, private layer-shell, launcher entry",
+				"label": "install.sh / setup-linux.sh: binary, private layer-shell, launcher entry",
 				"to": "linux-settings",
 				"variant": "dashed"
 			}

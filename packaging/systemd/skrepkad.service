@@ -1,6 +1,6 @@
 # Skrepka's clipboard daemon, as a systemd USER unit.
 #
-# Installed by scripts/install.sh into $XDG_CONFIG_HOME/systemd/user (which is
+# Installed by install.sh into $XDG_CONFIG_HOME/systemd/user (which is
 # ~/.config/systemd/user unless XDG_CONFIG_HOME says otherwise), enabled with
 # `systemctl --user enable --now skrepkad.service`.
 #
@@ -107,7 +107,7 @@ Type=exec
 ExecStart=%h/.local/bin/skrepkad
 
 # %h is the home directory of the user running the service manager
-# (systemd.unit(5), Table 5). scripts/install.sh rewrites this line only when
+# (systemd.unit(5), Table 5). install.sh rewrites this line only when
 # $XDG_BIN_HOME points somewhere other than ~/.local/bin.
 
 # on-failure is the documented recommendation for long-running services. It

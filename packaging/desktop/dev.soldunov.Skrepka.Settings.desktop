@@ -4,7 +4,7 @@ Name=Skrepka Settings
 GenericName=Clipboard Sync Settings
 Comment=Pair and manage the devices Skrepka shares clipboard history with
 # The plain program name is right for a repository copy: it is looked up in
-# $PATH. scripts/install.sh rewrites this one line to the absolute installed
+# $PATH. install.sh rewrites this one line to the absolute installed
 # path, because ~/.local/bin is not on the desktop session's $PATH on every
 # distribution and a launcher entry that cannot find its program does nothing.
 Exec=skrepka-settings

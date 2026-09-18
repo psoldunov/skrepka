@@ -108,7 +108,7 @@ What exists today, and both quality gates are green over it:
 | `Sources/SkrepkaLinuxPlatform/Discovery/` | Phase 6 — `AvahiDiscovery`, the `PeerDiscovery` conformance over `org.freedesktop.Avahi`. Here rather than beside `BonjourDiscovery` because the *dependency* is what macOS must not carry, not the code. Every signature confirmed against avahi 0.8's own interface XML; its signals are directed at the client's unique name, so no `AddMatch` rule is needed |
 | `Sources/SkrepkaDaemon/` | Phase 6 — the composition root, `FileTrustStore` (the `0600`-at-creation identity file), the session-loss rebuild, and the D-Bus service |
 | `Sources/SkrepkaCLI/` + `Sources/skrepka-cli/` | Phase 6 — `list`, `copy`, `pair`, `peers`, `doctor`, with `--json` from the start |
-| `packaging/systemd/` + `scripts/install.sh` | Phase 6 — the user unit and the no-root installer [D-10](open-questions.md#d-10) forces. Phase 8 hardens both rather than inventing a second layout |
+| `packaging/systemd/` + `install.sh` + `scripts/setup-linux.sh` | Phase 6 — the user unit and the no-root installer [D-10](open-questions.md#d-10) forces. Since 0.2.0 the root `install.sh` downloads, checks and installs a release, and `scripts/setup-linux.sh` builds a checkout and hands off to it. Phase 8 hardens both rather than inventing a second layout |
 | `scripts/doctor.sh` | **556 tests / 74 suites green** under Xcode 27.0 and Swift 6.4 (run 2026-09-18). The Linux image is still Swift 6.3.3 — `swift:6.4-noble` is not published yet — so the two compilers differ until it is |
 | `scripts/doctor-linux.sh` | **708 tests / 98 suites green, SwiftLint included** (run 2026-09-18) — 18 of them driving a headless Sway and an Xvfb started by the test |
 

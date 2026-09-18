@@ -14,5 +14,5 @@ import Foundation
 /// red gate rather than a Linux daemon claiming to be a version older than
 /// itself.
 public enum DaemonVersion {
-    public static let current = "0.1.4"
+    public static let current = "0.2.0"
 }
