@@ -55,8 +55,8 @@ every call the window makes — `gtk_css_provider_load_from_string` and
 4.14. `scripts/install.sh` builds the window only when
 `pkg-config --exists 'gtk4 >= 4.12' gtk4-layer-shell-0` succeeds, and a headless
 install with just the daemon and the CLI is a complete one. A binary built
-elsewhere, the Deck tarball's included, needs GTK 4.12 or newer on the machine
-it runs on: an older one fails at launch with a missing symbol.
+elsewhere, including the one in the Deck tarball, needs GTK 4.12 or newer on the
+machine it runs on: an older one fails at launch with a missing symbol.
 
 ## `scripts/install.sh`
 
