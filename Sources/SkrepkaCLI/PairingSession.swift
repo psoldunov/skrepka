@@ -20,7 +20,9 @@ struct PairingSession {
 
     private func dial(_ fingerprint: String) async throws -> Int32 {
         CLIConsole.say("Dialling \(fingerprint)…")
-        let proposal = try await proxy.pair(with: fingerprint)
+        // The daemon may take up to its own dial deadline to answer; the
+        // default call timeout would give up a third of the way there.
+        let proposal = try await proxy.withTimeout(SkrepkaBus.pairingCallTimeout).pair(with: fingerprint)
         return try await answer(proposal)
     }
 

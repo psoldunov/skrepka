@@ -63,7 +63,11 @@ public enum SkrepkaInterface {
     /// Bumped when a member is added, so a client can require a minimum without
     /// calling a method it is not sure exists — a `Method call … unknown method`
     /// error is indistinguishable from a daemon that is not running.
-    public static let version: UInt32 = 1
+    ///
+    /// - 1: the Phase 6 surface.
+    /// - 2: ``Member/setLivePush``, and the live-push choice and default on
+    ///   ``PeerDocument`` that a client needs to draw the switch it sets.
+    public static let version: UInt32 = 2
 
     /// Every member this build exports, spelled once.
     public enum Member {
@@ -113,6 +117,14 @@ public enum SkrepkaInterface {
 
         /// `(s fingerprint) -> s`. Forgets a paired device.
         public static let unpair = "Unpair"
+
+        /// `(s device, s choice) -> s`. Records whether what is copied here
+        /// goes straight to one paired device's clipboard. `device` names it
+        /// the way ``unpair`` does — a fingerprint, or a prefix of the device
+        /// ID that matches exactly one paired device. `choice` is one of
+        /// ``PeerDocument/LivePushChoiceName``; anything else is refused as an
+        /// invalid argument. Answers ``ActionDocument``. Since version 2.
+        public static let setLivePush = "SetLivePush"
 
         /// `() -> s`. Exchanges indexes with every live peer now rather than on
         /// the timer. ``ActionDocument``.

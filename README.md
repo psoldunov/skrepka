@@ -42,6 +42,11 @@ has no in-app updater, so `brew upgrade --cask skrepka` is the whole update
 path — and `brew uninstall --zap --cask skrepka` is the one that takes the
 clipboard history with it.
 
+On Linux there is no app bundle: `scripts/install.sh` puts the daemon
+(`skrepkad`), the CLI (`skrepka`) and the GTK4 Settings window
+(`skrepka-settings`, with a launcher entry) under `~/.local`, needing no root.
+See [packaging/README.md](packaging/README.md).
+
 [CHANGELOG.md](CHANGELOG.md) says what each version changed.
 
 ## Build and run

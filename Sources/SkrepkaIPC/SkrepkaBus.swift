@@ -21,6 +21,17 @@ public enum SkrepkaBus {
     /// enough that a busy daemon mid-sync still answers.
     public static let callTimeout: Duration = .seconds(10)
 
+    /// How long a client waits for ``DaemonProxy/pair(with:)``.
+    ///
+    /// Longer than ``callTimeout`` because the daemon bounds a dial-to-pair by
+    /// its own `Daemon.pairDialTimeout`, thirty seconds, and resolving the
+    /// peer, the TLS handshake and the pairing exchange all happen inside that
+    /// one call. A client that gave up at ten reported a timeout for a dial the
+    /// daemon was still running — and whose proposal, if it landed, then
+    /// waited for an answer from a client that had already gone. Held above
+    /// the daemon's bound by `SkrepkaBusClientTests`.
+    public static let pairingCallTimeout: Duration = .seconds(45)
+
     /// A `Duration` as whole nanoseconds, which is the unit
     /// `DBusClient.Connection.send(_:timeoutNanoseconds:)` takes.
     ///
@@ -79,6 +90,27 @@ public enum SkrepkaBus {
             throw IPCError.timedOut(member: "the session bus handshake", after: callTimeout)
         } catch {
             throw IPCError.daemonUnavailable(reason: String(describing: error))
+        }
+    }
+
+    /// A proxy on a session that outlives one call — the shape a window needs,
+    /// where ``withDaemon(logger:_:)`` is the CLI's.
+    ///
+    /// Call it per request rather than keeping the proxy: ``BusSession`` hands
+    /// out a connection that is fresh when fetched, and the session goes into
+    /// the proxy so a call that dies on a dead transport invalidates it for
+    /// the next one. A session that cannot connect at all becomes
+    /// ``IPCError/daemonUnavailable(reason:)``, so a window gives the advice
+    /// the CLI gives rather than a bus error.
+    public static func proxy(
+        on session: BusSession,
+        timeout: Duration = callTimeout
+    ) async throws -> DaemonProxy {
+        do {
+            let connection = try await session.connection()
+            return DaemonProxy(connection: connection, session: session, timeout: timeout)
+        } catch let error as BusSession.SessionError {
+            throw IPCError.daemonUnavailable(reason: error.description)
         }
     }
 }

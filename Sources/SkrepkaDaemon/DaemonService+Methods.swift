@@ -92,7 +92,7 @@ extension DaemonService {
         ]
     }
 
-    /// The two members that act on paired peers.
+    /// The three members that act on paired peers.
     private func peerMethods() -> [DBusObjectServer.Method] {
         let daemon = daemonReference
         return [
@@ -111,6 +111,26 @@ extension DaemonService {
                     throw ServiceError.badArguments(SkrepkaInterface.Member.unpair)
                 }
                 let result = await daemon.unpair(fingerprint: fingerprint)
+                return [.string(try SkrepkaDocumentCoding.encode(result))]
+            },
+            DBusObjectServer.Method(
+                name: SkrepkaInterface.Member.setLivePush,
+                inputArgs: [
+                    DBusObjectServer.MethodArg(name: "device", type: "s"),
+                    DBusObjectServer.MethodArg(name: "choice", type: "s"),
+                ],
+                outputArgs: [DBusObjectServer.MethodArg(name: "result", type: "s")]
+            ) { context in
+                // An unknown choice is a malformed call rather than an
+                // ordinary refusal: nothing a user did produces one, only a
+                // client that built the argument wrong.
+                guard let device = Self.string(context.arguments.first),
+                    let raw = Self.string(context.arguments.dropFirst().first),
+                    let choice = LivePushChoice(rawValue: raw)
+                else {
+                    throw ServiceError.badArguments(SkrepkaInterface.Member.setLivePush)
+                }
+                let result = await daemon.setLivePush(device: device, choice: choice)
                 return [.string(try SkrepkaDocumentCoding.encode(result))]
             },
         ]

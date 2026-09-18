@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Skrepka Settings
+GenericName=Clipboard Sync Settings
+Comment=Pair and manage the devices Skrepka shares clipboard history with
+# The plain program name is right for a repository copy: it is looked up in
+# $PATH. scripts/install.sh rewrites this one line to the absolute installed
+# path, because ~/.local/bin is not on the desktop session's $PATH on every
+# distribution and a launcher entry that cannot find its program does nothing.
+Exec=skrepka-settings
+# A stock freedesktop icon. A real Skrepka icon is a Phase 8 follow-up
+# (docs/linux-sync/phase-8-gnome-packaging.md).
+Icon=edit-paste
+Terminal=false
+StartupNotify=true
+Categories=Settings;GTK;
+Keywords=clipboard;history;sync;pair;devices;

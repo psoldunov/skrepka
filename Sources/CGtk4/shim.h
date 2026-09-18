@@ -27,8 +27,11 @@
 // it as static inline functions is what a code generator would emit, minus the
 // generator.
 
+#include <errno.h>
+#include <glib-unix.h>
 #include <gtk/gtk.h>
 #include <gtk4-layer-shell.h>
+#include <sys/eventfd.h>
 
 // MARK: - Casts
 
@@ -58,6 +61,99 @@ static inline GtkWidget *skrepka_row_as_widget(GtkListBoxRow *row) {
 
 static inline GtkWidget *skrepka_window_as_widget(GtkWindow *window) {
 	return GTK_WIDGET(window);
+}
+
+static inline GApplication *skrepka_as_application(GtkApplication *application) {
+	return G_APPLICATION(application);
+}
+
+static inline GtkButton *skrepka_as_button(GtkWidget *widget) { return GTK_BUTTON(widget); }
+
+static inline GtkSwitch *skrepka_as_switch(GtkWidget *widget) { return GTK_SWITCH(widget); }
+
+static inline GtkFrame *skrepka_as_frame(GtkWidget *widget) { return GTK_FRAME(widget); }
+
+static inline GtkSpinner *skrepka_as_spinner(GtkWidget *widget) {
+	return GTK_SPINNER(widget);
+}
+
+// MARK: - Style
+
+/// Adds `css` to every widget on the default display, above the theme.
+///
+/// In C because `GTK_STYLE_PROVIDER()` is a macro, and so the provider's one
+/// reference can be dropped here once the display holds its own.
+static inline void skrepka_install_css(const char *css) {
+	GdkDisplay *display = gdk_display_get_default();
+	if (display == NULL) { return; }
+	GtkCssProvider *provider = gtk_css_provider_new();
+	gtk_css_provider_load_from_string(provider, css);
+	gtk_style_context_add_provider_for_display(display, GTK_STYLE_PROVIDER(provider),
+	                                           GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+	g_object_unref(provider);
+}
+
+// MARK: - Variadic and array-taking calls
+
+// Swift imports no C variadic function and builds a NULL-terminated string
+// array only with manual allocation, so the three calls below that need one of
+// the two are spelled here, with the arguments Skrepka actually passes.
+
+/// `gtk_alert_dialog_new` takes a printf format. Passing the message as the
+/// `%s` argument rather than as the format is what keeps a `%` in a device's
+/// name from being read as a conversion.
+static inline GtkAlertDialog *skrepka_alert_dialog_new(const char *message) {
+	return gtk_alert_dialog_new("%s", message);
+}
+
+/// Two buttons, in the order they appear. GTK copies the labels.
+static inline void skrepka_alert_dialog_set_buttons(GtkAlertDialog *dialog, const char *first,
+                                                    const char *second) {
+	const char *labels[] = {first, second, NULL};
+	gtk_alert_dialog_set_buttons(dialog, labels);
+}
+
+/// The name a screen reader announces for a control with no visible label of
+/// its own — a switch beside a row title.
+static inline void skrepka_set_accessible_label(GtkWidget *widget, const char *label) {
+	gtk_accessible_update_property(GTK_ACCESSIBLE(widget), GTK_ACCESSIBLE_PROPERTY_LABEL, label,
+	                               -1);
+}
+
+/// Escape closes the window through its built-in `window.close` action, which
+/// runs the same close-request a click on the title bar's button does.
+static inline void skrepka_close_on_escape(GtkWindow *window) {
+	GtkEventController *controller = gtk_shortcut_controller_new();
+	GtkShortcut *shortcut = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_Escape, 0),
+	                                         gtk_named_action_new("window.close"));
+	gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(controller), shortcut);
+	gtk_widget_add_controller(GTK_WIDGET(window), controller);
+}
+
+// MARK: - Waking the main loop from another thread
+
+// An eventfd is the only thing that crosses threads between Swift's
+// concurrency pool and GTK's main loop: the pool writes to it, and a
+// `g_unix_fd_source` on the loop wakes when it becomes readable. No pointer to
+// a widget or to anything that owns one ever leaves the loop's thread. See
+// Sources/SkrepkaLinuxUI/Backend/MainLoopInbox.swift.
+
+/// A non-blocking, close-on-exec eventfd, or -1 with `errno` set.
+static inline int skrepka_wake_fd_new(void) { return eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK); }
+
+/// Makes the descriptor readable. Retried on EINTR; the only other failure,
+/// EAGAIN, needs the counter at 2^64 - 2 and cannot happen one write at a time.
+static inline void skrepka_wake_fd_signal(int descriptor) {
+	while (eventfd_write(descriptor, 1) < 0 && errno == EINTR) {
+	}
+}
+
+/// Resets the descriptor so it is no longer readable. EAGAIN — nothing was
+/// written since the last reset — is the ordinary answer and is not an error.
+static inline void skrepka_wake_fd_clear(int descriptor) {
+	eventfd_t value = 0;
+	while (eventfd_read(descriptor, &value) < 0 && errno == EINTR) {
+	}
 }
 
 // MARK: - Main loop

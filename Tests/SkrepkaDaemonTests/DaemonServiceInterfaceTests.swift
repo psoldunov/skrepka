@@ -30,6 +30,7 @@ struct DaemonServiceInterfaceTests {
         SkrepkaInterface.Member.pairWith: (["s"], ["s"]),
         SkrepkaInterface.Member.confirmPairing: (["s", "b"], ["s"]),
         SkrepkaInterface.Member.unpair: (["s"], ["s"]),
+        SkrepkaInterface.Member.setLivePush: (["s", "s"], ["s"]),
         SkrepkaInterface.Member.syncNow: ([], ["s"]),
     ]
 

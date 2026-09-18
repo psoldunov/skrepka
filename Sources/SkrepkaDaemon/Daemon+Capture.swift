@@ -223,24 +223,6 @@ extension Daemon {
         }
     }
 
-    /// Whether live push is on for one peer, after the user's override has been
-    /// resolved against design §3's platform default.
-    func isLivePushOn(for deviceID: SyncDeviceID) async -> Bool {
-        // A read that fails falls back to the platform default, deliberately.
-        // This runs once per peer on every capture, so it cannot report or
-        // propagate without turning a locked store into a log flood or into a
-        // failed capture; and the default is the setting the user has not
-        // overridden, which is the safe answer to give when the override
-        // cannot be read.
-        let choice = (try? await trust.livePushChoice(for: deviceID)) ?? .followsPlatformDefault
-        let setting = LivePushSetting(
-            local: .linux,
-            remote: progress[deviceID]?.platform ?? .unknown,
-            choice: choice
-        )
-        return setting.isOn
-    }
-
     func notifyHistoryChanged() {
         for observer in historyObservers.values { observer.yield(()) }
     }

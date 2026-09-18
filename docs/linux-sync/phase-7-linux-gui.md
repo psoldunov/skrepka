@@ -120,6 +120,49 @@ it, so **back-to-back `wtype` calls are dropped** — reliably, and in both the
 prototype and the real target. Three seconds between key presses is enough. A
 dropped key there is the harness, not the picker.
 
+### What has landed, 2026-09-18: Settings, the devices half
+
+Step 5's pairing and paired-devices part, ahead of the Steam Deck session so
+the session can exercise it. `skrepka-settings` is an ordinary window, not a
+layer-shell surface, and it is the macOS Sync pane in GTK4: this device's name
+and code, the "Allow new devices to pair" switch, every paired and sighted
+device with Pair… / Unpair, a per-device Live clipboard switch, Sync Now, and
+the code-comparison dialog for both directions. Retention and exclusions are
+not in it — the daemon's interface cannot set them yet.
+
+```
+Sources/SkrepkaLinuxUI/Backend/MainLoopInbox.swift   Sendable values onto GTK's loop: Mutex + eventfd
+Sources/SkrepkaLinuxUI/Backend/MainLoopWatch.swift   the loop-thread end, a g_unix_fd source
+Sources/SkrepkaLinuxUI/Settings/                     the window; SyncModel and the *State types are
+                                                     the pure, tested half; DaemonLink the bus half
+Sources/skrepka-settings/main.swift                  the executable, dev.soldunov.Skrepka.Settings
+packaging/desktop/dev.soldunov.Skrepka.Settings.desktop
+```
+
+Three things it settled that the picker's daemon connection will reuse:
+
+- **How an async answer reaches a GTK widget.** `DaemonProxy` answers on
+  Swift's concurrency pool and GTK may only be touched from its loop thread.
+  Only `Sendable` values cross — into a queue behind a `Mutex`, with an eventfd
+  write that a `g_unix_fd_source` on the loop wakes for. No widget pointer
+  leaves the loop thread, and nothing needs `MainActor.assumeIsolated` or
+  `@unchecked Sendable`.
+- **One call at a time.** The daemon answers bus calls in order, and a
+  `PairWith` may take its whole thirty-second dial deadline. A poll queued
+  behind it would time out, and a timeout invalidates the bus session under the
+  dial — so `DaemonLink` sends one call at a time and drops a poll while
+  anything is queued. `SkrepkaBus.pairingCallTimeout` is the dial's own
+  timeout, longer than the daemon's; `skrepka pair --peer` uses it too, and
+  used to give up at ten seconds.
+- **Live push is set over the bus.** `SetLivePush` is interface version 2; the
+  daemon stored the choice from Phase 6 on and nothing could set it.
+
+Done when #5 — pairing completed entirely from the GUI — is covered by the
+model's tests in both directions, and the window and its pairing dialog were
+drawn under the headless sway against a stand-in daemon. It has not yet run
+against a real peer, or on KWin. Section 5 of
+[`steam-deck-session.md`](steam-deck-session.md) is that check.
+
 **Still to build, in the order they unblock each other:**
 
 1. **The picker's rows** (step 2). `PaletteWindow.show(_:)` takes `[ClipSummary]`
@@ -132,7 +175,8 @@ dropped key there is the harness, not the picker.
 4. **The tray** (step 4). `MarkPath` is in place, so the mark is ready; what is
    missing is a Cairo renderer for it and the StatusNotifierItem itself. Note
    that no candidate toolkit ships one, so this is D-Bus work either way.
-5. **Settings** (step 5).
+5. **Settings** (step 5). The devices half has landed, as `skrepka-settings`;
+   retention and exclusions wait on daemon members that can set them.
 6. **Thumbnails** (step 6) — `ThumbnailProducing` and `GdkPixbufThumbnailMaker`.
    Deliberately not started: `PaletteWindow` draws no pictures yet, and
    introducing the protocol before its second conformance has something to draw

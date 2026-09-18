@@ -1,0 +1,44 @@
+import CGtk4
+
+/// One line of a settings card: a title with a smaller line under it on the
+/// left, and a control or a value on the right.
+///
+/// The macOS pane's `SettingsRow`, so the two read as the same product.
+final class SettingsRow {
+    let widget: GtkWidgetPointer
+    private let subtitleLabel: GtkWidgetPointer
+    private let trailing: GtkWidgetPointer
+
+    init(title: String, subtitle: String?) throws {
+        guard let line = GtkBuild.box(vertical: false, spacing: 12),
+            let text = GtkBuild.box(vertical: true, spacing: 2),
+            let titleLabel = GtkBuild.label(title),
+            let subtitleLabel = GtkBuild.label(
+                subtitle ?? "", classes: [SettingsStyle.secondary], wraps: true),
+            let trailing = GtkBuild.box(vertical: false, spacing: 10)
+        else { throw SettingsError.widgetCreationFailed }
+        GtkBuild.margins(line, vertical: 10, horizontal: 12)
+        gtk_widget_set_hexpand(text, 1)
+        gtk_widget_set_valign(trailing, GTK_ALIGN_CENTER)
+        GtkBuild.setVisible(subtitleLabel, !(subtitle ?? "").isEmpty)
+
+        GtkBuild.append(titleLabel, to: text)
+        GtkBuild.append(subtitleLabel, to: text)
+        GtkBuild.append(text, to: line)
+        GtkBuild.append(trailing, to: line)
+
+        self.widget = line
+        self.subtitleLabel = subtitleLabel
+        self.trailing = trailing
+    }
+
+    /// Adds a control or a value at the right-hand end.
+    func addTrailing(_ child: GtkWidgetPointer) {
+        GtkBuild.append(child, to: trailing)
+    }
+
+    func setSubtitle(_ text: String) {
+        GtkBuild.setText(subtitleLabel, text)
+        GtkBuild.setVisible(subtitleLabel, !text.isEmpty)
+    }
+}

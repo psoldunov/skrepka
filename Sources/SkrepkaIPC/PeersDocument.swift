@@ -40,6 +40,23 @@ public struct PeerDocument: Codable, Sendable, Hashable {
     /// been resolved against the platform default.
     public let livePush: Bool
 
+    /// What the user chose for this peer, as one of ``LivePushChoiceName``.
+    ///
+    /// Nil for a device that is not paired — live push to one is impossible,
+    /// not merely off — and in a document from a daemon older than interface
+    /// version 2. Carried beside ``livePush`` rather than instead of it
+    /// because a settings row shows both: the switch follows ``livePush``,
+    /// and the sentence under it depends on whether the user has chosen at all.
+    public let livePushChoice: String?
+
+    /// Why live push is on or off while the user has chosen nothing, as one of
+    /// ``LivePushDefaultName``. Nil wherever ``livePushChoice`` is.
+    ///
+    /// Sent rather than rebuilt by each client from the two platforms, which
+    /// would be design §3's rule written once per client — and a client that
+    /// lags the daemon would then state a default the daemon no longer applies.
+    public let livePushDefault: String?
+
     /// The last successful index exchange, or nil where there has not been one
     /// this run.
     public let lastSyncedAt: Date?
@@ -62,7 +79,9 @@ public struct PeerDocument: Codable, Sendable, Hashable {
         isAcceptingPairing: Bool,
         linkState: String,
         livePush: Bool,
-        lastSyncedAt: Date?
+        lastSyncedAt: Date?,
+        livePushChoice: String? = nil,
+        livePushDefault: String? = nil
     ) {
         self.deviceID = deviceID
         self.fingerprint = fingerprint
@@ -74,6 +93,33 @@ public struct PeerDocument: Codable, Sendable, Hashable {
         self.linkState = linkState
         self.livePush = livePush
         self.lastSyncedAt = lastSyncedAt
+        self.livePushChoice = livePushChoice
+        self.livePushDefault = livePushDefault
+    }
+
+    /// The values ``livePushChoice`` carries, and what
+    /// ``SkrepkaInterface/Member/setLivePush`` accepts.
+    ///
+    /// The same strings as `LivePushChoice`'s raw values in `SkrepkaSync`,
+    /// which this target cannot import — it builds without the sync core so
+    /// the CLI does not link it. `LivePushMemberTests` holds the two together.
+    public enum LivePushChoiceName {
+        /// Nothing recorded; ``PeerDocument/livePushDefault`` decides.
+        public static let followsPlatformDefault = "followsPlatformDefault"
+        public static let on = "on"
+        public static let off = "off"
+    }
+
+    /// The values ``livePushDefault`` carries — `LivePushDefault`'s cases.
+    public enum LivePushDefaultName {
+        /// Two different systems, or two Linux machines: live push is the
+        /// point of pairing them.
+        public static let on = "on"
+        /// Two Apple devices, where Universal Clipboard already does this.
+        public static let offBetweenAppleDevices = "offBetweenAppleDevices"
+        /// The peer has not said what it runs — on Linux, until its link has
+        /// connected this run.
+        public static let offForUnrecognisedPlatform = "offForUnrecognisedPlatform"
     }
 }
 
