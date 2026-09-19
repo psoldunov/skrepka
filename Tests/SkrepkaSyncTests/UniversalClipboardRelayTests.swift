@@ -103,6 +103,20 @@ struct UniversalClipboardRelayTests {
         }
     }
 
+    /// A fetch that runs out of budget can stop between two file lists. The
+    /// one that did not arrive may name a file of the user's own, so a partial
+    /// set of lists proves nothing.
+    @Test("A relay is judged only once every file list the item declares has arrived")
+    func needsEveryDeclaredFileList() {
+        let linuxList = RepresentationKey(canonical: "text/uri-list", origin: "text/uri-list")
+        let declared = [Self.fileList, linuxList].map { RepresentationDescriptor(key: $0, byteCount: 1) }
+        let meta = Self.meta(representations: declared)
+        let staged = Data(Self.staged.absoluteString.utf8)
+
+        #expect(!UniversalClipboardRelay.isRelay(meta, payloads: [Self.fileList: staged]))
+        #expect(UniversalClipboardRelay.isRelay(meta, payloads: [Self.fileList: staged, linuxList: staged]))
+    }
+
     @Test("A uri-list with CRLF line ends, comments and a trailing NUL reads as its URLs")
     func readsAURIList() {
         let body = "# relayed\r\n\(Self.staged.absoluteString)\r\n\u{0}"
@@ -151,7 +165,8 @@ struct UniversalClipboardRelayTests {
 
     static func meta(
         kind: String = "imageFile",
-        createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
+        createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000),
+        representations: [RepresentationDescriptor] = []
     ) -> SyncClipMeta {
         SyncClipMeta(
             contentHash: String(repeating: "c", count: 64),
@@ -159,7 +174,8 @@ struct UniversalClipboardRelayTests {
             preview: "CleanShot 2026-09-18 at 23.55.42@2x.png",
             createdAt: createdAt,
             isPinned: LWWRegister(value: false, timestamp: createdAt, deviceID: SyncFixtures.deviceA),
-            originDeviceID: SyncFixtures.deviceA
+            originDeviceID: SyncFixtures.deviceA,
+            representations: representations
         )
     }
 }

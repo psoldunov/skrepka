@@ -85,6 +85,11 @@ public enum UniversalClipboardRelay {
     /// every device.
     public static func isRelay(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) -> Bool {
         guard fileSystemKinds.contains(meta.kind) else { return false }
+        // Every list the item declares, or no answer. A fetch that ran out of
+        // budget can stop between two of them, and the one left behind may
+        // name a file of the user's own.
+        let declared = meta.representations.map(\.key).filter { $0.canonical == fileListKey }
+        guard declared.allSatisfy({ payloads[$0] != nil }) else { return false }
         let lists = payloads.filter { $0.key.canonical == fileListKey }.map(\.value)
         return !lists.isEmpty && lists.allSatisfy { holdsOnlyStagedFiles(fileURLs(in: $0)) }
     }
