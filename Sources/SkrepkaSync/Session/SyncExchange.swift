@@ -69,6 +69,10 @@ public struct SyncExchange: Sendable {
     /// empty and leaves a non-empty one alone — it has to, or a peer could
     /// overwrite bytes this device captured itself — so a second call for the
     /// same row would be dropped.
+    ///
+    /// Bytes that show the item to be a Universal Clipboard relay are not
+    /// stored: the row the merge just learned is discarded and tombstoned
+    /// instead — see ``UniversalClipboardRelay``.
     private func fetchPayloads(
         offered: [SyncClipMeta],
         holding localItems: [SyncClipMeta],
@@ -90,6 +94,12 @@ public struct SyncExchange: Sendable {
             guard !missing.isEmpty else { continue }
             let fetched = try await fetch(missing, of: meta, budget: &budget)
             guard !fetched.isEmpty else { continue }
+            // The bytes are the first point at which a relay can be told from
+            // a file: an index entry names its files by display name alone.
+            if UniversalClipboardRelay.isRelay(meta, payloads: fetched) {
+                try await runtime.store.discardRelay(meta, by: runtime.deviceID, at: Date())
+                continue
+            }
             try await runtime.store.capture(meta, payloads: fetched)
         }
     }

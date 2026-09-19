@@ -1,4 +1,5 @@
 import Foundation
+import SkrepkaSync
 
 /// Turns a ``PasteboardSnapshot`` into a ``CaptureDecision``.
 ///
@@ -52,11 +53,16 @@ public struct CaptureRules: Sendable {
         guard !payload.isEmpty, let kind = Self.kind(for: payload) else {
             return Self.emptyReason(declaredTypes: snapshot.declaredTypes)
         }
+        let fileURLs = kind.isFileSystemEntry ? Self.fileURLs(in: snapshot, payload: payload) : []
+        // Ahead of the size check: a relay is not a copy made on this Mac at
+        // all, and calling a large one too large would log a notice for it.
+        if UniversalClipboardRelay.holdsOnlyStagedFiles(fileURLs) {
+            return .rejectedUniversalClipboardRelay
+        }
         guard payload.byteCount <= maximumItemBytes else {
             return .rejectedTooLarge(byteCount: payload.byteCount)
         }
 
-        let fileURLs = kind.isFileSystemEntry ? Self.fileURLs(in: snapshot, payload: payload) : []
         let text = Self.text(for: kind, payload: payload, fileURLs: fileURLs)
         guard kind == .image || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .rejectedEmpty

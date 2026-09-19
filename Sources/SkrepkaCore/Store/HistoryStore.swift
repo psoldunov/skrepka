@@ -63,7 +63,9 @@
         /// ``HistoryStoreSyncError/deviceIdentityUnavailable``.
         public var localDeviceID: SyncDeviceID?
 
-        private let container: ModelContainer
+        /// Not private: `HistoryStore+Relays.swift` hands it to a scan that reads
+        /// through a context of its own, off the main actor.
+        let container: ModelContainer
         /// Not private: the capture path that uses it is
         /// `HistoryStore+Capture.swift`, and an extension in another file cannot
         /// see a private member.

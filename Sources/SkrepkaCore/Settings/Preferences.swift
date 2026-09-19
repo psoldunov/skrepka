@@ -23,6 +23,7 @@ public final class Preferences {
         pasteAutomatically = defaults.value(for: .pasteAutomatically)
         hasCompletedFirstRun = defaults.value(for: .hasCompletedFirstRun)
         syncEnabled = defaults.value(for: .syncEnabled)
+        hasRemovedUniversalClipboardRelays = defaults.value(for: .hasRemovedUniversalClipboardRelays)
     }
 
     /// Maximum unpinned entries, nil for unlimited.
@@ -69,6 +70,18 @@ public final class Preferences {
         didSet { defaults.set(syncEnabled, for: .syncEnabled) }
     }
 
+    /// Set once history has been cleared of the Universal Clipboard relays
+    /// earlier builds recorded — see `HistoryStore.removeUniversalClipboardRelays()`.
+    ///
+    /// Not a setting: the user never sees it. It is here because it has to
+    /// survive a relaunch, like ``hasCompletedFirstRun``, and the clean-up is too
+    /// costly to repeat on every one.
+    public var hasRemovedUniversalClipboardRelays: Bool {
+        didSet {
+            defaults.set(hasRemovedUniversalClipboardRelays, for: .hasRemovedUniversalClipboardRelays)
+        }
+    }
+
     public var retentionPolicy: RetentionPolicy {
         RetentionPolicy(
             maximumItems: maximumItems,
@@ -110,6 +123,9 @@ struct PreferenceKey<Value: Sendable>: Sendable {
     }
     static var syncEnabled: PreferenceKey<Bool> {
         .init(name: "syncEnabled", defaultValue: false)
+    }
+    static var hasRemovedUniversalClipboardRelays: PreferenceKey<Bool> {
+        .init(name: "hasRemovedUniversalClipboardRelays", defaultValue: false)
     }
 }
 

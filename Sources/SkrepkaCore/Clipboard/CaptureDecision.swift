@@ -24,6 +24,14 @@ public enum CaptureDecision: Sendable, Equatable {
     case rejectedUnreadable
     /// Larger than the configured per-item ceiling.
     case rejectedTooLarge(byteCount: Int)
+    /// Files Universal Clipboard staged on this Mac for a copy made on another
+    /// device.
+    ///
+    /// Not history here: the path is a staging copy with a new name on every
+    /// relay, so recording it made a second row for each copy, and sync
+    /// carried that row back to the device the copy came from. That device
+    /// records the real file. See `UniversalClipboardRelay` in `SkrepkaSync`.
+    case rejectedUniversalClipboardRelay
 
     public var item: ClipItem? {
         guard case .captured(let item) = self else { return nil }
@@ -49,6 +57,8 @@ public enum CaptureDecision: Sendable, Equatable {
             "Skipped an entry of \(byteCount) bytes — over the size limit."
         case .rejectedUnreadable:
             "The pasteboard changed but returned no readable data."
+        case .rejectedUniversalClipboardRelay:
+            "Skipped files Universal Clipboard relayed from another device."
         }
     }
 
@@ -60,19 +70,24 @@ public enum CaptureDecision: Sendable, Equatable {
     public var isNoteworthyRejection: Bool {
         switch self {
         case .rejectedUnreadable, .rejectedTooLarge: true
-        case .captured, .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedEmpty: false
+        case .captured, .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedEmpty,
+            .rejectedUniversalClipboardRelay:
+            false
         }
     }
 
     /// Whether something was copied that the rules declined to record.
     ///
     /// True for every rejection but ``rejectedEmpty``: a password, an excluded
-    /// app's copy, an oversized item and an unreadable one are each content
-    /// that replaced what the clipboard held, which a live-push hand-over has
-    /// to hear about. An empty clipboard is not a copy of anything.
+    /// app's copy, an oversized item, an unreadable one and a relay are each
+    /// content that replaced what the clipboard held, which a live-push
+    /// hand-over has to hear about. An empty clipboard is not a copy of
+    /// anything.
     public var isRefusedCopy: Bool {
         switch self {
-        case .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedTooLarge, .rejectedUnreadable: true
+        case .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedTooLarge, .rejectedUnreadable,
+            .rejectedUniversalClipboardRelay:
+            true
         case .captured, .rejectedEmpty: false
         }
     }

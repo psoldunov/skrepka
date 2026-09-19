@@ -14,6 +14,7 @@ struct CaptureDecisionTests {
             .rejectedExcludedApp(bundleID: "com.example.vault"),
             .rejectedTooLarge(byteCount: 1 << 30),
             .rejectedUnreadable,
+            .rejectedUniversalClipboardRelay,
         ]
         for decision in refusals {
             #expect(decision.isRefusedCopy)

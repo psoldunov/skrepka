@@ -168,11 +168,21 @@ public actor SyncResponder {
     ///
     /// Answers with no messages. A live push is applied, not acknowledged — see
     /// ``SyncInitiator/push(_:payloads:)``.
+    ///
+    /// A Universal Clipboard relay from a peer that still records them is
+    /// discarded before either happens. It is not history, and on the
+    /// clipboard it would replace what the user copied with a file URL into
+    /// the peer's staging folder, which does not exist here. See
+    /// ``UniversalClipboardRelay``.
     private func acceptLivePush(
         _ meta: SyncClipMeta,
         inline: [RepresentationKey: Data]
     ) async throws -> [SyncMessage] {
         guard InboundClock.isPlausible(meta, receivedAt: now()) else { return [] }
+        guard !UniversalClipboardRelay.isRelay(meta, payloads: inline) else {
+            try await store.discardRelay(meta, by: session.localIdentity.deviceID, at: now())
+            return []
+        }
         try await store.capture(meta, payloads: inline)
         await onLivePush(meta, inline)
         return []
