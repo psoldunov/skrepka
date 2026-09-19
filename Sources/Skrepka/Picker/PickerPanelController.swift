@@ -39,6 +39,9 @@ final class PickerPanelController {
     func dismiss() {
         stopMonitors()
         panel?.orderOut(nil)
+        // Once the panel is off screen, so the list is back at its top before
+        // the next open instead of scrolling there as the panel appears.
+        model.reset()
     }
 
     private func makePanel() -> PickerPanel {

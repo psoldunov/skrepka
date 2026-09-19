@@ -480,7 +480,7 @@
 						"path": "Sources/SkrepkaSync/Model"
 					}
 				],
-				"sublabel": "device id, LWW register, clip meta, limits, live-push policy and echo gate",
+				"sublabel": "device id, LWW register, clip meta, limits, live-push policy and echo gate, Universal Clipboard relay test",
 				"type": "backend"
 			},
 			{
@@ -692,6 +692,12 @@
 				"label": "filters",
 				"to": "privacy-rules",
 				"variant": "security"
+			},
+			{
+				"from": "privacy-rules",
+				"id": "e-rules-syncmodel",
+				"label": "refuses Universal Clipboard relays",
+				"to": "sync-model"
 			},
 			{
 				"from": "capture",

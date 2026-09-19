@@ -187,6 +187,7 @@ extension SyncCoordinator {
         // The store stamps new rows with this and writes tombstones only once it
         // has one, so it has to land before anything is captured or offered.
         store.localDeviceID = certificate.deviceID
+        await removeUniversalClipboardRelaysOnce()
 
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
         self.group = group
@@ -210,6 +211,28 @@ extension SyncCoordinator {
         try await reloadPairedPeers()
         try await startSyncListener(runtime: runtime)
         try await startBrowsing()
+    }
+
+    /// Clears history of the Universal Clipboard relays earlier builds
+    /// recorded, the first time sync comes up — see
+    /// `HistoryStore.removeUniversalClipboardRelays()`.
+    ///
+    /// Here rather than at launch because each removal writes a tombstone, a
+    /// tombstone needs this device's identity, and this is the first point the
+    /// store has it. Removed without one, every relay would come back from the
+    /// peer that sent it, only to be fetched and discarded all over again.
+    ///
+    /// Before any link starts, so no exchange runs against the rows being
+    /// removed. Awaited, but the payload reads it waits on run off the main
+    /// actor. A failure leaves the marker unset and is tried on the next
+    /// bring-up.
+    private func removeUniversalClipboardRelaysOnce() async {
+        guard !preferences.hasRemovedUniversalClipboardRelays else { return }
+        guard let removed = await store.removeUniversalClipboardRelays() else { return }
+        preferences.hasRemovedUniversalClipboardRelays = true
+        SkrepkaLog.sync.notice(
+            "Removed \(removed, privacy: .public) Universal Clipboard relays from history."
+        )
     }
 
     /// Re-reads the paired set and the live-push choices that go with it.

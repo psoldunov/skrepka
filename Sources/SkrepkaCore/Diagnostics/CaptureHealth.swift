@@ -54,7 +54,8 @@ public final class CaptureHealth {
         case .captured:
             consecutiveUnreadable = 0
             lastCapturedAt = date
-        case .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedEmpty, .rejectedTooLarge:
+        case .rejectedPrivacyMarker, .rejectedExcludedApp, .rejectedEmpty, .rejectedTooLarge,
+            .rejectedUniversalClipboardRelay:
             // Any decision Skrepka could only reach by reading real bytes proves
             // access works, so the run resets.
             consecutiveUnreadable = 0
