@@ -46,6 +46,12 @@ final class PickerModel {
     /// stick and no keystroke ever reaches SwiftUI.
     private(set) var focusToken = 0
 
+    /// Bumped every time the list should go back to its top, without animation.
+    ///
+    /// A token rather than a scroll call because only the view holds the
+    /// scroll position, the same reason ``focusToken`` exists.
+    private(set) var scrollResetToken = 0
+
     private var hasPointerMoved = false
     private var firstPointerLocation: CGPoint?
     private static let pointerMovementThreshold: CGFloat = 4
@@ -104,13 +110,21 @@ final class PickerModel {
         focusToken += 1
     }
 
-    /// Called when the panel opens, so a stale query never greets the user.
+    /// Called when the panel closes and again when it opens, so a stale query
+    /// never greets the user and the list starts at its top.
+    ///
+    /// On close as well, so the list is back at the top while nobody is looking.
+    /// Done only on open, the scroll back from wherever the user had left it
+    /// played out in front of them as the panel appeared.
     func reset() {
         query = ""
         selectedIndex = 0
-        selectionSource = .keyboard
+        // After `query`, whose `didSet` would otherwise leave it at `.keyboard`
+        // and have the list animate after the first row as well.
+        selectionSource = .reset
         hasPointerMoved = false
         firstPointerLocation = nil
+        scrollResetToken += 1
         // Unconditional: `query` was already empty on a second open, so its
         // `didSet` does not fire, and the panel is sized from `results`.
         refreshResults()
@@ -244,6 +258,9 @@ final class PickerModel {
 enum SelectionSource {
     case keyboard
     case pointer
+    /// ``PickerModel/reset()`` put it back on the first row. The list goes back
+    /// to its top with it, so there is no row to scroll after.
+    case reset
 }
 
 extension Comparable {

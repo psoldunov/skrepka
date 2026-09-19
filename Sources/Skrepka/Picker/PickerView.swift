@@ -13,6 +13,10 @@ struct PickerView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isSearchFocused: Bool
+    /// Held so the list can be sent back to its top edge, padding and all.
+    /// `ScrollViewProxy` scrolls only to a row, which leaves the padding above
+    /// the first one out of view.
+    @State private var scrollPosition = ScrollPosition(edge: .top)
 
     private static let cornerRadius: CGFloat = 20
     /// Rows to move for one Page Up / Page Down.
@@ -149,6 +153,13 @@ struct PickerView: View {
                 .padding(.vertical, PickerMetrics.listVerticalPadding)
             }
             .defaultScrollAnchor(.top)
+            .scrollPosition($scrollPosition)
+            .onChange(of: model.scrollResetToken) { _, _ in
+                // Never animated. This runs as the panel closes, and a list that
+                // scrolls back to the top is exactly what the user must not
+                // see the next time it opens.
+                withAnimation(nil) { scrollPosition.scrollTo(edge: .top) }
+            }
             // The offset, not `onScrollPhaseChange`: what makes hover wrong is
             // rows moving under the pointer, and the offset says that directly
             // for every input — trackpad, momentum, a legacy wheel with no
