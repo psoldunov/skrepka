@@ -108,6 +108,50 @@
             #expect(count == 0)
         }
 
+        // MARK: - Checked mutations
+
+        @Test("Setting a pin writes only when its value changes")
+        func settingAPinIsIdempotentAndExplicit() async throws {
+            let store = try SQLiteHistoryStore(
+                location: nil,
+                retention: .unlimited,
+                localDeviceID: EngineFixtures.localDevice
+            )
+            #expect(await store.capture(EngineFixtures.item("pin", at: EngineFixtures.at(1))))
+            let id = try #require(try await store.summaries().first?.id)
+
+            try await store.setPinned(id, to: true)
+            let pinned = try #require(try await store.clipRow(id: id))
+            #expect(pinned.isPinned)
+            #expect(pinned.pinnedAt != nil)
+            #expect(pinned.pinnedBy == EngineFixtures.localDevice.hex)
+
+            try await store.setPinned(id, to: true)
+            #expect(try await store.clipRow(id: id) == pinned)
+
+            try await store.setPinned(id, to: false)
+            #expect(try await store.clipRow(id: id)?.isPinned == false)
+        }
+
+        @Test("Checked deletion and clearing report removed rows")
+        func checkedMutationsRemoveTheRequestedRows() async throws {
+            let store = try SQLiteHistoryStore(
+                location: nil,
+                retention: .unlimited,
+                localDeviceID: EngineFixtures.localDevice
+            )
+            #expect(await store.capture(EngineFixtures.item("pinned", at: EngineFixtures.at(1))))
+            #expect(await store.capture(EngineFixtures.item("ordinary", at: EngineFixtures.at(2))))
+            let pinnedID = try #require(try await store.summaries().first { $0.text == "pinned" }?.id)
+            let ordinaryID = try #require(try await store.summaries().first { $0.text == "ordinary" }?.id)
+            try await store.setPinned(pinnedID, to: true)
+
+            try await store.deleteChecked(ordinaryID)
+            #expect(try await store.summaries().map(\.text) == ["pinned"])
+            #expect(try await store.clearChecked(keepingPinned: true) == 0)
+            #expect(try await store.clearChecked(keepingPinned: false) == 1)
+        }
+
         // MARK: - The file
 
         @Test("Deleting a clip takes its payload with it")

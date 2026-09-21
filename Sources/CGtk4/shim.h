@@ -248,3 +248,17 @@ static inline unsigned long skrepka_connect(gpointer instance, const char *signa
 	return g_signal_connect_data(instance, signal, handler, data, destroy_data,
 	                             (GConnectFlags)0);
 }
+
+// MARK: - Feature headers
+//
+// One module map names one header, so the helpers each feature needs live in a
+// header of their own and are pulled in here. Split by feature rather than kept
+// in this file so that each stays readable on its own, and so the C side of a
+// feature is found next to its name.
+//
+//   app.h      the app shell: printing to the terminal that invoked it
+//   gdbus.h    GDBus: the tray's StatusNotifierItem and menu, and the portals
+//   picker.h   the picker window: X11 placement and the keyboard grab
+#include "app.h"
+#include "gdbus.h"
+#include "picker.h"

@@ -11,7 +11,7 @@ enum ConfirmDialog {
     /// Calls `confirmed` only if the person chose `confirm`. Escape, the close
     /// button and Cancel all mean no, and Return lands on Cancel.
     static func ask(
-        over parent: UnsafeMutablePointer<GtkWindow>,
+        over parent: UnsafeMutablePointer<GtkWindow>?,
         message: String,
         detail: String,
         confirm: String,

@@ -1,3 +1,4 @@
+import DBUS
 import Foundation
 import SkrepkaIPC
 import SkrepkaSync
@@ -27,6 +28,50 @@ struct AvahiDiscoveryTests {
     /// A session pointed at a socket nothing is listening on, on every machine.
     static func deadSession() -> BusSession {
         BusSession(bus: .system, address: deadAddress)
+    }
+
+    @Test("an avahi error reply keeps its D-Bus error name")
+    func errorReplyKeepsItsName() {
+        let headers: [(code: HeaderField.Code, value: DBusValue)] = [
+            (.errorName, .string("org.freedesktop.Avahi.NotPermittedError"))
+        ]
+
+        #expect(
+            DBusMessage.avahiErrorName(in: headers)
+                == "org.freedesktop.Avahi.NotPermittedError")
+    }
+
+    @Test("publication refusals explain their cause and remedy")
+    func publicationRefusalsAreActionable() {
+        let notPermitted = AvahiError.refused(
+            method: AvahiNames.Server.entryGroupNew,
+            name: "org.freedesktop.Avahi.NotPermittedError",
+            detail: "Not permitted"
+        ).description
+        #expect(notPermitted.contains("disable-user-service-publishing=yes"))
+        #expect(notPermitted.contains("sudo systemctl restart avahi-daemon"))
+        #expect(notPermitted.contains("still discover and dial published peers"))
+
+        let tooManyClients = AvahiError.refused(
+            method: AvahiNames.Server.entryGroupNew,
+            name: "org.freedesktop.Avahi.TooManyClientsError",
+            detail: "Too many clients"
+        ).description
+        #expect(tooManyClients.contains("clients-max"))
+
+        let tooManyObjects = AvahiError.refused(
+            method: AvahiNames.Server.entryGroupNew,
+            name: "org.freedesktop.Avahi.TooManyObjectsError",
+            detail: "Too many objects"
+        ).description
+        #expect(tooManyObjects.contains("objects-per-client-max"))
+
+        let accessDenied = AvahiError.refused(
+            method: AvahiNames.Server.entryGroupNew,
+            name: "org.freedesktop.DBus.Error.AccessDenied",
+            detail: "Access denied"
+        ).description
+        #expect(accessDenied.contains("system D-Bus policy"))
     }
 
     @Test("probing without a daemon reports responderUnavailable, with a reason")

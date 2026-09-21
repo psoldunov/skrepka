@@ -33,6 +33,12 @@ struct DaemonServiceInterfaceTests {
         SkrepkaInterface.Member.unpair: (["s"], ["s"]),
         SkrepkaInterface.Member.setLivePush: (["s", "s"], ["s"]),
         SkrepkaInterface.Member.syncNow: ([], ["s"]),
+        SkrepkaInterface.Member.search: (["s", "u"], ["s"]),
+        SkrepkaInterface.Member.copyAs: (["s", "s"], ["s"]),
+        SkrepkaInterface.Member.setPinned: (["s", "b"], ["s"]),
+        SkrepkaInterface.Member.delete: (["s"], ["s"]),
+        SkrepkaInterface.Member.clear: (["b"], ["s"]),
+        SkrepkaInterface.Member.preview: (["s", "u"], ["s"]),
     ]
 
     static func service() throws -> DaemonService {

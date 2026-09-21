@@ -34,11 +34,23 @@
             /// mapping between the two belongs to `RepresentationKeyMap` and its
             /// caller, not to a storage read.
             public let representationTypes: [String]
+            /// The representation identifiers whose bytes this device holds.
+            ///
+            /// An entry learned from a peer has an index before it has payload
+            /// bytes, so this stays separate from `representationTypes`: callers
+            /// can draw a capability without claiming a preview they cannot send.
+            public let localRepresentationTypes: [String]
 
-            public init(summary: ClipSummary, contentHash: String, representationTypes: [String]) {
+            public init(
+                summary: ClipSummary,
+                contentHash: String,
+                representationTypes: [String],
+                localRepresentationTypes: [String]
+            ) {
                 self.summary = summary
                 self.contentHash = contentHash
                 self.representationTypes = representationTypes
+                self.localRepresentationTypes = localRepresentationTypes
             }
         }
 
@@ -58,6 +70,7 @@
         public func listing() throws -> [ClipListing] {
             let rows = try clipRows(.everything, trailing: "ORDER BY created_at DESC, rowid ASC")
             let indexes = try representationIndexes(.everything)
+            let localTypes = try locallyHeldRepresentationTypes()
             let hashes = Dictionary(rows.map { ($0.id, $0.contentHash) }) { first, _ in first }
             let ordered = ClipProjection(ordered: rows.map(SQLiteClipMapping.summary(from:))).items
             return ordered.map { summary in
@@ -69,7 +82,8 @@
                     // string rather than a force-unwrap, because an unreachable
                     // crash is still a crash.
                     contentHash: hashes[summary.id] ?? "",
-                    representationTypes: (indexes[summary.id]?.keys).map { $0.sorted() } ?? []
+                    representationTypes: (indexes[summary.id]?.keys).map { $0.sorted() } ?? [],
+                    localRepresentationTypes: localTypes[summary.id] ?? []
                 )
             }
         }
@@ -90,6 +104,25 @@
                 throw ListingError.ambiguousPrefix(prefix, matching: matches.count)
             }
             return matches.first?.id
+        }
+
+        /// The locally held types for every entry, without reading a payload blob.
+        ///
+        /// `bytes IS NOT NULL` is answered from SQLite's record metadata, so a
+        /// history listing can identify previewable rows without loading pictures.
+        private func locallyHeldRepresentationTypes() throws -> [UUID: [String]] {
+            var result: [UUID: [String]] = [:]
+            try database.query(
+                """
+                SELECT clip_id, "type" FROM clip_representation WHERE bytes IS NOT NULL
+                """
+            ) { statement in
+                guard let idText = statement.text(0), let id = UUID(uuidString: idText),
+                    let type = statement.text(1)
+                else { return }
+                result[id, default: []].append(type)
+            }
+            return result.mapValues { $0.sorted() }
         }
 
         public enum ListingError: Error, Sendable, Equatable, CustomStringConvertible {

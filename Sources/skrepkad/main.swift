@@ -22,5 +22,7 @@ case .help:
 case .version:
     FileHandle.standardOutput.write(Data("skrepkad \(DaemonVersion.current)\n".utf8))
 case .run:
-    exit(await DaemonRunner.run(options))
+    // `DaemonRunner.run` does not return: after a clean shutdown it terminates
+    // the process itself, for the reason spelled out there.
+    _ = await DaemonRunner.run(options)
 }

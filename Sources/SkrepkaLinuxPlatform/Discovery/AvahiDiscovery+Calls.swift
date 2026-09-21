@@ -65,7 +65,11 @@ extension AvahiDiscovery {
         // error reply is avahi speaking, so it must not be reported as the
         // transport dying.
         guard reply.messageType != .error else {
-            throw AvahiError.refused(method: method, detail: reply.avahiErrorDetail)
+            throw AvahiError.refused(
+                method: method,
+                name: reply.avahiErrorName,
+                detail: reply.avahiErrorDetail
+            )
         }
         return reply.body
     }
@@ -210,6 +214,23 @@ extension Duration {
 }
 
 extension DBusMessage {
+    /// The error-name header, which identifies why avahi refused a call.
+    var avahiErrorName: String { Self.avahiErrorName(in: headerFields) }
+
+    /// Reads an error name from reply headers. Kept separate so captured reply
+    /// headers can exercise it without a live system bus.
+    static func avahiErrorName(in fields: [HeaderField]) -> String {
+        avahiErrorName(in: fields.map { (code: $0.code, value: $0.variant.value) })
+    }
+
+    static func avahiErrorName(
+        in fields: [(code: HeaderField.Code, value: DBusValue)]
+    ) -> String {
+        guard case .string(let name) = fields.first(where: { $0.code == .errorName })?.value
+        else { return "" }
+        return name
+    }
+
     /// The human half of an error reply, which D-Bus convention puts first in
     /// the body.
     var avahiErrorDetail: String {

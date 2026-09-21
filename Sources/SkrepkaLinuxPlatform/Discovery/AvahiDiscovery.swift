@@ -186,7 +186,7 @@ public actor AvahiDiscovery: PeerDiscovery {
 /// Why a call to avahi did not produce an answer.
 enum AvahiError: Error, Sendable, CustomStringConvertible {
     case noReply(method: String)
-    case refused(method: String, detail: String)
+    case refused(method: String, name: String, detail: String)
     /// The daemon accepted the call and answered a body this build cannot read.
     case unreadableReply(method: String)
     /// The bus took the call and nothing came back inside
@@ -196,10 +196,46 @@ enum AvahiError: Error, Sendable, CustomStringConvertible {
     var description: String {
         switch self {
         case .noReply(let method): "avahi did not answer \(method)"
-        case .refused(let method, let detail) where detail.isEmpty: "avahi refused \(method)"
-        case .refused(let method, let detail): "avahi refused \(method): \(detail)"
+        case .refused(let method, let name, let detail):
+            Self.refusal(method: method, name: name, detail: detail)
         case .unreadableReply(let method): "avahi answered \(method) with something unreadable"
         case .timedOut(let method): "avahi did not answer \(method) in time"
+        }
+    }
+
+    private static func refusal(method: String, name: String, detail: String) -> String {
+        let publishingDisabled =
+            method == AvahiNames.Server.entryGroupNew
+            && name == "org.freedesktop.Avahi.NotPermittedError"
+        if publishingDisabled {
+            return """
+                avahi-daemon is set to refuse services from user programs \
+                (`disable-user-service-publishing=yes` in `/etc/avahi/avahi-daemon.conf`), \
+                so other devices cannot see this one. Set it to `no` under `[publish]`, then run \
+                `sudo systemctl restart avahi-daemon`. This device can still discover and dial \
+                published peers; sync and live push work only over connections this device opens.
+                """
+        }
+        switch name {
+        case "org.freedesktop.Avahi.TooManyClientsError":
+            return """
+                avahi refused \(method) because its D-Bus client limit is full. Stop unused mDNS \
+                clients or raise `clients-max` under `[server]` in avahi-daemon.conf.
+                """
+        case "org.freedesktop.Avahi.TooManyObjectsError":
+            return """
+                avahi refused \(method) because this process reached its object limit. Restart \
+                skrepkad or raise `objects-per-client-max` under `[server]` in avahi-daemon.conf.
+                """
+        case "org.freedesktop.DBus.Error.AccessDenied":
+            return """
+                the system D-Bus policy denied avahi \(method). Check the avahi system-bus policy \
+                and the avahi-daemon journal.
+                """
+        default:
+            let error = name.isEmpty ? "" : " (\(name))"
+            let reason = detail.isEmpty ? "" : ": \(detail)"
+            return "avahi refused \(method)\(error)\(reason)"
         }
     }
 }

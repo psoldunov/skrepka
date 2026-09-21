@@ -40,10 +40,20 @@ struct CLIOptionsTests {
         }
     }
 
-    @Test("`copy` takes a position or a hash")
+    @Test("`copy` takes a position or a hash, and `--plain` requests plain text")
     func copySelectors() throws {
-        #expect(try CLIOptions.parse(["copy", "3"]).command == .copy(.position(3)))
-        #expect(try CLIOptions.parse(["copy", "A1B2"]).command == .copy(.hash("a1b2")))
+        #expect(try CLIOptions.parse(["copy", "3"]).command == .copy(.position(3), plain: false))
+        #expect(try CLIOptions.parse(["copy", "A1B2"]).command == .copy(.hash("a1b2"), plain: false))
+        #expect(try CLIOptions.parse(["copy", "--plain", "3"]).command == .copy(.position(3), plain: true))
+    }
+
+    @Test("history actions take one selector, and clear defaults to keeping pins")
+    func historyActions() throws {
+        #expect(try CLIOptions.parse(["pin", "3"]).command == .pin(.position(3)))
+        #expect(try CLIOptions.parse(["unpin", "a1b2"]).command == .unpin(.hash("a1b2")))
+        #expect(try CLIOptions.parse(["delete", "3"]).command == .delete(.position(3)))
+        #expect(try CLIOptions.parse(["clear"]).command == .clear(keepingPinned: true))
+        #expect(try CLIOptions.parse(["clear", "--all"]).command == .clear(keepingPinned: false))
     }
 
     @Test("`copy` needs something to copy, and only one thing")
@@ -86,7 +96,7 @@ struct CLIOptionsTests {
 
     @Test("--json belongs only to the commands that print a document")
     func jsonIsNotUniversal() {
-        for verb in ["copy", "sync", "pair", "unpair"] {
+        for verb in ["copy", "pin", "unpin", "delete", "clear", "sync", "pair", "unpair"] {
             #expect(throws: CLIError.unknownFlag("--json", command: verb)) {
                 try CLIOptions.parse([verb, "--json", "x"])
             }
@@ -100,6 +110,9 @@ struct CLIOptionsTests {
         }
         #expect(throws: CLIError.unknownFlag("--peer", command: "list")) {
             try CLIOptions.parse(["list", "--peer", "ab-cd"])
+        }
+        #expect(throws: CLIError.unknownFlag("--all", command: "delete")) {
+            try CLIOptions.parse(["delete", "--all", "3"])
         }
         #expect(throws: CLIError.unknownFlag("--verbose", command: "doctor")) {
             try CLIOptions.parse(["doctor", "--verbose"])
@@ -129,8 +142,8 @@ struct CLIOptionsTests {
 
     @Test("`copy 0` is a usage error rather than a hash prefix")
     func copyRefusesNonPositions() throws {
-        #expect(try CLIOptions.parse(["copy", "1"]).command == .copy(.position(1)))
-        #expect(try CLIOptions.parse(["copy", "0a1b"]).command == .copy(.hash("0a1b")))
+        #expect(try CLIOptions.parse(["copy", "1"]).command == .copy(.position(1), plain: false))
+        #expect(try CLIOptions.parse(["copy", "0a1b"]).command == .copy(.hash("0a1b"), plain: false))
         for argument in ["0", "-1", ""] {
             #expect(throws: CLIError.self) { try CLIOptions.parse(["copy", argument]) }
         }

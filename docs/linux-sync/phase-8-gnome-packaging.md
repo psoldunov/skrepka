@@ -74,8 +74,10 @@ packaging/
   debian/{control,rules,changelog,skrepka.install}
   rpm/skrepka.spec
   systemd/skrepkad.service      # from Phase 6
-  desktop/dev.soldunov.Skrepka.desktop
-  desktop/dev.soldunov.Skrepka.Settings.desktop
+  desktop/dev.soldunov.Skrepka.App.desktop      # skrepka-gui; its Settings action replaces
+                                                # the 0.2.0 Settings.desktop
+  autostart/dev.soldunov.Skrepka.App.desktop    # skrepka-gui --background
+  dbus/dev.soldunov.Skrepka.service             # activates skrepkad.service
   README.md                     # why not Flatpak — see below
 ```
 

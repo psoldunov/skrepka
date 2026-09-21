@@ -18,7 +18,7 @@ extension DaemonService {
             interfaces: [
                 DBusObjectServer.Interface(
                     name: SkrepkaInterface.name,
-                    methods: readMethods() + clipboardMethods() + peerMethods()
+                    methods: readMethods() + clipboardMethods() + pickerMethods() + peerMethods()
                         + pairingWindowMethods() + pairingAnswerMethods(),
                     signals: [
                         DBusObjectServer.Signal(name: SkrepkaInterface.Signal.historyChanged),

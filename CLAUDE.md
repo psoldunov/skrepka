@@ -13,7 +13,7 @@ scripts/notarize.sh   # build, sign, notarize, staple — for builds you send ou
 scripts/doctor.sh     # the quality gate — run after every change
 scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
 scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols from its XML
-scripts/setup-linux.sh  # build skrepkad, skrepka and skrepka-settings, install into ~/.local — Linux only
+scripts/setup-linux.sh  # build skrepkad, skrepka and skrepka-gui, install into ~/.local — Linux only
 ```
 
 The Linux side has its own gate and its own entry points, and neither is
@@ -35,9 +35,11 @@ file placement in `install.sh`, building in `setup-linux.sh`.
 
 Together they are the no-root install path for the Linux daemon
 (`skrepkad`) and its CLI (`skrepka`): binaries into `~/.local/bin`, a systemd
-**user** unit into `~/.config/systemd/user`, and — when the build has it — the
-GTK4 Settings window (`skrepka-settings`) with a launcher entry and, from the
-Deck tarball, a private `libgtk4-layer-shell` in `~/.local/lib/skrepka`. A user
+**user** unit into `~/.config/systemd/user`, a D-Bus activation file so any
+client starts the daemon on demand, and — when the build has it — the GTK4
+desktop app (`skrepka-gui`: tray icon, picker and Settings in one process) with
+its launcher and autostart entries, the macOS app icon in the hicolor theme and,
+from the Deck tarball, a private `libgtk4-layer-shell` in `~/.local/lib/skrepka`. A user
 unit rather than a system one because the daemon needs the session bus and the
 Wayland or X11 display, and a system unit has neither. `--uninstall` reverses it and deliberately
 leaves the history database and the device key alone — deleting the key

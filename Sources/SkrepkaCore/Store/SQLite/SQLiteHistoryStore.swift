@@ -188,52 +188,19 @@
 
         public func delete(_ id: UUID) {
             do {
-                try database.transaction {
-                    guard let row = try clipRow(id: id) else { return }
-                    try database.run("DELETE FROM clip WHERE id = ?", [.value(id)])
-                    // A deletion is a fact peers have to learn, or the next sync
-                    // brings it straight back. Eviction is not — see
-                    // applyRetention(). The whole row rather than its hash: a
-                    // concealed entry earns no tombstone, and `isConcealed` is
-                    // the only thing that says so.
-                    try recordDeletions(of: [row])
-                }
+                try deleteChecked(id)
             } catch {
-                // The removal and its tombstone land together or not at all: a row
-                // deleted without one is a row the next sync brings back. The
-                // transaction has already rolled back, which leaves the entry
-                // visible — something the user can act on, unlike silent
-                // resurrection.
                 SkrepkaLog.store.error("Failed to delete entry: \(error.localizedDescription)")
             }
-            // Deletion is what grows the tombstone table, so it is what clears it.
-            // Outside the transaction above: tidying must not roll back a removal
-            // the user asked for.
-            pruneExpiredTombstones()
         }
 
         /// Removes everything, optionally sparing pinned entries.
         public func clear(keepingPinned: Bool = true) {
-            let condition = keepingPinned ? " WHERE is_pinned = 0" : ""
             do {
-                try database.transaction {
-                    // The rows have to be read before they go: clearing history is
-                    // a deletion, so it writes a tombstone per row. Rows rather
-                    // than hashes because a concealed entry earns no tombstone —
-                    // its hash is a probe for the content itself, and a peer that
-                    // never held it has nothing to delete.
-                    let doomed = try clipRows(keepingPinned ? .unpinned : .everything)
-                    try database.run("DELETE FROM clip\(condition)")
-                    try recordDeletions(of: doomed)
-                }
+                _ = try clearChecked(keepingPinned: keepingPinned)
             } catch {
-                // Same reason as delete(_:): rows and tombstones land together or
-                // not at all.
                 SkrepkaLog.store.error("Failed to clear history: \(error.localizedDescription)")
             }
-            // Same reason as delete(_:), and the path that writes the most of them
-            // at once.
-            pruneExpiredTombstones()
         }
 
         /// Evicts entries past the retention cap.

@@ -10,6 +10,123 @@ Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path on a Mac. On Linux, re-running `install.sh`
 is.
 
+## Unreleased
+
+Linux gets a desktop app: a tray icon, the clipboard picker on a global
+shortcut, and Settings, in one program. It also fixes the daemon going deaf
+after its first answer, which left 0.2.0's Settings window and every later
+`skrepka` command timing out.
+
+### Added
+
+- **`skrepka-gui`, one desktop app for Linux.** It holds the tray icon, the
+  global shortcut, the picker and the Settings window in a single GTK4
+  application, `dev.soldunov.Skrepka.App`. It replaces `skrepka-settings` and
+  its "Skrepka Settings" launcher entry. It takes one option at most:
+  - no option opens the picker;
+  - `--picker` opens the picker, or closes it when it is open;
+  - `--settings` opens Settings;
+  - `--background` starts in the tray and shows nothing, which is what the
+    autostart entry runs at login;
+  - `--quit` quits the app. `skrepkad` keeps running and keeps recording.
+
+  A second launch hands its option to the copy that is already running and
+  exits, so the launcher, the tray and a shortcut never start two apps.
+- **A clipboard picker on Linux.** It has the macOS layout: a search field,
+  rows with a kind tile or an image thumbnail, a subtitle (type, size, lines,
+  dimensions, how long ago), a pin glyph, Alt+1 to Alt+9 badges, the accent
+  colour on the selection, key hints in the footer, a gear that opens Settings,
+  and empty states with the paperclip mark. It follows the desktop's dark or
+  light setting and its accent colour, read from the appearance portal. Search
+  runs in the daemon over the whole text of every entry, not the first line.
+  - **Return copies the entry to the clipboard and closes the picker.** You
+    paste with Ctrl+V; Skrepka does not synthesise the keystroke
+    ([D-11](docs/linux-sync/open-questions.md#d-11)). Alt+Return copies the
+    rich form and Alt+Shift+Return plain text.
+  - Alt+1 to Alt+9 choose that row, Alt+P pins or unpins, and Alt+Backspace or
+    Alt+Delete deletes. Home, End, Page Up and Page Down move the selection,
+    and Esc closes. Right-clicking a row offers Pin or Unpin, Copy as Plain
+    Text and Delete.
+  - The pointer selects a row only after it moves, so a picker that opens under
+    a resting pointer does not steal the selection.
+  - On KWin and sway it opens as a wlr-layer-shell overlay, which leaves the app
+    underneath its caret. Where there is no layer-shell it falls back to an
+    undecorated window kept above the others, centred on the pointer's monitor,
+    with the keyboard grabbed. That fallback is for X11 sessions, which SteamOS
+    before 3.8.10 uses in Desktop Mode. It has only been seen to map under Xvfb.
+- **A global shortcut, Meta+Shift+V.** The app asks for it through the
+  `org.freedesktop.portal.GlobalShortcuts` portal, mirroring ⌘⇧V on the Mac.
+  The desktop asks you to confirm or change it the first time. Where there is no
+  such portal, bind `skrepka-gui --picker` as a custom shortcut in the desktop's
+  keyboard settings.
+- **A tray icon.** A left click opens the picker, or closes it. The menu reads
+  Open Skrepka, Clear History…, Settings… and Quit Skrepka. Clear History asks
+  first and keeps pinned entries. When the daemon cannot be started, a row
+  saying so sits at the top.
+- **The daemon starts when something needs it.** The installer adds a D-Bus
+  activation file, so any client call starts `skrepkad` through its systemd unit.
+  The app also starts the daemon itself when the call finds it missing, by asking
+  systemd for `skrepkad.service`, and shows the tray problem row when that fails.
+- **`skrepka pin`, `unpin`, `delete`, `clear` and `copy --plain`.** They cover
+  the same actions as the picker: `pin <n|hash>`, `unpin <n|hash>`,
+  `delete <n|hash>`, `clear` for every unpinned entry and `clear --all` for
+  every entry, and `copy --plain <n|hash>` for the plain-text form. The daemon's
+  D-Bus interface is version 3, with `Search`, `CopyAs`, `SetPinned`, `Delete`,
+  `Clear` and `Preview` members and the row fields the picker draws.
+- **`install.sh` installs the app.** It adds `skrepka-gui`, a "Skrepka" launcher
+  entry with a Settings action, an autostart entry that runs `--background`, the
+  app icon at the hicolor sizes, a monochrome tray icon that follows the panel's
+  text colour, and the D-Bus activation file. It removes the old
+  `skrepka-settings` files, quits a running app before upgrading, and starts the
+  app in the tray when it runs inside a graphical session. `--uninstall` removes
+  all of it and still leaves your history and this device's sync identity.
+
+### Changed
+
+- **Settings opens from the tray, the picker's gear or the launcher's Settings
+  action.** Its contents are the Sync pane 0.2.0 shipped, unchanged. It runs
+  inside the app instead of as its own process.
+- **`skrepka doctor` and the journal say why Avahi refused to publish.** A
+  daemon that only reported `avahi refused EntryGroupNew` gave no way forward.
+  The message now names the D-Bus error and, for the usual cause, says what to
+  change. See the note under Fixed.
+
+### Fixed
+
+- **`skrepkad` answered one D-Bus call and then none.** The D-Bus library's send
+  waits for a reply to every message it writes, including the method return the
+  daemon sends back. That wait sat inside the connection's read loop, so the loop
+  never read a second message. The first client got its answer; the Settings
+  window and a second `skrepka` command then timed out. This affected 0.2.0.
+  Replies are now written without waiting for anything.
+
+### Known limitations
+
+- **The tray, the shortcut and the picker have not been run on real KDE Plasma.**
+  They are tested under a headless sway and against fake portals and a fake
+  tray watcher on a private bus. The first Steam Deck session is still to come.
+- **`could not publish the service: avahi refused EntryGroupNew…` means
+  avahi-daemon is refusing services from user programs.** Its source refuses
+  `EntryGroupNew` for exactly three reasons: `disable-user-service-publishing=yes`,
+  too many clients, or too many objects for one client. On a daemon that has just
+  started it is the first. Other devices cannot see this one while it lasts, so a
+  Mac cannot dial it. The Linux device can still see and dial the Mac. To fix it,
+  set `disable-user-service-publishing=no` under `[publish]` in
+  `/etc/avahi/avahi-daemon.conf`, then run `sudo systemctl restart avahi-daemon`.
+  On a Steam Deck `sudo` needs a password set with `passwd`. Whether an edit under
+  `/etc` survives a SteamOS update is unverified.
+- **`Failed to set thread priority for worker thread: pqc=… errno=13` in the
+  journal is harmless.** Swift's libdispatch tries to lower a worker thread's nice
+  value to imitate a quality-of-service class, and an unprivileged user service
+  is not allowed to (`EACCES`). It happens once per process in any Swift program
+  that uses Dispatch on Linux and changes nothing. It is left showing because
+  `LIBDISPATCH_LOG=NO`, the switch that would hide it, hides libdispatch's
+  assertion messages too.
+- **Thumbnails of copied image files are not drawn.** An image copied as pixels
+  gets its thumbnail. A file copied from a file manager still shows a kind tile.
+- **Retention and exclusion settings are macOS only.** The Linux Settings window
+  has the Sync pane and nothing else.
+
 ## [0.2.0](https://github.com/psoldunov/skrepka/releases/tag/v0.2.0) — 2026-09-18
 
 Skrepka runs on Linux — as a preview — and a Linux box can share clipboard

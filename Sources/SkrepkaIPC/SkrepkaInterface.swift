@@ -67,7 +67,11 @@ public enum SkrepkaInterface {
     /// - 1: the Phase 6 surface.
     /// - 2: ``Member/setLivePush``, and the live-push choice and default on
     ///   ``PeerDocument`` that a client needs to draw the switch it sets.
-    public static let version: UInt32 = 2
+    /// - 3: the picker's members — ``Member/search``, ``Member/copyAs``,
+    ///   ``Member/setPinned``, ``Member/delete``, ``Member/clear`` and
+    ///   ``Member/preview`` — and the row fields on ``ClipDocument`` a picker
+    ///   draws its subtitle from.
+    public static let version: UInt32 = 3
 
     /// Every member this build exports, spelled once.
     public enum Member {
@@ -129,6 +133,46 @@ public enum SkrepkaInterface {
         /// `() -> s`. Exchanges indexes with every live peer now rather than on
         /// the timer. ``ActionDocument``.
         public static let syncNow = "SyncNow"
+
+        /// `(s query, u limit) -> s`. ``HistoryDocument`` holding the entries
+        /// that match `query`, best match first — `Matcher`'s ranking, run over
+        /// the full text the daemon holds rather than the one-line previews a
+        /// client has. `total` counts every match; `limit` of 0 means all of
+        /// them. A blank query answers what ``history`` answers. Since
+        /// version 3.
+        public static let search = "Search"
+
+        /// `(s selector, s style) -> s`. ``copy``, in a chosen style: `style`
+        /// is a ``CopyStyle`` wire name, and `plain` writes the entry's text
+        /// alone so the app it lands in cannot pick up its formatting. Anything
+        /// else is refused as an invalid argument. ``ActionDocument``. Since
+        /// version 3.
+        public static let copyAs = "CopyAs"
+
+        /// `(s selector, b pinned) -> s`. Pins or unpins one entry, and the
+        /// change reaches paired devices the way a pin made on a Mac does.
+        /// Idempotent: pinning a pinned entry succeeds and changes nothing.
+        /// ``ActionDocument``. Since version 3.
+        public static let setPinned = "SetPinned"
+
+        /// `(s selector) -> s`. Deletes one entry, and records the deletion so
+        /// a paired device does not bring it back. ``ActionDocument``. Since
+        /// version 3.
+        public static let delete = "Delete"
+
+        /// `(b keepPinned) -> s`. Deletes every entry — every unpinned one when
+        /// `keepPinned` is true. Recorded for peers like ``delete``.
+        /// ``ActionDocument``. Since version 3.
+        public static let clear = "Clear"
+
+        /// `(s selector, u maxBytes) -> s`. The picture an entry holds, for a
+        /// client to draw a thumbnail from. ``PreviewDocument`` as JSON, the
+        /// bytes base64-encoded. `maxBytes` is capped at
+        /// ``PreviewDocument/defaultByteLimit``: 0 uses that cap, and a larger
+        /// value is clamped to it. An entry over the resulting limit or holding no
+        /// picture answers a document with no data and a sentence saying why.
+        /// Since version 3.
+        public static let preview = "Preview"
     }
 
     /// Signals a client may subscribe to.

@@ -36,7 +36,7 @@ public struct SyncFailure: Sendable, Hashable, Error {
         }
     }
 
-    static let updateBoth = "Update skrepkad and skrepka-settings together."
+    static let updateBoth = "Update skrepkad and skrepka-gui together: install Skrepka again."
 
     private static func describe(_ error: IPCError) -> SyncFailure {
         if error.isDaemonNotRunning {

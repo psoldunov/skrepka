@@ -22,6 +22,8 @@ public enum Keysym {
     public static let pageDown: UInt32 = 0xff56
     public static let home: UInt32 = 0xff50
     public static let end: UInt32 = 0xff57
+    public static let backspace: UInt32 = 0xff08
+    public static let delete: UInt32 = 0xffff
     /// ASCII, and the range the by-number shortcuts read.
     public static let one: UInt32 = 0x0031
     public static let nine: UInt32 = 0x0039

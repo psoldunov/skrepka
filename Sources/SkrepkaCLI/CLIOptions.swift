@@ -15,7 +15,11 @@ public struct CLIOptions: Sendable, Hashable {
     public enum Command: Sendable, Hashable {
         /// `limit` of 0 is every entry, matching the bus member.
         case list(limit: UInt32)
-        case copy(ClipSelector)
+        case copy(ClipSelector, plain: Bool)
+        case pin(ClipSelector)
+        case unpin(ClipSelector)
+        case delete(ClipSelector)
+        case clear(keepingPinned: Bool)
         case pair(peer: String?, seconds: UInt32)
         case peers
         case doctor
@@ -45,7 +49,11 @@ public struct CLIOptions: Sendable, Hashable {
 
         USAGE
           skrepka list   [--limit N] [--json]   history, newest first, pinned first
-          skrepka copy   <n|hash>               put one entry back on the clipboard
+          skrepka copy   [--plain] <n|hash>     put one entry back on the clipboard
+          skrepka pin    <n|hash>               pin one history entry
+          skrepka unpin  <n|hash>               unpin one history entry
+          skrepka delete <n|hash>               remove one history entry
+          skrepka clear  [--all]                remove unpinned entries, or every entry
           skrepka pair   [--peer FINGERPRINT] [--timeout SECONDS]
                                                 pair with another device
           skrepka peers  [--json]               paired and sighted devices
@@ -89,7 +97,7 @@ extension CLIOptions {
     /// against it: which options are legal depends on the verb, and the verb is
     /// known before its arguments are.
     enum Verb: String, Sendable, Hashable {
-        case list, copy, pair, peers, doctor, sync, unpair
+        case list, copy, pin, unpin, delete, clear, pair, peers, doctor, sync, unpair
 
         init(_ name: String) throws {
             guard let verb = Verb(rawValue: name) else { throw CLIError.unknownCommand(name) }
@@ -99,7 +107,7 @@ extension CLIOptions {
         var acceptsJSON: Bool {
             switch self {
             case .list, .peers, .doctor: true
-            case .copy, .pair, .sync, .unpair: false
+            case .copy, .pin, .unpin, .delete, .clear, .pair, .sync, .unpair: false
             }
         }
     }
@@ -114,6 +122,8 @@ extension CLIOptions {
         var limit: UInt32 = 0
         var peer: String?
         var seconds = CLIOptions.defaultPairingSeconds
+        var plain = false
+        var keepPinned = true
         var positionals: [String] = []
 
         init(parsing arguments: [String], for verb: Verb) throws {
@@ -138,6 +148,8 @@ extension CLIOptions {
             case "--limit" where verb == .list: limit = try Self.number(&rest, for: flag)
             case "--peer" where verb == .pair: peer = try Self.value(&rest, for: flag)
             case "--timeout" where verb == .pair: seconds = try Self.number(&rest, for: flag)
+            case "--plain" where verb == .copy: plain = true
+            case "--all" where verb == .clear: keepPinned = false
             default: throw CLIError.unknownFlag(flag, command: verb.rawValue)
             }
         }
@@ -178,11 +190,27 @@ extension CLIOptions {
             case .sync:
                 try none(verb)
                 return .sync
-            case .copy: return .copy(try selector(verb))
+            case .copy, .pin, .unpin, .delete, .clear: return try historyAction(verb)
             case .unpair: return .unpair(fingerprint: try fingerprint(verb))
             case .pair:
                 try none(verb)
                 return .pair(peer: try namedPeer(), seconds: seconds)
+            }
+        }
+
+        /// Builds the five verbs that mutate history, after the parser has
+        /// already restricted their flags to the ones their action understands.
+        private func historyAction(_ verb: Verb) throws -> Command {
+            switch verb {
+            case .copy: return .copy(try selector(verb), plain: plain)
+            case .pin: return .pin(try selector(verb))
+            case .unpin: return .unpin(try selector(verb))
+            case .delete: return .delete(try selector(verb))
+            case .clear:
+                try none(verb)
+                return .clear(keepingPinned: keepPinned)
+            case .list, .pair, .peers, .doctor, .sync, .unpair:
+                throw CLIError.unknownCommand(verb.rawValue)
             }
         }
 

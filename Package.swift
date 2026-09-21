@@ -261,10 +261,11 @@ let package = Package(
     // ships it in the tools tarball so Phase 7 step 1 can be walked through on KWin
     // without depending on the daemon.
     package.products.append(.executable(name: "skrepka-palette-demo", targets: ["skrepka-palette-demo"]))
-    // The Settings window: this device, the devices it is paired with and can
-    // see, pairing in both directions, and live push per device. A product so
+    // The desktop app: the tray icon, the picker its hotkey opens, and the
+    // Settings window both of them lead to — one process, so the picker is
+    // already built when the hotkey fires. A product so
     // `scripts/setup-linux.sh` and `scripts/build-deck.sh` can name it.
-    package.products.append(.executable(name: "skrepka-settings", targets: ["skrepka-settings"]))
+    package.products.append(.executable(name: "skrepka-gui", targets: ["skrepka-gui"]))
     package.targets.append(contentsOf: [
         // libwayland-client itself. `providers:` is what turns a missing
         // package into a message naming it rather than a link failure;
@@ -365,6 +366,12 @@ let package = Package(
         // `SkrepkaIPC` because the windows here are clients of the daemon in
         // another process, like the CLI — and not `SkrepkaDaemon`, for the
         // reason the CLI does not depend on it either.
+        //
+        // The four after GLib are libraries GTK itself links and a modern
+        // linker will not hand through to us: Cairo for the mark
+        // (`MarkRenderer`), GdkPixbuf for decoding thumbnails, Pango for text
+        // attributes, and Xlib for the picker's X11 placement in
+        // `Sources/CGtk4/picker.h`. All four are on any machine that has GTK 4.
         .target(
             name: "SkrepkaLinuxUI",
             dependencies: ["SkrepkaCore", "SkrepkaIPC", "CGtk4"],
@@ -374,6 +381,10 @@ let package = Package(
                 .linkedLibrary("gio-2.0"),
                 .linkedLibrary("gobject-2.0"),
                 .linkedLibrary("glib-2.0"),
+                .linkedLibrary("cairo"),
+                .linkedLibrary("gdk_pixbuf-2.0"),
+                .linkedLibrary("pango-1.0"),
+                .linkedLibrary("X11"),
             ]
         ),
         .testTarget(
@@ -461,18 +472,17 @@ let package = Package(
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/../lib"])
             ]
         ),
-        // The Settings window's entry point — everything else is in
-        // `SkrepkaLinuxUI/Settings/`, where the tests can reach it.
+        // The desktop app's entry point — everything else is in
+        // `SkrepkaLinuxUI/`, where the tests can reach it.
         //
         // Two rpaths, for the one library a Linux box may lack: SteamOS ships
-        // no gtk4-layer-shell, and this links it through CGtk4 even though the
-        // window never uses layer-shell. `$ORIGIN/../lib` finds the copy the
-        // Deck tarball carries beside `bin/`, as the palette demo does;
-        // `$ORIGIN/../lib/skrepka` finds the private copy `install.sh`
-        // puts beside an installed `~/.local/bin`. A system copy, where there is
-        // one, is found after both without either.
+        // no gtk4-layer-shell, which the picker is drawn with. `$ORIGIN/../lib`
+        // finds the copy the Deck tarball carries beside `bin/`, as the palette
+        // demo does; `$ORIGIN/../lib/skrepka` finds the private copy
+        // `install.sh` puts beside an installed `~/.local/bin`. A system copy,
+        // where there is one, is found after both without either.
         .executableTarget(
-            name: "skrepka-settings",
+            name: "skrepka-gui",
             dependencies: ["SkrepkaLinuxUI"],
             swiftSettings: sharedSwiftSettings,
             linkerSettings: [

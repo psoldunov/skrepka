@@ -9,8 +9,8 @@ whatever landed in between.
 
 The Deck OLED is the [D-10](open-questions.md#d-10) test rig. Everything Skrepka
 built on Linux so far — Phase 5's clipboard backends, Phase 6's daemon and CLI,
-Phase 7's palette and Settings window — has only been exercised inside a container against a
-headless sway. This is the checklist for the first run on a real KDE Plasma 6.4
+Phase 7's desktop app (tray, picker, shortcut and Settings) — has only been
+exercised inside a container against a headless sway. This is the checklist for the first run on a real KDE Plasma 6.4
 session, with a real Mac at the other end.
 
 Two hours if nothing blocks, an afternoon if something does.
@@ -32,6 +32,31 @@ SteamOS 3.0 shipped glibc 2.33. Newer releases are reported to carry 2.41, but
 that is **unverified**, so step 0.5 checks it. If the Deck's glibc is older,
 nothing will start. The fix then is building in an older image, not anything
 on the Deck.
+
+### Two journal lines you may meet
+
+Neither stops the session on its own. Both are worth recognising before the
+first `journalctl`.
+
+- **`could not publish the service: avahi refused EntryGroupNew…`** means
+  avahi-daemon is refusing service publication from a user program. In avahi's
+  `dbus-protocol.c` that call is refused for `disable-user-service-publishing=yes`,
+  for too many clients, or for too many objects on one client. On a fresh daemon
+  it is the first. While it lasts, other devices cannot see the Deck, so the Mac
+  cannot dial it; the Deck can still discover and dial the Mac, and sync and live
+  push run only over connections the Deck opens. `skrepka doctor` and the journal
+  print the remedy: under `[publish]` in `/etc/avahi/avahi-daemon.conf`, set
+  `disable-user-service-publishing=no`, then `sudo systemctl restart
+  avahi-daemon`. `sudo` on the Deck needs a password, set with `passwd`.
+  **Unverified:** whether an edit under `/etc` survives a SteamOS update.
+  Record what happened, and whether the edit was needed.
+- **`Failed to set thread priority for worker thread: pqc=… errno=13`** is
+  benign. Swift's libdispatch (`_dispatch_worker_thread` in `src/queue.c`) tries
+  to renice a worker thread to imitate a quality-of-service class, and an
+  unprivileged user unit may not lower its nice value (`EACCES`). It appears once
+  per process in any Swift program that uses Dispatch on Linux and changes no
+  behaviour. It is left in place because `LIBDISPATCH_LOG=NO` would also hide
+  libdispatch's assertion messages. Do not record it as a finding.
 
 ## 0. Deck prep — 20 minutes
 
@@ -60,7 +85,7 @@ you install into. All of these run from Desktop Mode's Konsole.
 
 All on the Deck, in Konsole. The tarballs are downloaded and kept, rather
 than installed with the one-line `curl … | bash`, for two reasons:
-- Sections 2 and 5 run the probe and the palette demo, which ship in the
+- Sections 2 and 4 run the probe and the palette demo, which ship in the
   release's second asset, `skrepka-linux-x86_64-tools.tar.gz`.
 - Step 0.5 reads the `runtime-report.txt` in the main one.
 
@@ -86,17 +111,28 @@ that one directory.
      `journalctl` commands.
    - A yellow `⚠ … is not on your $PATH` is expected on a fresh Deck; follow
      what it prints.
-   - It also installs `skrepka-settings` with a private copy of
-     `libgtk4-layer-shell` in `~/.local/lib/skrepka`, and a "Skrepka Settings"
-     launcher entry. Section 5 uses both.
-   - A yellow `⚠ … cannot find:` line means a shared library the Settings
-     window needs is missing; record it.
+   - It also installs the desktop app, `skrepka-gui`, with a private copy of
+     `libgtk4-layer-shell` in `~/.local/lib/skrepka`, a "Skrepka" launcher entry
+     with a Settings action, an autostart entry, the app icon, the tray icon and
+     a D-Bus activation file for the daemon. There is no separate "Skrepka
+     Settings" launcher any more. Sections 4 and 5 use the app.
+   - Inside Desktop Mode's graphical session it starts the app in the tray as
+     its last step.
+   - A yellow `⚠ … cannot find:` line means a shared library the app needs is
+     missing; record it.
    - **Fail:** `skrepkad from this build cannot run on this machine` means the
      glibc floor in "Read this first" is not met. Record the loader's message
      it prints.
 3. `systemctl --user status skrepkad` shows `active (running)`.
    - **Pass:** the status is `active`; the journal has no repeated
      `on-failure` restarts.
+4. Look at the system tray in Desktop Mode's panel.
+   - **Pass:** a Skrepka paperclip icon is there, drawn in the panel's text
+     colour, and a right click shows Open Skrepka, Clear History…, Settings… and
+     Quit Skrepka. There is no problem row at the top.
+   - **Finding, not a failure:** no icon. Record whether `pgrep -a skrepka-gui`
+     finds the process. The tray is tested against a fake watcher on a private
+     bus, not against Plasma's.
 
 **When master is ahead of the latest release,** build on the Mac with
 `scripts/build-deck.sh` and carry both tarballs in `build/deck/` over any way
@@ -110,9 +146,11 @@ it.
 This is the first live run of `ExtDataControlBinding` against KWin —
 [OQ-4](open-questions.md#oq-4). The daemon does not run this probe; the
 standalone `skrepka-clip-probe` binary does. Stop `skrepkad` for this section
-so both binaries do not fight over the clipboard.
+so both binaries do not fight over the clipboard. Quit the app first: with the
+D-Bus activation file installed, the app or any `skrepka` command starts the
+daemon again on its next call.
 
-1. `systemctl --user stop skrepkad`.
+1. `skrepka-gui --quit`, then `systemctl --user stop skrepkad`.
 2. `./bin/skrepka-clip-probe report` — prints the session and the backend it
    picked.
    - **Pass:** `backend:  Wayland (ext-data-control-v1)`. Plasma 6.4 advertises
@@ -130,7 +168,8 @@ so both binaries do not fight over the clipboard.
    offered them, so it has to keep running for a paste to work.
    - **Pass:** while it runs, any other app can paste `hello from skrepka` with
      Ctrl+V. Then press Ctrl+C.
-5. `kill %1` to stop the watcher, then `systemctl --user start skrepkad`.
+5. `kill %1` to stop the watcher, then `systemctl --user start skrepkad` and
+   start the app again with `skrepka-gui --background`.
 
 ## 3. Daemon and pairing with the Mac — 30 minutes
 
@@ -145,7 +184,9 @@ works just as well.
      Mac has advertised itself (allow ~10 s), and `peers` lists the Mac under
      `ON THE NETWORK`.
    - **Fail (nothing in sight):** check `journalctl --user -u skrepkad -f` for
-     `avahi` errors. This is the Avahi blocker from the top note.
+     `avahi` errors. This is the Avahi blocker from the top note. If the line is
+     `could not publish the service: avahi refused EntryGroupNew…`, see "Two
+     journal lines you may meet" above.
 3. On the Deck: `skrepka pair`, which opens the Deck to pairing for a while.
    On the Mac: Settings → Sync → the Deck's row → **Pair…**. Compare the code
    on both screens. It is 16 characters in groups of four. Confirm on both.
@@ -159,8 +200,9 @@ works just as well.
       find it in `skrepka list`; copy in Kate and find it in the Mac's history.
       Then pin one entry on the Mac and delete another there. **Pass:** the
       pinned one is marked `*` in `skrepka list` and the deleted one is gone.
-      The CLI has no pin or delete verb, so this half runs Mac → Deck only;
-      record it that way.
+      Then do the reverse from the Deck with `skrepka pin <n>` and
+      `skrepka delete <n>`, and look for the pin and the deletion in the Mac's
+      history.
    3. **Live push both ways, on by default.** The copies in item 2 arrive
       within a few seconds without anyone running `skrepka sync`.
    4. **Retention stays local.** On the Mac, open Settings → History and set
@@ -198,12 +240,60 @@ works just as well.
    - **Pass, after:** both copies are present on both sides within ~15 s of
      Wi-Fi returning, with no `skrepka sync` and no re-pairing.
 
-## 4. Palette on KWin — 20 minutes
+## 4. Picker, shortcut and tray on KWin — 30 minutes
 
-Phase 7 step 1 validation. `skrepka-palette-demo` is a hand-driven bring-up
+Phase 7's real picker, against the daemon's real history. The app must be
+running (`skrepka-gui --background` if section 2 left it quit) and `skrepkad`
+with it. Copy a few things first, in Kate and Firefox, so the picker has rows.
+
+1. Open Kate and start typing a sentence; leave the caret in the middle of a
+   word.
+2. Press **Meta+Shift+V**. The first time, the desktop asks you to confirm or
+   assign the shortcut for Skrepka — accept Meta+Shift+V. The shortcut runs
+   through `org.freedesktop.portal.GlobalShortcuts`, id `show-picker`, and this
+   is its first run against Plasma's portal.
+   - **Pass:** the picker appears centred over Kate, in the desktop's dark or
+     light setting and accent colour. Kate loses keyboard focus but keeps its
+     caret and its text.
+   - **Fail:** no prompt and no picker. Run `skrepka-gui --picker` in Konsole to
+     see whether the picker itself works, then record which half failed: the
+     portal (no prompt, nothing bound) or the layer-shell placement (a window
+     that is not an overlay). KWin's layer-shell support was inferred from
+     reading its source, so a live rejection is the finding.
+   - **Fallback, not a failure:** if Plasma has no working portal, bind
+     `skrepka-gui --picker` as a custom shortcut in System Settings → Keyboard →
+     Shortcuts, and record that.
+3. Type `br` without clicking first.
+   - **Pass:** the first keystroke lands in the search field, and the rows
+     narrow to entries containing it — anywhere in their text, not only the first
+     line.
+4. Press Down, Down, then Return.
+   - **Pass:** the picker closes, and Kate has keyboard focus back with its text
+     unchanged. The chosen entry is now on the clipboard: Ctrl+V pastes it into
+     Kate. Skrepka does not paste for you
+     ([D-11](open-questions.md#d-11)).
+5. Reopen the picker and check the rest of the keys: Alt+1 chooses the first
+   row, Alt+P pins the selected row, Alt+Backspace deletes it, Alt+Shift+Return
+   copies plain text, and Esc closes. Right-click a row for Pin, Copy as Plain
+   Text and Delete.
+   - **Pass:** each does what it says. A pinned row shows the pin glyph and sorts
+     first.
+6. Click the tray icon.
+   - **Pass:** the picker opens, and a second click closes it.
+7. Open the picker and click the gear.
+   - **Pass:** the Settings window opens. Section 5 uses it.
+8. Check the empty and image states: copy a screenshot, and look at its row.
+   - **Pass:** the row shows a thumbnail. A file copied from Dolphin shows a kind
+     tile instead; thumbnails of copied files are not built yet.
+
+### Alternative: the palette demo
+
+The tools tarball still ships `skrepka-palette-demo`, a hand-driven bring-up
 binary — canned rows, no history store, no hotkey — that opens a
 `PaletteWindow` against whatever session is running and prints every key
-command to stdout. See its file for what it is not.
+command to stdout. It isolates the layer-shell question from the portal and the
+daemon, so it is the thing to run if steps 2 to 4 fail and you want to know
+which layer broke. See its file for what it is not.
 
 1. Open a text editor (Kate) and start typing a sentence; leave the caret in
    the middle of a word.
@@ -222,23 +312,24 @@ command to stdout. See its file for what it is not.
      a `command: choose(…)` line naming the rich style. The palette closes, and
      Kate gets keyboard focus back with its text unchanged. The demo has canned
      rows and writes nothing to the clipboard. Under
-     [D-11](open-questions.md#d-11) the real picker will, and you will paste
-     with Ctrl+V.
+     [D-11](open-questions.md#d-11) the real picker does, as in the steps above,
+     and you paste with Ctrl+V.
 5. Reopen and hit Escape.
    - **Pass:** `command: dismiss`, palette closes.
 
 ## 5. Settings window on KWin — 20 minutes
 
-`skrepka-settings` is the GTK4 window for pairing, unpairing and managing the
-devices Skrepka shares history with. It talks to the running `skrepkad`, so
-start the daemon again first if section 2 left it stopped. It picks up where
-section 3 ended: the Mac is paired.
+Settings is the GTK4 window for pairing, unpairing and managing the devices
+Skrepka shares history with. It lives inside `skrepka-gui` and talks to the
+running `skrepkad`, so the app and the daemon must both be up if section 2 left
+them stopped. It picks up where section 3 ended: the Mac is paired.
 
-1. Launch "Skrepka Settings" from the application launcher, or run
-   `skrepka-settings` in Konsole (`./bin/skrepka-settings` from the untarred
-   tarball also works).
+1. Open Settings from the tray menu (**Settings…**), from the picker's gear, or
+   from the launcher entry's Settings action. `skrepka-gui --settings` in
+   Konsole does the same.
    - **Pass:** the window opens, shows this device's name and code, and lists
-     the Mac as paired.
+     the Mac as paired. Opening it a second way raises the same window rather
+     than opening another.
 2. Unpair the Mac from the window: click **Unpair** on its row, then **Unpair**
    again in the "Forget <name>?" dialog. Then, on the Mac, forget the Deck too.
    - **Pass:** the Mac stays in the window's one "Devices" list, now with the
@@ -263,12 +354,15 @@ section 3 ended: the Mac is paired.
 6. Press **Sync Now**.
    - **Pass:** the window shows a confirmation banner, e.g. "Asked 1 peer to
      sync."
-7. `systemctl --user stop skrepkad`, then, with the window still open,
-   `systemctl --user start skrepkad`.
-   - **Pass, while stopped:** within a few seconds the window says "The Skrepka
-     daemon is not running." and "Start it with: systemctl --user start
-     skrepkad".
-   - **Pass, after:** it recovers without being reopened.
+7. With the window still open, `systemctl --user stop skrepkad`. Do not start it
+   again by hand.
+   - **Pass:** the app or the bus starts the daemon again on the next call, so
+     the window recovers by itself without being reopened, and
+     `systemctl --user status skrepkad` shows `active (running)` again. A brief
+     "The Skrepka daemon is not running." in between is fine.
+   - **Finding:** the window stays on that message, or the tray's problem row
+     appears and stays. Record the row's text and `journalctl --user -u skrepkad`
+     for the same minute. Then start the daemon by hand.
 
 ## 6. Record findings — 10 minutes
 
@@ -283,8 +377,9 @@ Write results into these files, in this order:
    list, item by item, with the actual behaviour observed.
 3. **[`phase-7-linux-gui.md`](phase-7-linux-gui.md)** — replace "**Not
    demonstrated: KDE.**" with the actual result of section 4, and update D-4's
-   provisional exit condition to settled or reverted. Put the Settings window
-   results from section 5 in the same file, next to the palette result.
+   provisional exit condition to settled or reverted. Put the shortcut, tray and
+   Settings results (sections 3 to 5) in the same file, next to the picker
+   result.
 4. Attach the `runtime-report.txt` from the tarball to whichever finding
    depends on it — a Deck-side glibc mismatch belongs beside the finding it
    caused, not on its own.

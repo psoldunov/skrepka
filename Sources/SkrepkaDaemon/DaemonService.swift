@@ -67,7 +67,15 @@ public actor DaemonService {
     public func start() async throws {
         let connection = try await session.connection()
 
-        let server = DBusObjectServer(connection: connection, logger: logger)
+        // `BusReplyConnection` rather than the live connection directly: the
+        // object server sends its method returns through this, and the live
+        // connection's `send(_:)` waits for a reply to each one — a reply a
+        // method return never gets — which parks the read loop after the first
+        // call. See `BusReplyConnection` for the whole of it.
+        let server = DBusObjectServer(
+            connection: BusReplyConnection(writer: connection),
+            logger: logger
+        )
         await server.export(exportedObject())
         // Every message the connection does not recognise as a reply is a call
         // for us. `DBusObjectServer` answers the ones it exports and returns

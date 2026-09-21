@@ -1,0 +1,27 @@
+[Desktop Entry]
+Type=Application
+Name=Skrepka
+GenericName=Clipboard History
+Comment=Search everything you copied, and share it with your other devices
+# The plain program name is right for a repository copy: it is looked up in
+# $PATH. install.sh rewrites both Exec lines to the absolute installed path,
+# because ~/.local/bin is not on the desktop session's $PATH on every
+# distribution and a launcher entry that cannot find its program does nothing.
+Exec=skrepka-gui
+# The macOS app icon, as PNGs in the hicolor theme — packaging/icons/.
+Icon=dev.soldunov.Skrepka.App
+Terminal=false
+StartupNotify=true
+# X11 window matching for the Settings window's taskbar entry. The app sets its
+# program name to its application ID, which GTK uses for WM_CLASS; on Wayland
+# the application ID itself is the app_id, and matches this file's name.
+StartupWMClass=dev.soldunov.Skrepka.App
+Categories=Utility;GTK;
+Keywords=clipboard;history;paste;copy;sync;pair;
+# Settings is reached from the tray icon and the picker's gear button, and from
+# here: a launcher shows actions on right-click, which is not a second entry.
+Actions=Settings;
+
+[Desktop Action Settings]
+Name=Settings
+Exec=skrepka-gui --settings

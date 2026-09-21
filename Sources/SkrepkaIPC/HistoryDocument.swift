@@ -32,6 +32,38 @@ public struct ClipDocument: Codable, Sendable, Hashable {
     /// needs to decide whether it can do anything useful with a `Copy`.
     public let representations: [String]
 
+    // MARK: Row details, since version 3
+    //
+    // A document from an older daemon carries none of these keys, and a client
+    // reads each missing one as "not known" rather than failing the decode: nil
+    // for the counts and sizes, false for the two flags — see
+    // ``init(from:)``. What a picker row says under its title — "Text · 3
+    // lines", "Image · 1402 × 578", "3 Files" — comes from these, and from
+    // ``kind`` and ``byteCount``.
+
+    /// Lines in the entry's text, for the "3 lines" a multi-line row shows.
+    /// Nil where there is no text worth counting — a picture, a concealed
+    /// entry — and from a daemon older than version 3.
+    public let lineCount: Int?
+
+    /// The picture's size in pixels, when the entry is one.
+    public let imageWidth: Int?
+    public let imageHeight: Int?
+
+    /// Files a file entry holds — 3 for a copy of three files. Nil or 0 for
+    /// anything that is not a file.
+    public let fileCount: Int?
+
+    /// Whether the entry came from a password manager. Its ``preview`` is
+    /// already masked; this is what lets a client say so rather than draw a
+    /// row of bullets with no explanation.
+    public let isConcealed: Bool
+
+    /// Whether ``SkrepkaInterface/Member/preview`` has a picture to answer
+    /// with for this entry — the flag a client reads before asking, so a text
+    /// row never costs a round trip.
+    public let hasPreview: Bool
+
     public init(
         contentHash: String,
         preview: String,
@@ -39,7 +71,13 @@ public struct ClipDocument: Codable, Sendable, Hashable {
         isPinned: Bool,
         createdAt: Date,
         byteCount: Int?,
-        representations: [String]
+        representations: [String],
+        lineCount: Int? = nil,
+        imageWidth: Int? = nil,
+        imageHeight: Int? = nil,
+        fileCount: Int? = nil,
+        isConcealed: Bool = false,
+        hasPreview: Bool = false
     ) {
         self.contentHash = contentHash
         self.preview = preview
@@ -48,6 +86,38 @@ public struct ClipDocument: Codable, Sendable, Hashable {
         self.createdAt = createdAt
         self.byteCount = byteCount
         self.representations = representations
+        self.lineCount = lineCount
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
+        self.fileCount = fileCount
+        self.isConcealed = isConcealed
+        self.hasPreview = hasPreview
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case contentHash, preview, kind, isPinned, createdAt, byteCount, representations
+        case lineCount, imageWidth, imageHeight, fileCount, isConcealed, hasPreview
+    }
+
+    /// Written out rather than synthesised for the two flags alone: a
+    /// synthesised decoder requires every non-optional key, and a document
+    /// from a version-2 daemon has neither. Everything else decodes exactly as
+    /// the synthesised one would.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        contentHash = try container.decode(String.self, forKey: .contentHash)
+        preview = try container.decode(String.self, forKey: .preview)
+        kind = try container.decode(String.self, forKey: .kind)
+        isPinned = try container.decode(Bool.self, forKey: .isPinned)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        byteCount = try container.decodeIfPresent(Int.self, forKey: .byteCount)
+        representations = try container.decode([String].self, forKey: .representations)
+        lineCount = try container.decodeIfPresent(Int.self, forKey: .lineCount)
+        imageWidth = try container.decodeIfPresent(Int.self, forKey: .imageWidth)
+        imageHeight = try container.decodeIfPresent(Int.self, forKey: .imageHeight)
+        fileCount = try container.decodeIfPresent(Int.self, forKey: .fileCount)
+        isConcealed = try container.decodeIfPresent(Bool.self, forKey: .isConcealed) ?? false
+        hasPreview = try container.decodeIfPresent(Bool.self, forKey: .hasPreview) ?? false
     }
 }
 
