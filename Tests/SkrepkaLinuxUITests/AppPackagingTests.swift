@@ -19,7 +19,7 @@ struct SettingsPackagingTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let entry = root.appending(
-            path: "packaging/desktop/\(SettingsApplication.applicationID).desktop",
+            path: "packaging/desktop/\(SkrepkaApplication.applicationID).desktop",
             directoryHint: .notDirectory)
         #expect(FileManager.default.fileExists(atPath: entry.path))
     }

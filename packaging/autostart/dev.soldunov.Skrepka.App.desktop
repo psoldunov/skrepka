@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Skrepka
+Comment=Clipboard history in the tray, and the picker on its shortcut
+# --background: start the tray and the shortcut without opening the picker.
+# install.sh rewrites Exec to the absolute installed path, as it does for the
+# launcher entry.
+Exec=skrepka-gui --background
+Icon=dev.soldunov.Skrepka.App
+Terminal=false
+# An autostart entry, not a launcher: it must not show up in application menus.
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

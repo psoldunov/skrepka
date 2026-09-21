@@ -50,7 +50,25 @@ public enum DaemonRunner {
         // The session is opened here rather than inside `DaemonService`,
         // because the claim has to precede the daemon and the export has to
         // follow it: one session, held by whoever spans both.
-        return await run(options, over: BusSession(bus: .session), logger: logger)
+        let code = await run(options, over: BusSession(bus: .session), logger: logger)
+
+        // Terminate with `_exit` rather than returning into the C runtime's
+        // `exit`. By here `run(_:over:logger:)` has torn down everything the
+        // daemon owns — the store is closed, the bus name released, the
+        // listeners stopped — and every log line was flushed as it was written.
+        // What `exit` would still do is run the process's atexit handlers and
+        // static destructors, and on Linux that never returns for this process:
+        // the DBus client keeps a `MultiThreadedEventLoopGroup.singleton` whose
+        // event-loop threads run for the life of the process by design, and
+        // `exit`'s teardown blocks on them. The daemon logged its clean stop and
+        // then hung, so `systemctl stop` (and install.sh's upgrade path) waited
+        // out `TimeoutStopSec` and `SIGKILL`ed it every time. `_exit` skips the
+        // teardown there is nothing left to do, and the process is gone at once.
+        //
+        // Only the public entry point does this. The test seam
+        // `run(_:over:logger:)` returns normally, so a test process is not
+        // killed by exercising it.
+        _exit(code)
     }
 
     /// ``run(_:)`` without the signal handlers, over a session a caller

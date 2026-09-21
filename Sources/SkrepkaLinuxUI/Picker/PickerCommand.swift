@@ -15,6 +15,9 @@ public enum PickerCommand: Equatable, Sendable {
     /// Alt+1–9, which chooses that row outright.
     case chooseRow(index: Int)
     case togglePin
+    /// Alt+Backspace or Alt+Delete, which deletes the selected row. The macOS
+    /// picker has this only in its context menu; Linux adds a key for it.
+    case deleteSelection
     /// Not the picker's key. It goes to the search field, which is what makes
     /// the first keystroke after the hotkey land where the user expects.
     case type
@@ -92,6 +95,8 @@ public enum PickerKeyMap {
             // Alt+Shift+P should still mean the same thing as Alt+P rather than
             // falling through to the search field as a stray "P".
             return .togglePin
+        case Keysym.backspace, Keysym.delete:
+            return .deleteSelection
         default:
             break
         }

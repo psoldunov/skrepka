@@ -70,11 +70,13 @@ wrappers — none of which ships the two things this phase actually needs, a
 `gtk4-layer-shell` binding and a StatusNotifierItem. The bake-off, the rejected
 options and the screenshot are in [that phase's document](phase-7-linux-gui.md#the-outcome-of-step-1).
 
-What has landed is the Sway prototype for step 1, the picker's palette and key map,
-[OQ-12](open-questions.md#oq-12)'s portable path IR, and the devices half of
-Settings — `skrepka-settings`, which pairs, unpairs and sets live clipboard per
-device; what has not is the picker's rows, the hotkey, the tray and the rest of
-Settings. One new question came out of it —
+What has landed is the Sway prototype for step 1, the picker's palette, rows and
+key map, [OQ-12](open-questions.md#oq-12)'s portable path IR, the daemon
+connection, the global shortcut, the tray, and the devices half of Settings —
+together as one desktop app, `skrepka-gui`, whose Settings pairs, unpairs and
+sets live clipboard per device; what has not is thumbnails of copied image
+files, retention and exclusions in Settings, and any of it running on a real
+Steam Deck. One new question came out of it —
 [OQ-16](open-questions.md#oq-16), how the picker pastes into the app underneath
 — and it was decided 2026-09-18, as
 [D-11](open-questions.md#d-11): Return puts the clip on the clipboard and

@@ -59,17 +59,50 @@ curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh
 
 It downloads the build from the latest release and checks it against the
 published SHA-256. Then it installs the daemon (`skrepkad`), the CLI (`skrepka`)
-and the GTK4 Settings window (`skrepka-settings`, with a launcher entry) under
+and the desktop app (`skrepka-gui`, with a "Skrepka" launcher entry) under
 `~/.local`, and starts the daemon as a systemd user service. It needs no root.
+Run inside a graphical session, it also starts the app in the tray.
+
+The desktop app is one program with three parts:
+
+- **The picker.** The global shortcut Meta+Shift+V opens it over whatever you
+  are working in. Type to search, arrows to move, Return to copy the entry to
+  the clipboard and close, then paste with Ctrl+V. Skrepka does not paste for
+  you. Alt+1 to Alt+9 choose a row, Alt+P pins, and Alt+Backspace deletes. The
+  desktop asks you to confirm the shortcut the first time; where it has no
+  global-shortcuts portal, bind `skrepka-gui --picker` as a custom shortcut in
+  its keyboard settings.
+- **The tray icon.** A left click opens the picker. The menu has Open Skrepka,
+  Clear History… (pinned entries stay), Settings… and Quit Skrepka.
+- **Settings.** Open it from the tray, from the gear in the picker, or from the
+  launcher's Settings action. It is the Sync pane: pair, unpair and choose
+  which devices push live.
+
+The app starts `skrepkad` when it is not running, and so does any `skrepka`
+command, through a D-Bus activation file the installer adds. Quitting the app
+leaves the daemon recording. `skrepka pin`, `unpin`, `delete`, `clear` and
+`copy --plain` do from a terminal what the picker does.
 
 - `bash -s -- --version v0.2.0` after the pipe pins a release.
 - `bash -s -- --uninstall` removes everything except your history and this
   device's sync identity.
-- The Settings window needs GTK 4.12 or newer from the host.
+- The app needs GTK 4.12 or newer from the host.
+- Still to be run on real KDE Plasma: the tray, the shortcut and the picker are
+  tested under a headless sway and against fakes, not yet on a Steam Deck.
+
+If the journal or `skrepka doctor` says `could not publish the service: avahi
+refused EntryGroupNew…`, avahi-daemon is refusing services from user programs,
+so other devices cannot see this one. Set `disable-user-service-publishing=no`
+under `[publish]` in `/etc/avahi/avahi-daemon.conf`, then run
+`sudo systemctl restart avahi-daemon`. This device can still find and dial the
+others. Whether the edit survives a SteamOS update is unverified.
+`Failed to set thread priority for worker thread … errno=13` is harmless: a
+Swift runtime message about a scheduling hint an unprivileged service may not
+set.
 
 To build from a checkout instead, on any architecture, run
-`scripts/setup-linux.sh`. It needs a Swift 6.3 toolchain. It builds the Settings
-window only where the GTK 4.12 and gtk4-layer-shell development packages are
+`scripts/setup-linux.sh`. It needs a Swift 6.3 toolchain. It builds the desktop
+app only where the GTK 4.12 and gtk4-layer-shell development packages are
 installed. See [packaging/README.md](packaging/README.md).
 
 ## Build and run

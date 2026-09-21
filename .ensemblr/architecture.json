@@ -90,7 +90,9 @@
 				"wraps": [
 					"linux-picker",
 					"linux-settings",
-					"gtk-session"
+					"gtk-session",
+					"linux-app",
+					"linux-desktop-bus"
 				]
 			}
 		],
@@ -150,7 +152,7 @@
 						"path": "Sources/SkrepkaLinuxUI/Picker"
 					}
 				],
-				"sublabel": "GTK4 + layer-shell palette foundation",
+				"sublabel": "GTK4 layer-shell overlay, X11 fallback; macOS-style rows, search and actions over the daemon",
 				"type": "frontend"
 			},
 			{
@@ -159,16 +161,44 @@
 				"sources": [
 					{
 						"path": "Sources/SkrepkaLinuxUI/Settings"
-					},
-					{
-						"path": "Sources/skrepka-settings"
-					},
-					{
-						"path": "packaging/desktop"
 					}
 				],
-				"sublabel": "skrepka-settings — pair both ways, unpair, live clipboard per device; pure SyncModel, one-call-at-a-time DaemonLink",
+				"sublabel": "in-process window, opened from the tray and the picker's gear — pair both ways, unpair, live clipboard per device; pure SyncModel, one-call-at-a-time DaemonLink",
 				"type": "security"
+			},
+			{
+				"id": "linux-app",
+				"label": "Linux desktop app",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaLinuxUI/App"
+					},
+					{
+						"path": "Sources/skrepka-gui"
+					},
+					{
+						"path": "packaging"
+					}
+				],
+				"sublabel": "skrepka-gui: GtkApplication dev.soldunov.Skrepka.App owns tray, shortcut, picker and Settings; ensures skrepkad runs",
+				"type": "frontend"
+			},
+			{
+				"id": "linux-desktop-bus",
+				"label": "Tray, shortcut & appearance",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaLinuxUI/DBus"
+					},
+					{
+						"path": "Sources/SkrepkaLinuxUI/Tray"
+					},
+					{
+						"path": "Sources/SkrepkaLinuxUI/Hotkey"
+					}
+				],
+				"sublabel": "GDBus on GTK's loop: StatusNotifierItem + dbusmenu, GlobalShortcuts portal, appearance portal",
+				"type": "backend"
 			},
 			{
 				"id": "gtk-session",
@@ -179,9 +209,12 @@
 					},
 					{
 						"path": "Sources/CGtk4"
+					},
+					{
+						"path": "Sources/SkrepkaLinuxUI/Branding"
 					}
 				],
-				"sublabel": "main loop, layer-shell probe, C shim; eventfd inbox carries Sendable values onto the loop thread",
+				"sublabel": "main loop, layer-shell probe, C shim, Cairo paperclip mark; eventfd inbox carries Sendable values onto the loop thread",
 				"type": "backend"
 			},
 			{
@@ -198,7 +231,7 @@
 						"path": "Sources/SkrepkaCLI"
 					}
 				],
-				"sublabel": "skrepkad exports dev.soldunov.Skrepka1 (v2, SetLivePush); answers one call at a time; the skrepka CLI is its other client",
+				"sublabel": "skrepkad exports dev.soldunov.Skrepka1 (v3: SetLivePush, plus the picker's History, Search, CopyAs, Preview, SetPinned, Delete, HistoryChanged); answers one call at a time; the skrepka CLI is its other client",
 				"type": "backend"
 			},
 			{
@@ -1171,7 +1204,7 @@
 			{
 				"from": "tests",
 				"id": "e-tests-linuxpicker",
-				"label": "key map + metrics",
+				"label": "key map, metrics, row text, model",
 				"to": "linux-picker",
 				"variant": "dashed"
 			},
@@ -1233,10 +1266,47 @@
 			},
 			{
 				"from": "scripts",
-				"id": "e-scripts-linuxsettings",
-				"label": "install.sh / setup-linux.sh: binary, private layer-shell, launcher entry",
-				"to": "linux-settings",
+				"id": "e-scripts-linuxapp",
+				"label": "install.sh / setup-linux.sh: skrepka-gui, launcher + autostart entries, icons, D-Bus activation",
+				"to": "linux-app",
 				"variant": "dashed"
+			},
+			{
+				"from": "linux-picker",
+				"id": "e-linuxpicker-daemon",
+				"label": "session bus: History, Search, CopyAs, Preview, SetPinned, Delete",
+				"to": "linux-daemon",
+				"variant": "security"
+			},
+			{
+				"from": "linux-app",
+				"id": "e-linuxapp-linuxpicker",
+				"label": "shortcut / tray / launcher",
+				"to": "linux-picker"
+			},
+			{
+				"from": "linux-app",
+				"id": "e-linuxapp-linuxsettings",
+				"label": "tray, gear",
+				"to": "linux-settings"
+			},
+			{
+				"from": "linux-app",
+				"id": "e-linuxapp-desktopbus",
+				"label": "tray menu, shortcut, appearance",
+				"to": "linux-desktop-bus"
+			},
+			{
+				"from": "linux-app",
+				"id": "e-linuxapp-daemon",
+				"label": "starts it: D-Bus activation, systemd StartUnit",
+				"to": "linux-daemon"
+			},
+			{
+				"from": "linux-desktop-bus",
+				"id": "e-linuxdesktopbus-gtksession",
+				"label": "GDBus on the GTK main loop",
+				"to": "gtk-session"
 			}
 		],
 		"layout": {

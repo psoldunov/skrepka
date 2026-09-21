@@ -72,8 +72,8 @@ public enum CLIRunner {
             return 0
         case .doctor:
             return try await doctor(isJSON: options.isJSON, proxy: proxy)
-        case .copy(let selector):
-            return CLIOutcome.report(try await proxy.copy(selector), whenSilent: "Copied.")
+        case .copy, .pin, .unpin, .delete, .clear:
+            return try await historyAction(options.command, proxy: proxy)
         case .sync:
             return CLIOutcome.report(try await proxy.syncNow(), whenSilent: "Synced.")
         case .unpair(let fingerprint):
@@ -81,6 +81,31 @@ public enum CLIRunner {
             return CLIOutcome.report(result, whenSilent: "Forgotten.")
         case .pair(let peer, let seconds):
             return try await PairingSession(proxy: proxy).run(peer: peer, seconds: seconds)
+        }
+    }
+
+    private static func historyAction(
+        _ command: CLIOptions.Command,
+        proxy: DaemonProxy
+    ) async throws -> Int32 {
+        switch command {
+        case .copy(let selector, let plain):
+            let result =
+                plain
+                ? try await proxy.copy(selector, style: .plain)
+                : try await proxy.copy(selector)
+            return CLIOutcome.report(result, whenSilent: "Copied.")
+        case .pin(let selector):
+            return CLIOutcome.report(try await proxy.setPinned(selector, true), whenSilent: "Pinned.")
+        case .unpin(let selector):
+            return CLIOutcome.report(try await proxy.setPinned(selector, false), whenSilent: "Unpinned.")
+        case .delete(let selector):
+            return CLIOutcome.report(try await proxy.delete(selector), whenSilent: "Deleted.")
+        case .clear(let keepingPinned):
+            return CLIOutcome.report(
+                try await proxy.clear(keepingPinned: keepingPinned), whenSilent: "Cleared.")
+        case .list, .pair, .peers, .doctor, .sync, .unpair, .help:
+            return 2
         }
     }
 

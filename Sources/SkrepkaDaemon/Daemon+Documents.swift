@@ -32,7 +32,8 @@ extension Daemon {
     }
 
     static func clipDocument(_ listing: SQLiteHistoryStore.ClipListing) -> ClipDocument {
-        ClipDocument(
+        let summary = listing.summary
+        return ClipDocument(
             contentHash: listing.contentHash,
             // `previewText` rather than `text`: it is what masks a concealed
             // entry, and the macOS picker's licence to list one does not extend
@@ -41,18 +42,38 @@ extension Daemon {
             // client, so a GNOME menu and `skrepka list` render the same string
             // and neither can be made to run an escape sequence.
             preview: SafeText.oneLine(listing.summary.previewText),
-            kind: listing.summary.kind.rawValue,
-            isPinned: listing.summary.isPinned,
-            createdAt: listing.summary.createdAt,
-            byteCount: listing.summary.byteCount,
+            kind: summary.kind.rawValue,
+            isPinned: summary.isPinned,
+            createdAt: summary.createdAt,
+            byteCount: summary.byteCount,
             // Canonical media types, not the store's pasteboard identifiers: a
             // client outside this process has no business knowing that a Linux
             // store indexes by macOS type identifiers, which is an artefact of
             // one mapping table rather than a fact about the clipboard.
             representations: listing.representationTypes
                 .compactMap(RepresentationKeyMap.canonical(forUTI:))
-                .sorted()
+                .sorted(),
+            lineCount: summary.isConcealed || summary.kind.isFileSystemEntry || summary.kind == .image
+                ? nil : summary.lineCount,
+            imageWidth: summary.imageSize?.width,
+            imageHeight: summary.imageSize?.height,
+            fileCount: summary.fileCount > 0 ? summary.fileCount : nil,
+            isConcealed: summary.isConcealed,
+            hasPreview: !summary.isConcealed
+                && Self.pictureMediaType(in: listing.localRepresentationTypes) != nil
         )
+    }
+
+    /// The image kinds a GTK client can display directly, in the preference
+    /// order its preview request follows. The map keeps this boundary in media
+    /// types rather than leaking the store's UTI keys onto D-Bus.
+    static let previewMediaTypes = [
+        "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/webp",
+    ]
+
+    static func pictureMediaType(in representationTypes: [String]) -> String? {
+        let canonical = Set(representationTypes.compactMap(RepresentationKeyMap.canonical(forUTI:)))
+        return previewMediaTypes.first(where: canonical.contains)
     }
 
     // MARK: - Peers
@@ -150,7 +171,7 @@ extension Daemon {
     ///
     /// Split out of ``copy(_:)`` to keep that function inside the 40-line body
     /// the lint rule allows; it is pure, so it costs nothing to lift.
-    private static func writableTargets(
+    static func writableTargets(
         from representations: [String: Data]
     ) -> [String: Data] {
         var payloads: [RepresentationKey: Data] = [:]
@@ -161,8 +182,28 @@ extension Daemon {
         return LinuxClipboardWriter.targets(for: payloads)
     }
 
+    /// The text target alone, for a paste that must not carry markup or images.
+    static func plainWritableTargets(from representations: [String: Data]) -> [String: Data] {
+        let text = representations.filter {
+            RepresentationKeyMap.canonical(forUTI: $0.key) == "text/plain;charset=utf-8"
+        }
+        return writableTargets(from: text)
+    }
+
     /// Puts one entry on the clipboard.
     public func copy(_ selector: ClipSelector) async -> ActionDocument {
+        await copy(
+            selector,
+            targetBuilder: Self.writableTargets,
+            emptyTargetDetail: "nothing in that entry can be written to a Linux clipboard"
+        )
+    }
+
+    func copy(
+        _ selector: ClipSelector,
+        targetBuilder: ([String: Data]) -> [String: Data],
+        emptyTargetDetail: String
+    ) async -> ActionDocument {
         guard clipboard != nil else {
             return .refused(
                 """
@@ -186,10 +227,10 @@ extension Daemon {
         guard let contents = await store.contents(for: entry.summary.id) else {
             return .refused("that entry holds no bytes on this device yet", subject: entry.contentHash)
         }
-        let targets = Self.writableTargets(from: contents.payload.representations)
+        let targets = targetBuilder(contents.payload.representations)
         guard !targets.isEmpty else {
             return .refused(
-                "nothing in that entry can be written to a Linux clipboard",
+                emptyTargetDetail,
                 subject: entry.contentHash
             )
         }
@@ -232,7 +273,7 @@ extension Daemon {
         }
     }
 
-    private static func notFound(_ selector: ClipSelector, count: Int) -> String {
+    static func notFound(_ selector: ClipSelector, count: Int) -> String {
         switch selector {
         case .position(let index):
             count == 0

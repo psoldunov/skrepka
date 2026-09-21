@@ -3,9 +3,11 @@
 # Builds the x86_64 Linux release assets a GitHub release carries:
 #
 #   build/deck/skrepka-linux-x86_64.tar.gz        what install.sh installs:
-#                                                 skrepkad, skrepka,
-#                                                 skrepka-settings, the unit,
-#                                                 the launcher entry, install.sh
+#                                                 skrepkad, skrepka, skrepka-gui,
+#                                                 the unit, the launcher and
+#                                                 autostart entries, the icons,
+#                                                 the D-Bus activation file,
+#                                                 install.sh
 #   build/deck/skrepka-linux-x86_64-tools.tar.gz  the probes and the palette
 #                                                 demo, for hardware bring-up
 #   a .sha256 beside each                         what install.sh checks
@@ -119,7 +121,7 @@ fi
 INSTALLED_PRODUCTS=(
 	skrepkad
 	skrepka
-	skrepka-settings
+	skrepka-gui
 )
 TOOL_PRODUCTS=(
 	skrepka-clip-probe
@@ -158,8 +160,7 @@ done
 
 REPORT="${STAGE_ROOT}/runtime-report.txt"
 rm -rf "${STAGE_ROOT}"
-mkdir -p "${STAGE}/bin" "${STAGE}/packaging/systemd" "${STAGE}/packaging/desktop" "${STAGE}/lib" \
-	"${TOOLS_STAGE}/bin"
+mkdir -p "${STAGE}/bin" "${STAGE}/packaging" "${STAGE}/lib" "${TOOLS_STAGE}/bin"
 
 # `readelf -h` names the ELF class and machine — under emulation this is the
 # check that catches a silently-broken toolchain that produced arm64 slices
@@ -202,11 +203,11 @@ bold "Runtime probe written to ${REPORT}"
 
 # SteamOS 3.8 does not ship gtk4-layer-shell — it is an optional Arch package
 # (extra/gtk4-layer-shell) that no default install advertises — so the
-# palette demo and the Settings window would fail at load time with
+# palette demo and the desktop app would fail at load time with
 # "libgtk4-layer-shell.so.0: cannot open shared object file". The image built
 # the .so from source under /usr/lib/x86_64-linux-gnu/, and shipping it beside
 # the binaries with rpath $ORIGIN/../lib is the smallest thing that works
-# without asking the user to unlock the read-only root. skrepka-settings also
+# without asking the user to unlock the read-only root. skrepka-gui also
 # carries a second rpath, $ORIGIN/../lib/skrepka, for the installed copy:
 # install.sh finds the bundled library in lib/ beside bin/ and copies it
 # there.
@@ -214,7 +215,7 @@ bold "Runtime probe written to ${REPORT}"
 # GTK itself is not bundled: gtk-4 is a plain KDE dependency on SteamOS
 # through Plasma's GTK integration and any KDE spin has it, so the loader
 # finds libgtk-4.so.1 in the default search path. It has to be 4.12 or newer,
-# the oldest with every call skrepka-settings and the palette demo make, and a
+# the oldest with every call skrepka-gui and the palette demo make, and a
 # missing symbol surfaces at launch rather than in ldd. gtk4-layer-shell is the
 # one library the target box may lack.
 #
@@ -229,7 +230,7 @@ scripts/linux.sh cp -P \
 	"${REPO}/${STAGE}/lib/"
 
 # --------------------------------------------------------------------------
-# Stage: binaries, install.sh, unit, launcher entry, report
+# Stage: binaries, install.sh, packaging, report
 # --------------------------------------------------------------------------
 
 for product in "${INSTALLED_PRODUCTS[@]}"; do
@@ -258,9 +259,14 @@ scripts/linux.sh strip --strip-debug "${STAGE}/bin/"* "${TOOLS_STAGE}/bin/"*
 # this tarball and installs from it the same way.
 cp "${REPO}/install.sh" "${STAGE}/install.sh"
 chmod 0755 "${STAGE}/install.sh"
-cp "${REPO}/packaging/systemd/skrepkad.service" "${STAGE}/packaging/systemd/skrepkad.service"
-cp "${REPO}/packaging/desktop/dev.soldunov.Skrepka.Settings.desktop" \
-	"${STAGE}/packaging/desktop/dev.soldunov.Skrepka.Settings.desktop"
+# The directories install.sh reads, whole: the unit, the D-Bus activation file,
+# the launcher and autostart entries, and the icons. packaging/README.md is the
+# one file in there install.sh does not read, and it goes too — it explains the
+# rest to whoever opens the tarball.
+for directory in systemd dbus desktop autostart icons; do
+	cp -R "${REPO}/packaging/${directory}" "${STAGE}/packaging/${directory}"
+done
+cp "${REPO}/packaging/README.md" "${STAGE}/packaging/README.md"
 # In the tarball as well as beside it: the Deck session reads it on the Deck.
 cp "${REPORT}" "${STAGE}/runtime-report.txt"
 
@@ -281,14 +287,14 @@ What is in this tarball
 
   bin/skrepkad                the clipboard-history daemon
   bin/skrepka                 the CLI
-  bin/skrepka-settings        the Settings window: pair, unpair and manage the
-                              devices Skrepka shares clipboard history with
-  lib/libgtk4-layer-shell.so* the layer-shell library the Settings window needs
-                              at runtime, in case the host does not have one
+  bin/skrepka-gui             the desktop app: the tray icon, the clipboard
+                              picker and Settings (pairing and devices)
+  lib/libgtk4-layer-shell.so* the layer-shell library the picker needs at
+                              runtime, in case the host does not have one
   install.sh                  the installer
-  packaging/systemd/skrepkad.service   the systemd USER unit install.sh writes
-  packaging/desktop/dev.soldunov.Skrepka.Settings.desktop
-                              the launcher entry install.sh writes
+  packaging/                  the systemd USER unit, the D-Bus activation file,
+                              the launcher and autostart entries and the icons
+                              install.sh writes — see packaging/README.md
   runtime-report.txt          the shared libraries and glibc version each binary
                               needs, recorded when it was built
 
@@ -305,22 +311,26 @@ Installing from the tarball
 
 ./install.sh --uninstall reverses it.
 
-The installer places skrepkad, skrepka and skrepka-settings into ~/.local/bin,
-the systemd user unit into ~/.config/systemd/user, a private copy of
-libgtk4-layer-shell into ~/.local/lib/skrepka, and a launcher entry named
-"Skrepka Settings" into ~/.local/share/applications. Those are the defaults: an
-absolute XDG_BIN_HOME, XDG_CONFIG_HOME or XDG_DATA_HOME moves its part to
-wherever it points. Nothing needs root.
+The installer places skrepkad, skrepka and skrepka-gui into ~/.local/bin, the
+systemd user unit into ~/.config/systemd/user, a private copy of
+libgtk4-layer-shell into ~/.local/lib/skrepka, a launcher entry named
+"Skrepka" into ~/.local/share/applications, the app's icons into
+~/.local/share/icons, an autostart entry into ~/.config/autostart, and a D-Bus
+activation file into ~/.local/share/dbus-1/services so the daemon starts
+whenever anything asks for it. Those are the defaults: an absolute
+XDG_BIN_HOME, XDG_CONFIG_HOME or XDG_DATA_HOME moves its part to wherever it
+points. Nothing needs root.
 
-Running the Settings window
----------------------------
+Running the desktop app
+-----------------------
 
-    ./bin/skrepka-settings
+    ./bin/skrepka-gui
 
-Runs in place from the untarred tarball. Once installed, open "Skrepka
-Settings" from the application launcher instead. It talks to the running
-skrepkad, so the daemon has to be up, and it needs the host's GTK to be 4.12 or
-newer.
+Runs in place from the untarred tarball and opens the clipboard picker; the
+tray icon stays. Once installed it starts with your session, and the
+application launcher's "Skrepka" opens the picker. Settings is in the tray
+menu and behind the picker's gear button. It needs the host's GTK to be 4.12
+or newer.
 DOCS
 
 cat > "${TOOLS_STAGE}/TOOLS.txt" << 'DOCS'

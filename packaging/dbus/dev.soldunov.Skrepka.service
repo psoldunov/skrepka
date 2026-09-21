@@ -1,0 +1,14 @@
+# D-Bus activation for skrepkad: any client that calls dev.soldunov.Skrepka while
+# the daemon is not running — the tray app, the Settings window, the skrepka
+# command — has the bus start it, instead of reporting that nothing answers.
+#
+# SystemdService hands the start to the systemd user unit rather than letting
+# the bus exec the binary itself, so the daemon still runs under the unit's
+# restart policy and logging, and dbus-broker — which activates only through
+# systemd — can activate it at all. Exec is what dbus-daemon runs on a machine
+# without a systemd user manager; install.sh rewrites it to the absolute
+# installed path, which the D-Bus specification requires.
+[D-BUS Service]
+Name=dev.soldunov.Skrepka
+Exec=skrepkad
+SystemdService=skrepkad.service

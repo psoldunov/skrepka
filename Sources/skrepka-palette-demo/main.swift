@@ -1,61 +1,52 @@
+import CGtk4
 import Foundation
 import SkrepkaCore
 import SkrepkaLinuxUI
 
-// A hand-driven smoke test for `PaletteWindow` on a real compositor.
+// A hand-driven smoke test and screenshot rig for the picker on a real
+// compositor.
 //
-// The prototype under `prototypes/palette-bakeoff/` proved the picker maps and
-// takes keys on a headless sway. Phase 7 step 1 asks the same of KWin, and no
-// headless run can answer that — the compositor has to be the one under the
-// user's session. This binary is the smallest thing that opens the palette on
-// whatever session is running, with canned rows and no history store, and
-// prints every key command and query change to stdout so a checklist can tick.
+// It drives the real `PickerController` against an in-process fake daemon with
+// canned rows, so the whole picker — search, rows, thumbnails, footer, empty
+// states — can be seen on the Steam Deck without `skrepkad`. Two environment
+// variables pick what to draw, so one binary produces every screenshot:
 //
-// It is not a product — no menu-bar entry, no daemon, no hotkey. `skrepkad`
-// remains the picker for the real installation. `skrepka-palette-demo` is only
-// what you launch by hand on the Steam Deck to answer "does the palette come
-// up over KWin".
+//   SKREPKA_DEMO_APPEARANCE = dark | light   (default dark)
+//   SKREPKA_DEMO_STATE      = list | empty    (default list)
+//
+// It is not a product — no tray, no hotkey, no daemon. `skrepka-gui` is the
+// picker for the real installation.
 
 guard GtkSession.start() else {
     FileHandle.standardError.write(Data("skrepka-palette-demo: could not open display\n".utf8))
     exit(2)
 }
 
-FileHandle.standardOutput.write(Data("layer-shell available: \(GtkSession.isLayerShellAvailable)\n".utf8))
-FileHandle.standardOutput.write(Data("layer-shell protocol: \(GtkSession.layerShellProtocolVersion)\n".utf8))
+let environment = ProcessInfo.processInfo.environment
+let appearance =
+    environment["SKREPKA_DEMO_APPEARANCE"] == "light"
+    ? AppearancePreference(colorScheme: .light, accent: nil)
+    : AppearancePreference(colorScheme: .dark, accent: nil)
+let showEmpty = environment["SKREPKA_DEMO_STATE"] == "empty"
 
-let rows: [ClipSummary] = (1...8).map { index in
-    ClipSummary(
-        id: UUID(),
-        kind: .text,
-        text: "Sample clip \(index) — pretend clipboard history for the Deck bring-up.",
-        sourceBundleID: nil,
-        createdAt: Date(),
-        isPinned: false,
-        isConcealed: false,
-        imageSize: nil,
-        byteCount: nil,
-        fileCount: 0,
-        hasThumbnail: false
-    )
-}
+let daemon = FakePickerDaemon(
+    rows: showEmpty ? [] : DemoClips.all(),
+    previewPNG: DemoClips.previewPNG())
 
 do {
-    let window = try PaletteWindow()
-    window.onQueryChanged = { query in
-        FileHandle.standardOutput.write(Data("query: \(query)\n".utf8))
+    let controller = try PickerController(connect: { daemon })
+    controller.onOpenSettings = {
+        FileHandle.standardOutput.write(Data("open settings\n".utf8))
     }
-    window.onCommand = { command in
-        FileHandle.standardOutput.write(Data("command: \(command)\n".utf8))
-        switch command {
-        case .dismiss, .choose, .chooseRow:
-            GtkSession.stop()
-        default:
-            break
-        }
+    controller.apply(appearance)
+    controller.start()
+    controller.show()
+    // SKREPKA_DEMO_MENU=1 pops the row context menu open a moment after the
+    // surface maps, so a screenshot can prove it renders on the layer-shell
+    // surface — right-clicks cannot be synthesised under the headless harness.
+    if environment["SKREPKA_DEMO_MENU"] == "1" {
+        controller.openMenuForSelection(afterSeconds: 1)
     }
-    window.show(rows)
-    window.present()
     GtkSession.run()
 } catch {
     FileHandle.standardError.write(Data("skrepka-palette-demo: \(error)\n".utf8))

@@ -87,6 +87,53 @@ struct IPCDocumentTests {
         }
     }
 
+    @Test("a version-2 clip document supplies absent picker fields as nil or false")
+    func versionTwoClipDocumentDefaultsPickerFields() throws {
+        let json = """
+            {"contentHash":"a1b2","preview":"hello","kind":"text","isPinned":false,
+            "createdAt":1,"byteCount":5,
+            "representations":["text/plain;charset=utf-8"]}
+            """
+        let document = try JSONDecoder().decode(ClipDocument.self, from: Data(json.utf8))
+        #expect(document.lineCount == nil)
+        #expect(document.imageWidth == nil)
+        #expect(document.imageHeight == nil)
+        #expect(document.fileCount == nil)
+        #expect(document.isConcealed == false)
+        #expect(document.hasPreview == false)
+    }
+
+    @Test("version-3 picker fields round-trip")
+    func clipDocumentRoundTripsPickerFields() throws {
+        let document = ClipDocument(
+            contentHash: "a1b2",
+            preview: "picture",
+            kind: "image",
+            isPinned: true,
+            createdAt: Date(timeIntervalSince1970: 1),
+            byteCount: 42,
+            representations: ["image/png"],
+            lineCount: 3,
+            imageWidth: 20,
+            imageHeight: 10,
+            fileCount: 2,
+            isConcealed: true,
+            hasPreview: true
+        )
+        let decoded = try JSONDecoder().decode(ClipDocument.self, from: JSONEncoder().encode(document))
+        #expect(decoded == document)
+    }
+
+    @Test("picture previews round-trip their base64 payload")
+    func previewDocumentRoundTrips() throws {
+        let document = PreviewDocument.picture(
+            Data([1, 2, 3]), mediaType: "image/png", contentHash: "a1b2")
+        let decoded = try SkrepkaDocumentCoding.decode(
+            PreviewDocument.self, from: try SkrepkaDocumentCoding.encode(document))
+        #expect(decoded == document)
+        #expect(decoded.bytes == Data([1, 2, 3]))
+    }
+
     @Test("a selector that names nothing is refused rather than guessed at")
     func clipSelectorValidation() {
         #expect(ClipSelector(validating: "1") == ClipSelector.position(1))

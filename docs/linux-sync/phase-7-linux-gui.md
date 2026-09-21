@@ -75,9 +75,10 @@ prototypes/                     # step 1, kept or deleted deliberately
 
 The `Picker/` names above were the plan; see "What has landed" below for what
 actually shipped — `PaletteWindow.swift` rather than `PickerWindow.swift`, with
-the key map and metrics split into their own tested files. `PickerList`,
-`PickerRow` and `SearchEntry` are still planned: the window has its foundation,
-not its rows.
+the key map and metrics split into their own tested files. The rows have since
+landed as `PickerListView`, `PickerRowView` and `PickerSearchBar`, and the tray
+and the shortcut as `Tray/TrayIcon.swift` and `Hotkey/GlobalShortcuts.swift`;
+the 2026-09-21 section lists what shipped.
 
 ### What has landed, 2026-09-08
 
@@ -123,7 +124,8 @@ dropped key there is the harness, not the picker.
 ### What has landed, 2026-09-18: Settings, the devices half
 
 Step 5's pairing and paired-devices part, ahead of the Steam Deck session so
-the session can exercise it. `skrepka-settings` is an ordinary window, not a
+the session can exercise it. (`skrepka-settings` has since been folded into
+`skrepka-gui` — see 2026-09-21 below.) It is an ordinary window, not a
 layer-shell surface, and it is the macOS Sync pane in GTK4: this device's name
 and code, the "Allow new devices to pair" switch, every paired and sighted
 device with Pair… / Unpair, a per-device Live clipboard switch, Sync Now, and
@@ -164,24 +166,125 @@ behind `SettingsApplication.run(connect:)`, not committed. It has not yet run
 against a real peer, or on KWin. Section 5 of
 [`steam-deck-session.md`](steam-deck-session.md) is that check.
 
+### What has landed, 2026-09-21: one desktop app
+
+Steps 2, 3 and 4 — the picker's rows, the daemon connection, the global
+shortcut and the tray — plus the Settings window moving in beside them.
+`skrepka-settings` is gone: `skrepka-gui` is one GtkApplication,
+`dev.soldunov.Skrepka.App`, that holds the tray icon, the shortcut, the picker
+(built once and kept hidden, so opening it draws rows it already has) and
+Settings, in process. A second launch forwards its option to the running copy
+over the session bus.
+
+```
+Sources/skrepka-gui/main.swift                         the executable
+Sources/SkrepkaLinuxUI/App/                            AppCommand (the options), AppController,
+                                                       AppMenu, AppShell, SkrepkaApplication
+Sources/SkrepkaLinuxUI/Picker/                         rows, search bar, footer, empty states,
+                                                       context menu, thumbnails, PickerModel
+                                                       (the pure, tested half), PickerDaemon
+Sources/SkrepkaLinuxUI/Hotkey/                         GlobalShortcuts, the portal payloads
+Sources/SkrepkaLinuxUI/Tray/                           StatusNotifierItem and dbusmenu over GDBus
+Sources/SkrepkaLinuxUI/Appearance/                     dark/light and accent, from the appearance portal
+Sources/SkrepkaLinuxUI/DBus/                           the GDBus wrappers the three above share
+Sources/SkrepkaLinuxUI/Branding/MarkRenderer.swift     the paperclip mark, drawn with Cairo
+Sources/SkrepkaIPC/                                    interface version 3; DaemonProxy+Picker,
+                                                       PreviewDocument, CopyStyle, DaemonStarter
+Sources/SkrepkaDaemon/                                 DaemonService+Picker, Daemon+History,
+                                                       BusReplyConnection
+Sources/SkrepkaCLI/                                    pin, unpin, delete, clear, copy --plain
+packaging/desktop/dev.soldunov.Skrepka.App.desktop     launcher entry, with a Settings action
+packaging/autostart/dev.soldunov.Skrepka.App.desktop   runs --background at login
+packaging/dbus/dev.soldunov.Skrepka.service            activates skrepkad.service on any call
+packaging/icons/hicolor/                               the app icon, and skrepka-tray.svg
+docs/images/linux-picker-{dark,light,empty,sway}.png   the screenshots
+```
+
+![The Linux picker, dark](../images/linux-picker-dark.png)
+
+**The picker** is the macOS layout: search field, rows with a kind tile or an
+image thumbnail, a subtitle (type, size, lines, dimensions, relative time), the
+pin glyph, Alt+1 to Alt+9 badges, the accent colour on the selection, footer key
+hints, a gear button that opens Settings, and empty states with the paperclip
+mark. The key map is still one tested function, `PickerKeyMap`. Return copies to
+the clipboard and closes, per D-11; Alt+Return is the rich form and
+Alt+Shift+Return plain text; Alt+P pins; Alt+Backspace and Alt+Delete delete,
+which the macOS picker offers only from its context menu. Home, End, Page Up and
+Page Down move the selection. A right-click menu offers Pin or Unpin, Copy as
+Plain Text and Delete. Hover selects a row only after the pointer moves. Search
+runs in the daemon over the full text (the new `Search` member), not over the
+summary the row shows.
+
+**Placement** is the layer-shell overlay on KWin and sway. Where there is no
+layer-shell — every X11 session, which is what SteamOS before 3.8.10 runs in
+Desktop Mode — it is an undecorated window marked above and skip-taskbar,
+centred on the pointer's monitor, with a keyboard grab taken on map.
+
+**The shortcut** is `org.freedesktop.portal.GlobalShortcuts`, id `show-picker`,
+preferred trigger Meta+Shift+V, which mirrors ⌘⇧V. The desktop asks the user to
+confirm or assign it on first run. With no portal, `skrepka-gui --picker` is what
+a hand-bound shortcut runs; it toggles.
+
+**The tray** is a StatusNotifierItem with a dbusmenu, written against GDBus.
+A left click toggles the picker. The menu is Open Skrepka, Clear History… (asks
+first, keeps pinned entries), Settings… and Quit Skrepka, with a problem row on
+top when the daemon cannot be started.
+
+**The daemon connection** is `DaemonStarter`: probe, then ask systemd to
+`StartUnit` `skrepkad.service` if the probe finds nothing, with the installed
+D-Bus activation file doing the same for every other client. The interface is
+version 3: `Search`, `CopyAs`, `SetPinned`, `Delete`, `Clear` and `Preview`, and
+the row fields on `ClipDocument`.
+
+One daemon bug came out of it and is fixed: `skrepkad` answered its first
+D-Bus call and then none. `DBusObjectServer` replies through
+`connection.send`, which on a live `DBusClient.Connection` waits for a reply to
+the method return, and that wait ran inside the connection's read loop, so the
+loop never read again. `BusReplyConnection` writes replies without waiting. It
+affected 0.2.0: the Settings window and a second `skrepka` command timed out.
+
+**What was demonstrated:**
+
+- the picker's rows, empty states and both colour schemes, drawn under a headless
+  sway and screenshotted with `grim`, against a stand-in daemon;
+- the tray against a fake StatusNotifierWatcher on a private session bus;
+- the global-shortcut exchange against a fake portal: `CreateSession`,
+  `BindShortcuts` and the `Activated` signal;
+- the daemon's `BusReplyConnection` fix, as a seam test in
+  `Tests/SkrepkaDaemonTests/BusReplyConnectionTests.swift`, and against the
+  built daemon on a private session bus — three `busctl` calls and repeated
+  `skrepka list` all answered;
+- the pure halves — the options, the key map, the row text, the picker model,
+  the tray menu and properties, the appearance parser — in
+  `Tests/SkrepkaLinuxUITests/`.
+
+**What was not:**
+
+- **KWin.** No layer-shell overlay on a real Plasma session.
+- **A real Plasma tray.** Only the fake watcher above.
+- **The real portal.** The fake proves the code follows the protocol as read,
+  not that `xdg-desktop-portal-kde` answers it that way, or how it words the
+  first-run prompt.
+- **X11 under a window manager.** The fallback has been seen to map under Xvfb
+  and nothing more; the keep-above hint and the keyboard grab are untested where
+  a window manager can refuse them.
+
+[`steam-deck-session.md`](steam-deck-session.md) sections 4 and 5 are those
+checks.
+
 **Still to build, in the order they unblock each other:**
 
-1. **The picker's rows** (step 2). `PaletteWindow.show(_:)` takes `[ClipSummary]`
-   and draws one label each. It needs the real row: thumbnail, kind symbol, the
-   pinned marker, the footer hints, the empty state — all decided already in
-   `Sources/Skrepka/Picker/`, which is what to read first.
-2. **The daemon connection.** The picker is a separate process from `skrepkad`
-   and speaks to it over the Phase 6 D-Bus interface. Nothing of this exists.
-3. **The global hotkey** (step 3), which is what opens the thing at all.
-4. **The tray** (step 4). `MarkPath` is in place, so the mark is ready; what is
-   missing is a Cairo renderer for it and the StatusNotifierItem itself. Note
-   that no candidate toolkit ships one, so this is D-Bus work either way.
-5. **Settings** (step 5). The devices half has landed, as `skrepka-settings`;
-   retention and exclusions wait on daemon members that can set them.
-6. **Thumbnails** (step 6) — `ThumbnailProducing` and `GdkPixbufThumbnailMaker`.
-   Deliberately not started: `PaletteWindow` draws no pictures yet, and
-   introducing the protocol before its second conformance has something to draw
-   into is exactly what [D-9](open-questions.md#d-9) defers.
+1. **Thumbnails of copied image files** (step 6). An image copied as pixels has
+   its thumbnail in the row. A file copied from a file manager still gets a kind
+   tile, because reading it to preview it — `ThumbnailProducing` and
+   `GdkPixbufThumbnailMaker` — is not built. [D-9](open-questions.md#d-9) is
+   why the protocol waited for a second conformance.
+2. **Retention and exclusions in Settings** (step 5). The Sync pane is all
+   Settings has. The rest waits on daemon members that can set them.
+3. **Verification on the Deck.** Everything in "What was not" above.
+
+Done and no longer listed: the picker's rows, the daemon connection, the global
+shortcut and the tray.
 
 And [OQ-16](open-questions.md#oq-16) is decided, as
 [D-11](open-questions.md#d-11): Return puts the clip on the clipboard and

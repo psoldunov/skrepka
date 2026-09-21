@@ -17,7 +17,7 @@ import Logging
 /// than folded into a generic helper, because the interesting part of each is
 /// the argument types, which is exactly what a generic helper hides.
 public struct DaemonProxy: Sendable {
-    private let connection: DBusClient.Connection
+    let connection: DBusClient.Connection
     private let session: BusSession?
     private let timeout: Duration
 
@@ -182,7 +182,7 @@ public struct DaemonProxy: Sendable {
 
     // MARK: - Plumbing
 
-    private func addMatch(_ rule: String) async throws {
+    func addMatch(_ rule: String) async throws {
         _ = try await send(
             DBusRequest.createMethodCall(
                 destination: "org.freedesktop.DBus",
@@ -195,7 +195,7 @@ public struct DaemonProxy: Sendable {
         )
     }
 
-    private func document<Document: SkrepkaDocument>(
+    func document<Document: SkrepkaDocument>(
         _ type: Document.Type,
         _ member: String,
         _ arguments: DBusValue...

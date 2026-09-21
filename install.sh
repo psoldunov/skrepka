@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Installs a released build of Skrepka's Linux daemon, CLI and Settings window
-# into your home directory. No root, no package manager, nothing to compile.
+# Installs a released build of Skrepka for Linux — the daemon, the CLI and the
+# desktop app (tray icon, picker and Settings) — into your home directory. No
+# root, no package manager, nothing to compile.
 #
 #   curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
 #   curl -fsSL <same url> | bash -s -- --version v0.2.0
@@ -27,16 +28,25 @@
 #
 #   ~/.local/bin/skrepkad            the daemon      ($XDG_BIN_HOME is honoured)
 #   ~/.local/bin/skrepka             the CLI
-#   ~/.local/bin/skrepka-settings    the GTK4 Settings window (optional)
+#   ~/.local/bin/skrepka-gui         the desktop app: tray, picker, Settings
+#                                    (optional)
 #   ~/.local/lib/skrepka/libgtk4-layer-shell.so.0
 #                                    a private copy of that library, only from a
 #                                    build that bundles one (the release tarball)
-#   ~/.local/share/applications/dev.soldunov.Skrepka.Settings.desktop
-#                                    the launcher entry for the Settings window
-#                                    ($XDG_DATA_HOME is honoured)
+#   ~/.local/share/applications/dev.soldunov.Skrepka.App.desktop
+#                                    the launcher entry ($XDG_DATA_HOME is
+#                                    honoured)
+#   ~/.local/share/icons/hicolor/…/dev.soldunov.Skrepka.App.png
+#                                    the app icon — the macOS one — and the
+#                                    tray's skrepka-tray.svg
+#   ~/.local/share/dbus-1/services/dev.soldunov.Skrepka.service
+#                                    D-Bus activation: the bus starts skrepkad
+#                                    for any client that calls it
+#   ~/.config/autostart/dev.soldunov.Skrepka.App.desktop
+#                                    starts the app in the tray at login
 #   ~/.config/systemd/user/skrepkad.service          ($XDG_CONFIG_HOME too)
 #
-# skrepka-settings is optional because it is the one piece that needs GTK4 and
+# skrepka-gui is optional because it is the one piece that needs GTK4 and
 # gtk4-layer-shell. A headless build with only the daemon and the CLI is a
 # legitimate install, so a payload without it skips it with a note.
 #
@@ -71,9 +81,23 @@ set -euo pipefail
 UNIT_NAME="skrepkad.service"
 DAEMON_NAME="skrepkad"
 CLI_NAME="skrepka"
-SETTINGS_NAME="skrepka-settings"
-DESKTOP_NAME="dev.soldunov.Skrepka.Settings.desktop"
+GUI_NAME="skrepka-gui"
+# The desktop app's GApplication ID. The launcher entry, the autostart entry and
+# the icon are all named after it, because that is how a desktop matches a
+# window to its entry and its icon.
+APP_ID="dev.soldunov.Skrepka.App"
+DESKTOP_NAME="${APP_ID}.desktop"
+ICON_NAME="${APP_ID}.png"
+TRAY_ICON_NAME="skrepka-tray.svg"
+# The daemon's bus name, and the D-Bus activation file named after it.
+DBUS_SERVICE_NAME="dev.soldunov.Skrepka.service"
 LAYER_SHELL_LIBRARY="libgtk4-layer-shell.so.0"
+# What 0.2.0 installed and skrepka-gui replaces: a separate Settings window with
+# its own launcher entry. Removed on install and on uninstall.
+LEGACY_SETTINGS_NAME="skrepka-settings"
+LEGACY_DESKTOP_NAME="dev.soldunov.Skrepka.Settings.desktop"
+# The sizes packaging/icons/hicolor carries the app icon at.
+ICON_SIZES="16 22 24 32 48 64 96 128 256 512"
 
 # The release asset. Its name carries no version on purpose: GitHub's
 # /releases/latest/download/<name> redirect only works for a name that is the
@@ -89,6 +113,9 @@ CONFIG_HOME=""
 DATA_HOME=""
 UNIT_DIR=""
 DESKTOP_DIR=""
+AUTOSTART_DIR=""
+ICON_DIR=""
+DBUS_SERVICE_DIR=""
 STATE_DIR=""
 PRIVATE_LIB_DIR=""
 MODE="install"
@@ -97,7 +124,7 @@ TARBALL=""
 FROM_DIR=""
 PAYLOAD=""
 TEMP_ROOT=""
-INSTALL_SETTINGS=0
+INSTALL_GUI=0
 
 # ---------------------------------------------------------------------------
 # Output
@@ -126,10 +153,11 @@ fail() {
 
 usage() {
 	cat << 'USAGE'
-Installs a released build of Skrepka's Linux daemon (skrepkad), CLI (skrepka)
-and Settings window (skrepka-settings) into your home directory, plus a systemd
-user unit that starts the daemon with your session. No root, no package
-manager, nothing to compile.
+Installs a released build of Skrepka for Linux into your home directory: the
+daemon (skrepkad), the CLI (skrepka) and the desktop app (skrepka-gui — the
+tray icon, the clipboard picker and Settings), plus a systemd user unit that
+starts the daemon with your session. No root, no package manager, nothing to
+compile.
 
 Usage:
   install.sh                    download the latest release and install it
@@ -141,7 +169,7 @@ Usage:
   install.sh --from-dir DIR     install a staged build: DIR/bin, DIR/packaging
                                 and optionally DIR/lib (scripts/setup-linux.sh
                                 uses this)
-  install.sh --uninstall        stop and remove the unit, binaries and entry
+  install.sh --uninstall        stop and remove the unit, binaries and entries
   install.sh --help             this message
 
 Piped from curl, pass arguments after `bash -s --`:
@@ -152,17 +180,21 @@ Piped from curl, pass arguments after `bash -s --`:
 Release builds are x86_64 only. On any other machine, clone the repository and
 run scripts/setup-linux.sh, which builds from source.
 
-The Settings window needs GTK 4.12 or newer from the host. The release bundles
+The desktop app needs GTK 4.12 or newer from the host. The release bundles
 gtk4-layer-shell, which SteamOS does not ship.
 
 Where things land (XDG_BIN_HOME, XDG_CONFIG_HOME and XDG_DATA_HOME are
 honoured when they hold an absolute path):
 
-  ~/.local/bin/skrepkad, ~/.local/bin/skrepka, ~/.local/bin/skrepka-settings
+  ~/.local/bin/skrepkad, ~/.local/bin/skrepka, ~/.local/bin/skrepka-gui
   ~/.local/lib/skrepka/libgtk4-layer-shell.so.0  a private copy, only when the
                              build bundles one; it sits at ../lib/skrepka
                              relative to the bin directory
-  ~/.local/share/applications/dev.soldunov.Skrepka.Settings.desktop
+  ~/.local/share/applications/dev.soldunov.Skrepka.App.desktop
+  ~/.local/share/icons/hicolor/*/apps/dev.soldunov.Skrepka.App.png
+  ~/.local/share/icons/hicolor/scalable/status/skrepka-tray.svg
+  ~/.local/share/dbus-1/services/dev.soldunov.Skrepka.service
+  ~/.config/autostart/dev.soldunov.Skrepka.App.desktop
   ~/.config/systemd/user/skrepkad.service
   ~/.local/share/skrepka/  — history and device key, created by the daemon,
                              never touched by this script or by --uninstall
@@ -257,10 +289,16 @@ resolve_paths() {
 	DATA_HOME="$(xdg_directory "${XDG_DATA_HOME:-}" "${HOME}/.local/share")"
 	UNIT_DIR="${CONFIG_HOME}/systemd/user"
 	DESKTOP_DIR="${DATA_HOME}/applications"
+	AUTOSTART_DIR="${CONFIG_HOME}/autostart"
+	ICON_DIR="${DATA_HOME}/icons/hicolor"
+	# $XDG_DATA_HOME/dbus-1/services is one of the session bus's standard
+	# service directories in the D-Bus specification, so both dbus-daemon and
+	# dbus-broker read it without configuration.
+	DBUS_SERVICE_DIR="${DATA_HOME}/dbus-1/services"
 	STATE_DIR="${DATA_HOME}/skrepka"
 
 	# The private library directory is computed from BIN_DIR, not from $HOME,
-	# because it has to match what the skrepka-settings binary was linked with:
+	# because it has to match what the skrepka-gui binary was linked with:
 	# an rpath of $ORIGIN/../lib/skrepka, which the dynamic loader resolves
 	# relative to the directory the binary sits in. With the default BIN_DIR
 	# that is ~/.local/lib/skrepka; with XDG_BIN_HOME=/opt/me/bin it is
@@ -403,6 +441,27 @@ replace_line() {
 	printf '%s' "${count}"
 }
 
+# Prints $1 as one systemd.service(5) command-line word. Command lines may use
+# double quotes; within them only `\"` and `\\` escape those characters, and
+# `%` must be `%%` because it begins a systemd specifier. A newline cannot live
+# in the directive at all, so refuse it rather than writing a second line.
+systemd_exec_quote() {
+	local path="$1" out="" char index
+	if [[ "${path}" == *$'\n'* ]]; then
+		return 1
+	fi
+	for ((index = 0; index < ${#path}; index++)); do
+		char="${path:index:1}"
+		case "${char}" in
+			'"') out+='\"' ;;
+			'\') out+='\\' ;;
+			'%') out+='%%' ;;
+			*) out+="${char}" ;;
+		esac
+	done
+	printf '"%s"' "${out}"
+}
+
 # ---------------------------------------------------------------------------
 # Uninstall
 # ---------------------------------------------------------------------------
@@ -410,6 +469,7 @@ replace_line() {
 uninstall() {
 	bold "Removing Skrepka"
 
+	stop_gui
 	if has_systemd_user_instance; then
 		# `|| true` on both: disabling a unit that was never enabled, or one
 		# whose file is already gone, exits non-zero, and neither is a failure
@@ -428,17 +488,16 @@ uninstall() {
 	for path in \
 		"${BIN_DIR}/${DAEMON_NAME}" \
 		"${BIN_DIR}/${CLI_NAME}" \
-		"${BIN_DIR}/${SETTINGS_NAME}" \
+		"${BIN_DIR}/${GUI_NAME}" \
 		"${DESKTOP_DIR}/${DESKTOP_NAME}" \
+		"${AUTOSTART_DIR}/${DESKTOP_NAME}" \
+		"${DBUS_SERVICE_DIR}/${DBUS_SERVICE_NAME}" \
 		"${PRIVATE_LIB_DIR}/${LAYER_SHELL_LIBRARY}" \
 		"${UNIT_DIR}/${UNIT_NAME}"; do
-		# -L as well as -e: a dangling symlink at one of these paths is still
-		# ours to remove, and -e alone would step over it.
-		if [[ -e "${path}" || -L "${path}" ]]; then
-			rm -f "${path}"
-			echo "removed ${path}"
-		fi
+		remove_file "${path}"
 	done
+	remove_icons
+	remove_legacy_settings
 
 	# rmdir, never rm -r: it removes the private library directory only when
 	# nothing is left in it, so a file the user put there survives and so does
@@ -448,6 +507,8 @@ uninstall() {
 		rmdir "${PRIVATE_LIB_DIR}" 2> /dev/null || true
 	fi
 	refresh_desktop_database
+	refresh_icon_cache
+	reload_session_bus
 
 	if has_systemd_user_instance; then
 		systemctl --user daemon-reload
@@ -473,10 +534,13 @@ uninstall() {
 # A payload is a directory laid out like the release tarball:
 #
 #   bin/skrepkad, bin/skrepka             required
-#   bin/skrepka-settings                  optional
+#   bin/skrepka-gui                       optional
 #   lib/libgtk4-layer-shell.so.0          optional, the bundled library
 #   packaging/systemd/skrepkad.service    required
+#   packaging/dbus/<activation file>      needed for D-Bus activation
 #   packaging/desktop/<desktop entry>     needed for the launcher entry
+#   packaging/autostart/<desktop entry>   needed to start in the tray at login
+#   packaging/icons/hicolor/…             the app icon and the tray icon
 #
 # Four ways to get one, tried in this order: --from-dir names it, --tarball
 # names an archive of one, this script sits inside one (an untarred release),
@@ -683,8 +747,11 @@ install_unit() {
 		temp_root
 		local staged="${TEMP_ROOT}/${UNIT_NAME}"
 		local from="ExecStart=%h/.local/bin/${DAEMON_NAME}"
-		local rewrote
-		rewrote="$(replace_line "${source}" "${staged}" "${from}" "ExecStart=${BIN_DIR}/${DAEMON_NAME}")"
+		local exec_value rewrote
+		if ! exec_value="$(systemd_exec_quote "${BIN_DIR}/${DAEMON_NAME}")"; then
+			fail "cannot write ${UNIT_NAME}: ${BIN_DIR} contains a newline."
+		fi
+		rewrote="$(replace_line "${source}" "${staged}" "${from}" "ExecStart=${exec_value}")"
 		# Asserted rather than assumed: if that line ever changes, a rewrite
 		# that matched nothing would leave the unit pointing at a binary that is
 		# not there, and systemd would report 203/EXEC with nothing pointing at
@@ -701,8 +768,8 @@ install_unit() {
 
 # Warns about shared libraries the loader cannot find for the installed
 # binary. A warning and never a failure: the daemon and the CLI do not need GTK
-# and work regardless, so an install whose Settings window will not start is
-# still a working install with one broken piece the user is told about.
+# and work regardless, so an install whose desktop app will not start is still
+# a working install with one broken piece the user is told about.
 #
 # ldd exits non-zero and prints "not a dynamic executable" for a file that is
 # not one, which has no line saying "not found", so that case is silent. It
@@ -720,37 +787,63 @@ warn_about_missing_libraries() {
 	if ((${#missing[@]} > 0)); then
 		yellow ""
 		yellow "⚠ ${binary} cannot find: ${missing[*]}"
-		yellow "  The Settings window will not start until they are installed."
+		yellow "  The desktop app will not start until they are installed."
 		yellow "  Install the packages that provide them from your distribution —"
 		yellow "  usually the GTK 4 runtime and gtk4-layer-shell. skrepkad and"
 		yellow "  skrepka are unaffected."
 	fi
 }
 
-install_settings() {
-	if [[ ! -x "${PAYLOAD}/bin/${SETTINGS_NAME}" ]]; then
-		yellow "skipping ${SETTINGS_NAME}: this build does not include it."
-		# A re-run that skips the Settings window leaves an earlier one in
-		# place, and it was built against the previous daemon's D-Bus
-		# interface. Left silently, it would talk to a daemon that has moved on.
-		if [[ -e "${BIN_DIR}/${SETTINGS_NAME}" ]]; then
-			yellow "note: ${BIN_DIR}/${SETTINGS_NAME} was left as it was, and may not match"
+# Removes one named file — never a directory, never a wildcard — and says so.
+# -L as well as -e: a dangling symlink at one of these paths is still ours to
+# remove, and -e alone would step over it.
+remove_file() {
+	local path="$1"
+	if [[ -e "${path}" || -L "${path}" ]]; then
+		rm -f "${path}"
+		echo "removed ${path}"
+	fi
+}
+
+install_gui() {
+	# Whatever this build carries, the 0.2.0 Settings window is gone: its job
+	# is skrepka-gui's now, and its launcher entry would be a second one.
+	remove_legacy_settings
+
+	if [[ ! -x "${PAYLOAD}/bin/${GUI_NAME}" ]]; then
+		yellow "skipping ${GUI_NAME}: this build does not include it."
+		# A re-run that skips the app leaves an earlier one in place, and it
+		# was built against the previous daemon's D-Bus interface. Left
+		# silently, it would talk to a daemon that has moved on.
+		if [[ -e "${BIN_DIR}/${GUI_NAME}" ]]; then
+			yellow "note: ${BIN_DIR}/${GUI_NAME} was left as it was, and may not match"
 			yellow "  the D-Bus interface of the daemon just installed."
 		fi
 		return 0
 	fi
-	INSTALL_SETTINGS=1
+	INSTALL_GUI=1
+
+	# The running app — if this is an upgrade — is asked to quit before its
+	# binary is replaced, so the one that starts afterwards is the new one.
+	stop_gui
 
 	# `install` for the binary and the library alike: it unlinks the
-	# destination first, so replacing a file a running Settings window has
-	# mapped writes a new inode instead of failing with ETXTBSY or corrupting
-	# the mapping.
-	install -m 0755 "${PAYLOAD}/bin/${SETTINGS_NAME}" "${BIN_DIR}/${SETTINGS_NAME}"
-	echo "installed ${BIN_DIR}/${SETTINGS_NAME}"
+	# destination first, so replacing a file a running app has mapped writes a
+	# new inode instead of failing with ETXTBSY or corrupting the mapping.
+	install -m 0755 "${PAYLOAD}/bin/${GUI_NAME}" "${BIN_DIR}/${GUI_NAME}"
+	echo "installed ${BIN_DIR}/${GUI_NAME}"
 
 	install_layer_shell
-	warn_about_missing_libraries "${BIN_DIR}/${SETTINGS_NAME}"
-	install_desktop_entry
+	warn_about_missing_libraries "${BIN_DIR}/${GUI_NAME}"
+	install_icons
+	install_desktop_entries
+}
+
+# The 0.2.0 layout, where Settings was its own program with its own launcher
+# entry. Named files only.
+remove_legacy_settings() {
+	remove_file "${BIN_DIR}/${LEGACY_SETTINGS_NAME}"
+	remove_file "${DESKTOP_DIR}/${LEGACY_DESKTOP_NAME}"
 }
 
 # A build that bundles gtk4-layer-shell keeps it in lib/ beside bin/ — the
@@ -783,36 +876,214 @@ install_layer_shell() {
 	fi
 }
 
-# The launcher entry. Its Exec= line is the payload's, with the plain program
-# name replaced by the absolute installed path, because ~/.local/bin is not on
-# every desktop session's $PATH.
-install_desktop_entry() {
-	local source="${PAYLOAD}/packaging/desktop/${DESKTOP_NAME}" exec_value
-	if [[ ! -f "${source}" ]]; then
-		yellow "no ${DESKTOP_NAME} in this build; ${SETTINGS_NAME} has no launcher entry."
+# The app icon — the macOS icon, rendered at every size the hicolor theme
+# expects — and the tray's monochrome mark, into the user's own hicolor theme.
+# Named after the application ID, so no other app's icon can be replaced.
+install_icons() {
+	local source="${PAYLOAD}/packaging/icons/hicolor" size
+	if [[ ! -d "${source}" ]]; then
+		yellow "no icons in this build; the launcher entry will show a generic one."
 		return 0
 	fi
-	if ! exec_value="$(desktop_exec_quote "${BIN_DIR}/${SETTINGS_NAME}")"; then
+	for size in ${ICON_SIZES}; do
+		if [[ -f "${source}/${size}x${size}/apps/${ICON_NAME}" ]]; then
+			mkdir -p "${ICON_DIR}/${size}x${size}/apps"
+			install -m 0644 "${source}/${size}x${size}/apps/${ICON_NAME}" \
+				"${ICON_DIR}/${size}x${size}/apps/${ICON_NAME}"
+		fi
+	done
+	if [[ -f "${source}/scalable/status/${TRAY_ICON_NAME}" ]]; then
+		mkdir -p "${ICON_DIR}/scalable/status"
+		install -m 0644 "${source}/scalable/status/${TRAY_ICON_NAME}" \
+			"${ICON_DIR}/scalable/status/${TRAY_ICON_NAME}"
+	fi
+	echo "installed the icons into ${ICON_DIR}"
+	refresh_icon_cache
+}
+
+remove_icons() {
+	local size
+	for size in ${ICON_SIZES}; do
+		remove_file "${ICON_DIR}/${size}x${size}/apps/${ICON_NAME}"
+	done
+	remove_file "${ICON_DIR}/scalable/status/${TRAY_ICON_NAME}"
+}
+
+# GTK trusts an icon-theme.cache only while it is newer than the theme's
+# directory, and reads the directories themselves when there is none. So a
+# cache is only ever *refreshed*, never created: one that already exists would
+# otherwise go on being believed without our icons in it, and one we created
+# would do the same to the next program that drops an icon here without
+# rebuilding it. Rebuilt when the tool is there; otherwise the directory is
+# touched, which makes GTK ignore the stale cache and read the files. Both best
+# effort — the icons are on disk either way.
+refresh_icon_cache() {
+	if [[ ! -f "${ICON_DIR}/icon-theme.cache" ]]; then
+		return 0
+	fi
+	if command -v gtk-update-icon-cache > /dev/null 2>&1 \
+		&& gtk-update-icon-cache --force --quiet --ignore-theme-index "${ICON_DIR}" > /dev/null 2>&1; then
+		return 0
+	fi
+	touch "${ICON_DIR}" 2> /dev/null || true
+}
+
+# The launcher entry and the autostart entry. Their Exec= lines are the
+# payload's, with the plain program name replaced by the absolute installed
+# path, because ~/.local/bin is not on every desktop session's $PATH.
+install_desktop_entries() {
+	local exec_value
+	if ! exec_value="$(desktop_exec_quote "${BIN_DIR}/${GUI_NAME}")"; then
 		yellow "cannot write a launcher entry: ${BIN_DIR} contains a character that"
 		yellow "a Desktop Entry Exec= line cannot hold (\"=\", a tab or a newline)."
-		yellow "  Run ${BIN_DIR}/${SETTINGS_NAME} from a terminal instead."
+		yellow "  Run ${BIN_DIR}/${GUI_NAME} from a terminal instead."
+		return 0
+	fi
+	install_entry "${PAYLOAD}/packaging/desktop/${DESKTOP_NAME}" "${DESKTOP_DIR}" "${exec_value}" \
+		"" "--settings"
+	install_entry "${PAYLOAD}/packaging/autostart/${DESKTOP_NAME}" "${AUTOSTART_DIR}" \
+		"${exec_value}" "--background"
+	refresh_desktop_database
+}
+
+# Installs the desktop entry $1 into the directory $2, rewriting each
+# `Exec=skrepka-gui<arguments>` line to the installed path $3 — one line per
+# argument string that follows, "" meaning none. Each rewrite must match exactly
+# one line, so a renamed or duplicated Exec= line in the entry is an error here
+# and not a launcher that starts nothing.
+install_entry() {
+	local source="$1" directory="$2" exec_value="$3"
+	shift 3
+	local name
+	name="$(basename "${source}")"
+	if [[ ! -f "${source}" ]]; then
+		yellow "no $(basename "$(dirname "${source}")")/${name} in this build; skipping it."
 		return 0
 	fi
 
 	temp_root
-	local staged="${TEMP_ROOT}/${DESKTOP_NAME}"
-	local from="Exec=${SETTINGS_NAME}"
-	local rewrote
-	rewrote="$(replace_line "${source}" "${staged}" "${from}" "Exec=${exec_value}")"
-	# Exactly one, asserted, so a renamed or duplicated Exec= line in the entry
-	# is an error here and not a launcher that starts nothing.
-	if [[ "${rewrote}" -ne 1 ]]; then
-		fail "expected exactly one '${from}' line in ${DESKTOP_NAME}, found ${rewrote}."
+	local staged="${TEMP_ROOT}/${name}.0" next arguments from rewrote step=0
+	cp "${source}" "${staged}"
+	for arguments in "$@"; do
+		step=$((step + 1))
+		next="${TEMP_ROOT}/${name}.${step}"
+		from="Exec=${GUI_NAME}${arguments:+ ${arguments}}"
+		rewrote="$(replace_line "${staged}" "${next}" "${from}" "Exec=${exec_value}${arguments:+ ${arguments}}")"
+		if [[ "${rewrote}" -ne 1 ]]; then
+			fail "expected exactly one '${from}' line in ${name}, found ${rewrote}."
+		fi
+		staged="${next}"
+	done
+	mkdir -p "${directory}"
+	install -m 0644 "${staged}" "${directory}/${name}"
+	echo "installed ${directory}/${name}"
+}
+
+# Prints $1 as a D-Bus service file's Exec= value: the bus splits the value the
+# way a POSIX shell would, without expanding anything, so a path with a space
+# in it is single-quoted. A path holding a single quote or a line break cannot
+# be quoted that way and returns 1.
+dbus_exec_quote() {
+	local path="$1"
+	if [[ "${path}" == *"'"* || "${path}" == *$'\n'* ]]; then
+		return 1
 	fi
-	mkdir -p "${DESKTOP_DIR}"
-	install -m 0644 "${staged}" "${DESKTOP_DIR}/${DESKTOP_NAME}"
-	echo "installed ${DESKTOP_DIR}/${DESKTOP_NAME}"
-	refresh_desktop_database
+	if [[ "${path}" =~ ^[A-Za-z0-9/._+:@,%-]+$ ]]; then
+		printf '%s' "${path}"
+	else
+		printf "'%s'" "${path}"
+	fi
+}
+
+# D-Bus activation for the daemon: with this file in place, the session bus
+# starts skrepkad — through its systemd unit — whenever anything calls it while
+# it is not running. The tray app, the Settings window and the skrepka command
+# all then find a daemon rather than an error.
+install_dbus_activation() {
+	local source="${PAYLOAD}/packaging/dbus/${DBUS_SERVICE_NAME}" exec_value
+	if [[ ! -f "${source}" ]]; then
+		yellow "no ${DBUS_SERVICE_NAME} in this build; skrepkad will not start on demand."
+		return 0
+	fi
+	if ! exec_value="$(dbus_exec_quote "${BIN_DIR}/${DAEMON_NAME}")"; then
+		yellow "cannot write ${DBUS_SERVICE_NAME}: ${BIN_DIR} holds a quote or a line break."
+		return 0
+	fi
+	temp_root
+	local staged="${TEMP_ROOT}/${DBUS_SERVICE_NAME}" rewrote
+	rewrote="$(replace_line "${source}" "${staged}" "Exec=${DAEMON_NAME}" "Exec=${exec_value}")"
+	if [[ "${rewrote}" -ne 1 ]]; then
+		fail "expected exactly one 'Exec=${DAEMON_NAME}' line in ${DBUS_SERVICE_NAME}, found ${rewrote}."
+	fi
+	mkdir -p "${DBUS_SERVICE_DIR}"
+	install -m 0644 "${staged}" "${DBUS_SERVICE_DIR}/${DBUS_SERVICE_NAME}"
+	echo "installed ${DBUS_SERVICE_DIR}/${DBUS_SERVICE_NAME}"
+	reload_session_bus
+}
+
+# Asks the session bus to re-read its service directories, so the activation
+# file works now rather than after the next login. dbus-daemon notices a new
+# file by itself; dbus-broker, which SteamOS and Arch run, only reads them on
+# ReloadConfig. Best effort through whichever client the machine has: without a
+# session bus — over ssh, in a container — there is nothing to reload, and the
+# file is read at the next login regardless.
+reload_session_bus() {
+	if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -z "${XDG_RUNTIME_DIR:-}" ]]; then
+		return 0
+	fi
+	if command -v busctl > /dev/null 2>&1; then
+		busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+			org.freedesktop.DBus ReloadConfig > /dev/null 2>&1 && return 0
+	fi
+	if command -v gdbus > /dev/null 2>&1; then
+		gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+			--method org.freedesktop.DBus.ReloadConfig > /dev/null 2>&1 && return 0
+	fi
+	if command -v dbus-send > /dev/null 2>&1; then
+		dbus-send --session --type=method_call --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+			org.freedesktop.DBus.ReloadConfig > /dev/null 2>&1 && return 0
+	fi
+	return 0
+}
+
+# Whether this shell belongs to a graphical session the app could show up in.
+has_graphical_session() {
+	[[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]]
+}
+
+# Asks a running app to quit. The app is single-instance, so `--quit` reaches
+# the running one over the bus; with none running it starts nothing and exits.
+# Bounded, because a wedged app must not hang an install.
+stop_gui() {
+	if [[ -x "${BIN_DIR}/${GUI_NAME}" ]] && has_graphical_session; then
+		if command -v timeout > /dev/null 2>&1; then
+			timeout 10 "${BIN_DIR}/${GUI_NAME}" --quit > /dev/null 2>&1 || true
+		else
+			"${BIN_DIR}/${GUI_NAME}" --quit > /dev/null 2>&1 || true
+		fi
+	elif ! has_graphical_session && command -v pkill > /dev/null 2>&1; then
+		# Over SSH `--quit` cannot start without a display, but an old GUI can
+		# still hold the previous binary after an upgrade or uninstall.
+		if pkill -TERM -u "$(id -u)" -x "${GUI_NAME}" > /dev/null 2>&1; then
+			echo "stopped running ${GUI_NAME}"
+		fi
+	fi
+}
+
+# Starts the app in the tray, so the icon and the shortcut are there the moment
+# the install finishes rather than at the next login. Detached from this shell
+# — `setsid` where it exists — so closing the terminal does not take it down.
+start_gui() {
+	if [[ "${INSTALL_GUI}" -ne 1 ]] || ! has_graphical_session; then
+		return 0
+	fi
+	if command -v setsid > /dev/null 2>&1; then
+		setsid -f "${BIN_DIR}/${GUI_NAME}" --background > /dev/null 2>&1 < /dev/null || true
+	else
+		nohup "${BIN_DIR}/${GUI_NAME}" --background > /dev/null 2>&1 < /dev/null &
+		disown || true
+	fi
+	green "✓ Skrepka is starting in your tray"
 }
 
 # ---------------------------------------------------------------------------
@@ -871,8 +1142,15 @@ print_next_steps() {
 	echo "Clipboard history and this device's sync identity will be created by the"
 	echo "daemon, on first run, under ${STATE_DIR}."
 	echo
-	if [[ "${INSTALL_SETTINGS}" -eq 1 ]]; then
-		echo "  ${SETTINGS_NAME}                    pair and manage devices (also in the launcher)"
+	if [[ "${INSTALL_GUI}" -eq 1 ]]; then
+		echo "Skrepka lives in the tray and starts with your session. Open the picker"
+		echo "with its shortcut — Meta+Shift+V unless you chose another when the"
+		echo "desktop asked — or from the tray icon or the application launcher."
+		echo "Settings is in the tray menu and behind the picker's gear button."
+		echo
+		echo "  ${GUI_NAME} --picker                  open the picker; bind this to a key in"
+		echo "                                     your desktop's settings if no shortcut"
+		echo "                                     was offered"
 	fi
 	echo "  ${CLI_NAME} --help                       what the CLI can do"
 	echo "  systemctl --user status ${UNIT_NAME}   is it running"
@@ -893,8 +1171,10 @@ main() {
 	preflight
 	install_binaries
 	install_unit
-	install_settings
+	install_dbus_activation
+	install_gui
 	enable_unit
+	start_gui
 	warn_about_path
 	print_next_steps
 }

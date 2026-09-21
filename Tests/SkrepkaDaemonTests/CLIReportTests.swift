@@ -3,6 +3,7 @@ import SkrepkaIPC
 import Testing
 
 @testable import SkrepkaCLI
+@testable import SkrepkaLinuxPlatform
 
 /// Golden output shapes.
 ///
@@ -50,11 +51,11 @@ struct CLIReportTests {
         let json = try SkrepkaDocumentCoding.encode(history(try stamp()))
         let expected = """
             {"clips":[{"byteCount":11,"contentHash":"a1b2c3d4e5f6","createdAt":"\(Self.stampText)",\
-            "isPinned":true,"kind":"text","preview":"hello world",\
-            "representations":["text/plain;charset=utf-8"]},\
+            "hasPreview":false,"isConcealed":false,"isPinned":true,"kind":"text",\
+            "preview":"hello world","representations":["text/plain;charset=utf-8"]},\
             {"byteCount":2048,"contentHash":"ffffffffffff","createdAt":"\(Self.stampText)",\
-            "isPinned":false,"kind":"image","preview":"a picture",\
-            "representations":["image/png"]}],"total":42,"version":\(SkrepkaInterface.version)}
+            "hasPreview":false,"isConcealed":false,"isPinned":false,"kind":"image",\
+            "preview":"a picture","representations":["image/png"]}],"total":42,"version":\(SkrepkaInterface.version)}
             """
         #expect(json == expected)
     }
@@ -105,6 +106,24 @@ struct CLIReportTests {
         #expect(text.contains("  restarts     1"))
         #expect(text.contains("  peers        2 paired, 1 in sight"))
         #expect(text.contains("  last capture 01-02 03:04"))
+    }
+
+    @Test("`doctor` and its JSON show the avahi publication remedy")
+    func avahiPublicationRemedyIsVisible() throws {
+        let refusal = AvahiError.refused(
+            method: AvahiNames.Server.entryGroupNew,
+            name: "org.freedesktop.Avahi.NotPermittedError",
+            detail: "Not permitted"
+        )
+        let problem = "Peer discovery or publishing is not working: \(refusal)"
+        let report = diagnostics(try stamp(), problems: [problem])
+        let text = DiagnosticsReport.text(report, timeZone: .gmt)
+        let json = try SkrepkaDocumentCoding.encode(report)
+
+        #expect(text.contains("disable-user-service-publishing=yes"))
+        #expect(text.contains("sudo systemctl restart avahi-daemon"))
+        #expect(json.contains("disable-user-service-publishing=yes"))
+        #expect(json.contains("sudo systemctl restart avahi-daemon"))
     }
 
     @Test("a clean machine says so")

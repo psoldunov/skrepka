@@ -154,7 +154,7 @@ extension Daemon {
             )
         }
         if let problem = network.problem, options.syncEnabled {
-            found.append("Peers cannot be found: \(problem)")
+            found.append("Peer discovery or publishing is not working: \(problem)")
         }
         if options.syncEnabled, network.problem == nil, !isPublished {
             found.append(
