@@ -35,7 +35,7 @@
 # Everything lands in build/kde/smoke/<run>/: shots/ (screenshots and a 4x
 # crop of the shadow corner), logs/ (skrepka-gui and skrepkad stderr, portal
 # traffic, the session's component logs), summary.txt. Exit status 1 when any
-# check fails.
+# check fails or stops without reporting a result.
 #
 # Takes about two minutes after the image exists (scripts/kde-image.sh).
 #
@@ -348,9 +348,20 @@ scripts/kde.sh bash -c "mkdir -p '${RUN}/logs/session' && cp /tmp/kde/logs/*.log
 {
 	echo "subject: ${SOURCE}"
 	echo "session: $(scripts/kde.sh pacman -Q kwin plasma-workspace xdg-desktop-portal-kde gtk4 | tr '\n' ' ')"
-	grep -h '^RESULT' "${RUN_DIR}"/logs/[1-4]-*.txt
+	# No match at all is reported below, by check; only a grep error aborts here.
+	grep -h '^RESULT' "${RUN_DIR}"/logs/[1-4]-*.txt || [[ $? -eq 1 ]]
 } > "${RUN_DIR}/summary.txt"
 echo
 cat "${RUN_DIR}/summary.txt"
 echo "evidence: build/kde/smoke/${RUN_ID}/"
+# A section runs without set -e, so one that dies before its RESULT line can
+# still exit 0 — and a missing FAIL is not a PASS.
+missing=""
+for check in 1 2 3 4; do
+	grep -q "^RESULT ${check} " "${RUN_DIR}/summary.txt" || missing="${missing} ${check}"
+done
+if [[ -n "${missing}" ]]; then
+	echo "no result from check${missing}: it stopped before reporting; see its log in logs/" >&2
+	exit 1
+fi
 ! grep -q '^RESULT .* FAIL' "${RUN_DIR}/summary.txt"
