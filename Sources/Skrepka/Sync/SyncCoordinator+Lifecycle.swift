@@ -198,7 +198,9 @@ extension SyncCoordinator {
                     deviceID: certificate.deviceID,
                     deviceName: displayName,
                     platform: .macos,
-                    protocolVersion: .current
+                    protocolVersion: .current,
+                    // Keeps the file bundles peers offer, so they may offer them.
+                    capabilities: SyncCapability.local
                 ),
                 localCertificate: certificate
             ),

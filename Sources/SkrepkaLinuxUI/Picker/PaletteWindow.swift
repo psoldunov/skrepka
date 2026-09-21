@@ -6,22 +6,33 @@ import SkrepkaIPC
 /// appears over the frontmost app, hosting the one ``PickerPanel``.
 ///
 /// There are two ways to raise it, chosen by what the session offers. Where the
-/// compositor speaks `zwlr_layer_shell_v1` — KWin and sway — it is a centred
-/// overlay layer surface with exclusive keyboard focus, which is the only
-/// Wayland mechanism that puts a keyboard-driven surface over the frontmost app
-/// without stealing its selection. Where it does not — every X11 session, and
-/// GNOME — it falls back to an ordinary undecorated toplevel; on X11 that
+/// compositor speaks `zwlr_layer_shell_v1` — KWin and sway — it is an overlay
+/// layer surface with exclusive keyboard focus, which is the only Wayland
+/// mechanism that puts a keyboard-driven surface over the frontmost app without
+/// stealing its selection. That surface covers the whole output and is
+/// transparent outside the panel — see `PaletteWindow+Overlay.swift` for why.
+/// Where there is no layer-shell — every X11 session, and GNOME — it falls back
+/// to an ordinary undecorated toplevel the size of the panel; on X11 that
 /// toplevel is marked above/skip-taskbar and grabs the keyboard on map, the way
 /// rofi does, so the first keystroke after the hotkey still lands in the search
-/// field. It no longer refuses to build for want of layer-shell.
+/// field. See `PaletteWindow+Plain.swift`.
+///
+/// Either way it closes when it stops being what the user is working with, as
+/// the macOS panel closes when it resigns key: when keyboard focus moves to
+/// another window, and — on the overlay, where a click elsewhere lands on the
+/// overlay itself — when a click falls outside the panel. KWin moves focus off
+/// even an exclusive layer surface when another window is clicked (it treats
+/// exclusive and on-demand alike), and GDK turns that `wl_keyboard.leave` into
+/// the window going inactive; sway keeps focus there, and the click does the
+/// work instead.
 ///
 /// `nonisolated`, and reached from the C key callback through the `gpointer`
 /// user data every GTK signal carries — the honest hole in concurrency checking
 /// this target describes rather than papers over. Every method runs on GTK's
 /// loop thread and nothing else may touch an instance.
 public final class PaletteWindow {
-    /// Why the palette could not be built. Layer-shell's absence is no longer
-    /// one of them — see the type's discussion.
+    /// Why the palette could not be built. Layer-shell's absence is not one of
+    /// them — see the type's discussion.
     public enum Unavailable: Error, CustomStringConvertible {
         case widgetCreationFailed
 
@@ -34,25 +45,32 @@ public final class PaletteWindow {
 
     /// Rows Page Up and Page Down move, matching the macOS picker.
     public static let pageJump = 5
-    /// The transparent border the window keeps around the panel so the panel's
-    /// drop shadow has room to fall — the same value as the panel's CSS margin.
-    private static let shadowInset: Int32 = 22
     /// The empty state's height, matching `PaletteMetrics`.
     private static let emptyHeight: Int32 = 150
 
-    /// Sends a decoded key press out; the window decides nothing.
+    /// Sends a decoded key press — or a click away — out; the window decides
+    /// nothing.
     public var onCommand: ((PickerCommand) -> Void)?
 
     /// The panel the window hosts, for the controller to drive.
     let panel: PickerPanel
 
-    private let window: UnsafeMutablePointer<GtkWindow>
-    private let windowWidget: UnsafeMutablePointer<GtkWidget>
-    private let usesLayerShell: Bool
-    private let outputHeight = skrepka_smallest_monitor_height()
-    /// The last size set, so an unchanged resize is skipped — repeatedly setting
-    /// the same default size re-commits the layer surface and can cost a key.
-    private var lastSize: (Int32, Int32)?
+    let window: UnsafeMutablePointer<GtkWindow>
+    let windowWidget: UnsafeMutablePointer<GtkWidget>
+    /// The full-output overlay the panel is laid out in, on a layer-shell
+    /// session; nil for a plain window.
+    var overlay: UnsafeMutablePointer<GtkWidget>?
+    /// How tall the panel wants to be for the rows on screen, before the
+    /// output's ceiling — what both kinds of window size the panel by.
+    var wantedHeight = PaletteMetrics.minimumHeight
+    /// The plain window's last size, so an unchanged resize is skipped.
+    var lastPlainSize: (Int32, Int32)?
+    /// Whether the window has been the active window since it was last shown.
+    /// Losing focus dismisses only after having had it, so a compositor that is
+    /// slow to activate it cannot close it on the way in.
+    var hasBeenActive = false
+    /// The look at focus taken once the row menu has closed.
+    private var focusRecheck: LoopTimer?
 
     public init() throws {
         guard let panel = PickerPanel(),
@@ -64,23 +82,26 @@ public final class PaletteWindow {
         self.panel = panel
         self.window = window
         self.windowWidget = windowWidget
-        usesLayerShell = GtkSession.isLayerShellAvailable
 
         gtk_window_set_decorated(window, 0)
         gtk_widget_add_css_class(windowWidget, "skrepka-picker")
-        gtk_window_set_child(window, panel.root)
-        if usesLayerShell {
-            Self.raiseAsOverlay(window)
+        if GtkSession.isLayerShellAvailable {
+            try buildOverlay()
         } else {
-            wirePlainWindow()
+            buildPlainWindow()
         }
         connectKeys(keys)
+        GtkSignal.onChange(of: "is-active", on: UnsafeMutableRawPointer(window)) { [weak self] in
+            self?.activeChanged()
+        }
+        panel.list.onMenuClosed = { [weak self] in self?.recheckFocusSoon() }
         resize(for: [])
     }
 
     // MARK: - Presenting
 
     public func present() {
+        hasBeenActive = false
         gtk_window_present(window)
         panel.list.scrollToTop()
         panel.searchBar.focus()
@@ -96,31 +117,70 @@ public final class PaletteWindow {
         gtk_widget_get_visible(windowWidget) != 0
     }
 
-    /// Resizes the window to fit `documents`, clamped to the output, with room
-    /// for the shadow. The arithmetic is `PaletteMetrics`', over the document's
-    /// own "has a preview" flag rather than a `ClipSummary`'s.
+    /// Sizes the panel to fit `documents`, clamped to the output. The
+    /// arithmetic is `PaletteMetrics`', over the document's own "has a
+    /// preview" flag rather than a `ClipSummary`'s.
     public func resize(for documents: [ClipDocument]) {
-        let content = documents.reduce(Int32(0)) { $0 + Self.rowHeight(documents.isEmpty ? nil : $1) }
-        let gutter = PaletteMetrics.gutter * Int32(max(0, documents.count - 1))
-        let wanted =
-            documents.isEmpty
-            ? PaletteMetrics.chromeHeight + Self.emptyHeight
-            : PaletteMetrics.chromeHeight + content + gutter
-        let height = min(
-            max(wanted, PaletteMetrics.minimumHeight),
-            PaletteMetrics.ceiling(outputHeight: outputHeight))
-        let width = PaletteMetrics.width + Self.shadowInset * 2
-        let full = height + Self.shadowInset * 2
-        if let lastSize, lastSize == (width, full) { return }
-        lastSize = (width, full)
-        gtk_window_set_default_size(window, width, full)
+        wantedHeight = Self.wantedHeight(for: documents)
+        if let overlay {
+            // The overlay covers the output whatever the panel's size, so only
+            // the panel's place in it is laid out again — the layer surface
+            // itself is not re-committed, which is what could cost a key.
+            gtk_widget_queue_allocate(overlay)
+        } else {
+            resizePlainWindow()
+        }
     }
 
-    private static func rowHeight(_ document: ClipDocument?) -> Int32 {
-        guard let document, document.hasPreview, !document.isConcealed else {
-            return PaletteMetrics.standardRowHeight
-        }
+    static func wantedHeight(for documents: [ClipDocument]) -> Int32 {
+        guard !documents.isEmpty else { return PaletteMetrics.chromeHeight + emptyHeight }
+        let content = documents.reduce(Int32(0)) { $0 + rowHeight($1) }
+        return PaletteMetrics.chromeHeight + content + PaletteMetrics.gutter * Int32(documents.count - 1)
+    }
+
+    private static func rowHeight(_ document: ClipDocument) -> Int32 {
+        guard document.hasPreview, !document.isConcealed else { return PaletteMetrics.standardRowHeight }
         return PaletteMetrics.imageRowHeight
+    }
+
+    /// Dismisses the picker as Escape would, unless its row menu is open — the
+    /// click or focus change that closes a menu is not one that should take
+    /// the picker with it.
+    func dismissFromOutside() {
+        guard isVisible, !panel.list.isMenuOpen else { return }
+        onCommand?(.dismiss)
+    }
+
+    /// Losing focus dismisses only after the window has had it, so a
+    /// compositor that is slow to activate it cannot close it on the way in.
+    /// The row menu's popup takes keyboard focus while it is open, which is
+    /// why ``dismissFromOutside()`` checks for it.
+    private func activeChanged() {
+        guard gtk_window_is_active(window) == 0 else {
+            hasBeenActive = true
+            return
+        }
+        guard hasBeenActive else { return }
+        hasBeenActive = false
+        dismissFromOutside()
+    }
+
+    /// Focus that left while the row menu was open was let go — the popup
+    /// takes focus itself — and nothing reports it again once the menu closes:
+    /// switch apps with the menu up and the picker would stay over the app
+    /// switched to. So look again once the menu has gone. Not at once: the
+    /// compositor hands focus back to the window after the popup is gone, and
+    /// a check in the same instant would see a window about to be active as
+    /// one that lost focus.
+    private func recheckFocusSoon() {
+        focusRecheck?.cancel()
+        focusRecheck = LoopTimer(milliseconds: 250) { [weak self] in
+            guard let self else { return }
+            focusRecheck?.cancel()
+            focusRecheck = nil
+            guard gtk_window_is_active(window) == 0 else { return }
+            dismissFromOutside()
+        }
     }
 
     // MARK: - Keys
@@ -134,47 +194,5 @@ public final class PaletteWindow {
             Unmanaged.passRetained(self).toOpaque(),
             Self.onContextReleased)
         gtk_widget_add_controller(windowWidget, keys)
-    }
-
-    // MARK: - Layer shell
-
-    /// The overlay path: no anchors centres it, exclusive keyboard delivers the
-    /// first keystroke without a click. See the prototype's findings.
-    private static func raiseAsOverlay(_ window: UnsafeMutablePointer<GtkWindow>) {
-        gtk_layer_init_for_window(window)
-        gtk_layer_set_layer(window, GTK_LAYER_SHELL_LAYER_OVERLAY)
-        gtk_layer_set_namespace(window, "skrepka-picker")
-        gtk_layer_set_keyboard_mode(window, GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE)
-    }
-
-    // MARK: - X11 fallback
-
-    /// Wires the plain toplevel's realize/map/unmap so an X11 session gets the
-    /// utility hints and the keyboard grab a layer surface would have given it.
-    /// On a non-X11 session without layer-shell — GNOME Wayland — these are
-    /// no-ops and the window is a best-effort plain toplevel.
-    private func wirePlainWindow() {
-        GtkSignal.connect(UnsafeMutableRawPointer(windowWidget), "realize") { [weak self] in
-            guard let surface = self?.surface() else { return }
-            skrepka_x11_mark_utility(surface)
-        }
-        GtkSignal.connect(UnsafeMutableRawPointer(windowWidget), "map") { [weak self] in
-            self?.presentX11()
-        }
-        GtkSignal.connect(UnsafeMutableRawPointer(windowWidget), "unmap") { [weak self] in
-            guard let surface = self?.surface() else { return }
-            skrepka_x11_ungrab_keyboard(surface)
-        }
-    }
-
-    private func presentX11() {
-        guard let surface = surface() else { return }
-        skrepka_x11_center(surface, gtk_widget_get_width(windowWidget), gtk_widget_get_height(windowWidget))
-        skrepka_x11_grab_keyboard(surface)
-    }
-
-    private func surface() -> OpaquePointer? {
-        guard let native = skrepka_window_as_native(window) else { return nil }
-        return gtk_native_get_surface(native)
     }
 }

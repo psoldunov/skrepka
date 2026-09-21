@@ -56,6 +56,16 @@ public actor PeerLink {
     /// unit, because that is the largest single fetch that cannot be split.
     public static let payloadBudgetPerSync = SyncLimits.maximumPayloadBytes
 
+    /// How long a push handed to ``fetchPushed(_:)`` stays worth delivering.
+    ///
+    /// The bytes are fetched on the next exchange, and a link that is down
+    /// reaches its next exchange whenever it reconnects — possibly an hour
+    /// later, when putting that item on the clipboard would replace whatever
+    /// the user has there with something they copied on another machine long
+    /// ago. Past this the item is still fetched and stored like any other; it
+    /// is only no longer handed to ``onPushFetched``.
+    public static let pushFetchWindow: Duration = .seconds(60)
+
     public let peerDeviceID: SyncDeviceID
 
     private let runtime: SyncRuntime
@@ -71,6 +81,8 @@ public actor PeerLink {
     /// macOS. The default is the same `CustomStringConvertible` description that
     /// goes to a log, which is the right answer for a headless peer.
     private let describeFailure: @Sendable (any Error) -> String
+    /// Told about a pushed item once its bytes have been fetched and stored.
+    private let onPushFetched: LivePushSink
 
     private var task: Task<Void, Never>?
     private var connection: SyncConnection?
@@ -78,19 +90,33 @@ public actor PeerLink {
     private var consecutiveFailures = 0
     /// Set by ``resync()``, cleared by the wait that acts on it.
     private var isResyncRequested = false
+    /// The push ``fetchPushed(_:)`` was last handed, until an exchange takes it.
+    private var pendingPush: PendingPush?
 
+    private struct PendingPush: Sendable {
+        let contentHash: String
+        let deadline: ContinuousClock.Instant
+    }
+
+    /// - Parameter onPushFetched: told about an item handed to
+    ///   ``fetchPushed(_:)`` once its bytes have been fetched and stored,
+    ///   within ``pushFetchWindow``. It receives every representation the
+    ///   fetch brought. Whether to put it on the clipboard is the caller's —
+    ///   see ``LivePushGate/claimFetched(_:at:)``. Defaults to doing nothing.
     public init(
         peerDeviceID: SyncDeviceID,
         runtime: SyncRuntime,
         resolve: @escaping @Sendable () async throws -> ResolvedPeer,
         report: @escaping @Sendable (SyncDeviceID, PeerLinkEvent) async -> Void,
-        describeFailure: @escaping @Sendable (any Error) -> String = { String(describing: $0) }
+        describeFailure: @escaping @Sendable (any Error) -> String = { String(describing: $0) },
+        onPushFetched: @escaping LivePushSink = { _, _ in }
     ) {
         self.peerDeviceID = peerDeviceID
         self.runtime = runtime
         self.resolve = resolve
         self.report = report
         self.describeFailure = describeFailure
+        self.onPushFetched = onPushFetched
     }
 
     // MARK: - Lifetime
@@ -151,6 +177,24 @@ public actor PeerLink {
         }
     }
 
+    /// Fetches the bytes of an item the peer pushed without them, now rather
+    /// than on the exchange ``resyncInterval`` away.
+    ///
+    /// Asks for an exchange — the peer only serves bytes of what it offered on
+    /// this connection, so the fetch has to follow a fresh index — and puts the
+    /// item first in its fetch order. Once the bytes are stored they go to
+    /// `onPushFetched`, provided that happens within ``pushFetchWindow``.
+    ///
+    /// A second call replaces the first: only the newest push is worth putting
+    /// on a clipboard. The older one is still fetched, in its turn.
+    public func fetchPushed(_ meta: SyncClipMeta) {
+        pendingPush = PendingPush(
+            contentHash: meta.contentHash,
+            deadline: ContinuousClock.now.advanced(by: Self.pushFetchWindow)
+        )
+        isResyncRequested = true
+    }
+
     // MARK: - The loop
 
     private func run() async {
@@ -206,10 +250,27 @@ public actor PeerLink {
 
         while !Task.isCancelled {
             isResyncRequested = false
-            let learned = try await SyncExchange(runtime: runtime, initiator: initiator).run()
+            let learned = try await exchange(over: initiator).run()
             await report(peerDeviceID, .synced(learned: learned, at: Date()))
             try await waitForNextExchange()
         }
+    }
+
+    /// One exchange, carrying the pending push — if one is still worth
+    /// delivering — as the item to fetch first and the one to hand on.
+    private func exchange(over initiator: SyncInitiator) -> SyncExchange {
+        let pending = pendingPush.flatMap { $0.deadline > ContinuousClock.now ? $0 : nil }
+        pendingPush = nil
+        guard let pending else { return SyncExchange(runtime: runtime, initiator: initiator) }
+        let deliver = onPushFetched
+        let handOn: LivePushSink = { meta, payloads in
+            guard meta.contentHash == pending.contentHash, ContinuousClock.now < pending.deadline else {
+                return
+            }
+            await deliver(meta, payloads)
+        }
+        return SyncExchange(
+            runtime: runtime, initiator: initiator, priority: pending.contentHash, onFetched: handOn)
     }
 
     /// Waits out ``resyncInterval``, or returns early once ``resync()`` has been

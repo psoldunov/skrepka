@@ -10,6 +10,116 @@ Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path on a Mac. On Linux, re-running `install.sh`
 is.
 
+## Unreleased
+
+Fixes from the first run on a real Steam Deck, and a Linux Settings window with
+the Mac's settings in it. On the Deck the picker could only be closed with Esc,
+the global shortcut did nothing, a Mac that opened pairing could not be paired
+with, and Macs never saw the Deck at all. All four are fixed. Copied files and
+pictures now reach the other machine as files and pictures, not as a path to
+something only the sender has.
+
+**Update the Mac app as well as the Linux build.** File transfer needs both
+ends; a Mac on 0.2.1 keeps syncing text and pictures with an updated Linux box,
+but not files.
+
+### Added
+
+- **Copied files travel with the copy.** When you copy files — in Finder,
+  Dolphin, or a screenshot tool that puts the file on the clipboard — Skrepka
+  reads them at once, up to 32 MB and 1000 files per copy, and a paired device
+  receives the files themselves. Pasting there gives real files in its own
+  cache, and for a picture also the picture, so a file manager pastes a file
+  and a chat app or editor pastes the image. A folder, or a copy over the
+  limit, pastes as the file names, and its row says "contents not synced".
+  Nothing ever pastes a path that exists only on the other machine.
+- **Pictures over 256 KB arrive on the other clipboard within seconds.** They
+  used to reach its history on the next half-minute exchange and never its
+  clipboard. Nothing is written if you copied something else in the meantime.
+
+- **Linux Settings has the Mac's panes, and looks like the picker.** A sidebar
+  sized for the Deck's touch screen leads to five panes, drawn in the picker's
+  colours and the desktop's accent, dark or light:
+  - **General:** the global shortcut and where to change it, a note that you
+    paste with Ctrl+V, and Launch at login.
+  - **History:** how many entries, pinned entries and images there are; Keep at
+    most and Discard after; and Clear…, keeping pinned entries or not.
+  - **Privacy:** what is never recorded — anything a password manager marks
+    secret — and why there is no per-app list on Linux: Wayland's clipboard
+    protocols never say which app copied.
+  - **Sync:** as before, plus a switch that stops sharing history altogether.
+  - **Status:** what `skrepka doctor` reports, problems first, with Copy.
+- **Retention is adjustable on Linux.** `skrepkad` still keeps at most 500
+  unpinned entries for 30 days by default. Both limits can now be changed in
+  Settings or with `skrepka config set retention.items|retention.days
+  <N|unlimited>`. A lower limit applies at once, and old entries now age out
+  hourly even when nothing new is copied. Pinned entries are never discarded.
+- **Sync can be switched off and on while the daemon runs,** from Settings or
+  with `skrepka config set sync.enabled on|off`. Off withdraws the device from
+  the network straight away.
+- **`skrepka config`** prints the settings (`--json` for scripts). They live in
+  `~/.config/skrepka/config.json`; a damaged file is set aside as
+  `config.json.bad` and the defaults are used.
+- **`skrepka-gui --status`** says whether the tray icon was accepted, whether the
+  global shortcut is bound and to which keys, and how the picker is shown. The
+  app also writes this to the journal: `journalctl --user -t skrepka-gui`.
+- **The daemon's D-Bus interface is version 4,** with `Settings` and
+  `SetSettings`.
+
+### Changed
+
+- **The picker closes when you click outside it or switch to another window,**
+  as on the Mac. On KDE and sway it now covers the screen with a transparent
+  layer, so a click outside it closes it — that first click does not reach the
+  window underneath.
+- **The picker opens where it does on the Mac:** centred, with its top 18% of
+  the way down the screen. The top stays put while a search shortens the list,
+  so the search field no longer moves as you type. Its shadow fades out
+  instead of ending in a hard-edged rectangle.
+- **`install.sh` starts the app as a systemd user service** named after the app,
+  so its messages reach the journal instead of being discarded.
+- **The tray icon is a fifth smaller,** closer in weight to the icons beside it.
+
+### Fixed
+
+- **The global shortcut was never set up.** The app told the desktop portal
+  which app it is only after GTK had already talked to the portal on the same
+  connection, so the portal refused, and the app gave up without saying so. It
+  now registers on a connection of its own, and carries on if that fails.
+  KDE asks you to confirm Meta+Shift+V the first time the app starts.
+- **KDE's confirmation of the shortcut was read as a refusal.** The portal
+  answers a successful binding with an empty reply; the app now asks what was
+  bound instead.
+- **"Pair…" stayed greyed out for a Mac that was ready to pair.** The Linux
+  daemon read a device's record once, when it first appeared, and never saw the
+  Mac open its pairing window afterwards. It now follows the record, and the
+  button enables within about a second.
+- **Macs never saw a Steam Deck.** SteamOS configures avahi to refuse
+  publishing anything (`disable-publishing=yes`). When avahi refuses,
+  `skrepkad` now answers for its own service on the local network itself, with
+  no root and nothing changed under `/etc`. `skrepka doctor` says which is
+  publishing.
+- **The tray's fallback picture was near-black,** invisible on a dark panel,
+  and its edges were darkened. It is drawn light and with straight alpha. Plasma
+  uses it only when it cannot find the `skrepka-tray` icon.
+- **The Settings window's minimise, maximise and close buttons were invisible
+  under KDE's Breeze theme,** which draws them as background pictures that the
+  window's own styling cleared. They now draw the same under every theme.
+- **The Settings window's stylesheet was never loaded.** Every appearance change
+  also added another copy of the picker's stylesheet; each window now keeps one.
+
+### Known limitations
+
+- **Copied files are kept in history,** up to 32 MB per copy, until retention
+  removes the entry — so history takes more disk than it did when a file copy
+  was only a path. Keep at most and Discard after bound it.
+- **A file copied before this update becomes a new entry the next time it is
+  copied,** because an entry for files now includes their contents.
+- **The built-in announcer speaks IPv4 only,** and does not break the tie when
+  two devices claim the same name at the same instant.
+- **Plasma 6.4 cannot open a shortcut editor for an app,** so Settings shows the
+  keys and points at System Settings → Shortcuts.
+
 ## [0.2.1](https://github.com/psoldunov/skrepka/releases/tag/v0.2.1) — 2026-09-21
 
 Linux gets a desktop app: a tray icon, the clipboard picker on a global

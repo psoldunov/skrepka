@@ -58,3 +58,20 @@ enum URIList {
         Data(([copyVerb] + urls.map(\.absoluteString)).joined(separator: "\n").utf8)
     }
 }
+
+// MARK: - Offering files
+
+extension LinuxRepresentationMap {
+    /// The selection targets that put local files on a Linux clipboard: the
+    /// standard `text/uri-list` every toolkit reads, and GNOME's spelling that
+    /// Nautilus and Dolphin prefer for a file paste. Empty for no files, or
+    /// when any URL is not a `file:` URL — a path that is not local is not a
+    /// file anything here can paste.
+    public static func fileListTargets(_ urls: [URL]) -> [String: Data] {
+        guard !urls.isEmpty, urls.allSatisfy(\.isFileURL) else { return [:] }
+        return [
+            "text/uri-list": URIList.formatURIList(urls),
+            "x-special/gnome-copied-files": URIList.formatGNOMECopiedFiles(urls),
+        ]
+    }
+}

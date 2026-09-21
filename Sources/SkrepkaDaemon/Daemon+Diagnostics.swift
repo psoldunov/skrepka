@@ -153,10 +153,10 @@ extension Daemon {
                 """
             )
         }
-        if let problem = network.problem, options.syncEnabled {
+        if let problem = network.problem, isSyncWanted {
             found.append("Peer discovery or publishing is not working: \(problem)")
         }
-        if options.syncEnabled, network.problem == nil, !isPublished {
+        if isSyncWanted, network.problem == nil, !isPublished {
             found.append(
                 """
                 This device is not published on the local network, so no peer can find it. \

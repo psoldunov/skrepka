@@ -121,6 +121,9 @@ extension AvahiDiscovery {
             )
             return states
         } catch {
+            // Passed through unwrapped so `publish(_:)` can tell avahi
+            // refusing to publish anything from avahi refusing this record.
+            if Self.isPublishingRefusal(error) { throw error }
             throw DiscoveryError.advertisingFailed(reason: describe(error))
         }
     }

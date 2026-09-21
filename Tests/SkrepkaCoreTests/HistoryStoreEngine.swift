@@ -55,6 +55,9 @@ protocol HistoryStoreConforming: Sendable {
     func recordProtocolVersion(_ version: ProtocolVersion, for deviceID: SyncDeviceID) async throws
     func livePushChoice(for deviceID: SyncDeviceID) async throws -> LivePushChoice
     func setLivePushChoice(_ choice: LivePushChoice, for deviceID: SyncDeviceID) async throws
+
+    func setFileCache(_ cache: FileCache?) async
+    @discardableResult func sweepFileCache() async -> Int
 }
 
 // MARK: - Conformances
@@ -69,6 +72,8 @@ protocol HistoryStoreConforming: Sendable {
         func summaries() -> [ClipSummary] { items }
 
         func setLocalDeviceID(_ deviceID: SyncDeviceID?) { localDeviceID = deviceID }
+
+        func setFileCache(_ cache: FileCache?) { fileCache = cache }
     }
 
 #endif

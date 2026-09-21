@@ -14,6 +14,18 @@ final class LoopTimer {
         )
     }
 
+    /// The same, at millisecond resolution, for a delay a person should not
+    /// notice.
+    init(milliseconds: UInt32, _ run: @escaping () -> Void) {
+        id = g_timeout_add_full(
+            G_PRIORITY_DEFAULT,
+            milliseconds,
+            LoopCallback.onTimeout,
+            Unmanaged.passRetained(LoopCallback(run)).toOpaque(),
+            LoopCallback.onReleased
+        )
+    }
+
     /// Idempotent. The closure is released as the source goes.
     func cancel() {
         guard id != 0 else { return }

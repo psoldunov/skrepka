@@ -45,19 +45,46 @@ enum MarkRenderer {
         color: RGBColor,
         alpha: Double = 1
     ) {
+        guard appendMark(to: cairo, in: frame) else { return }
+        cairo_set_source_rgba(cairo, color.red, color.green, color.blue, alpha)
+        // Winding rather than even-odd for the reason `StatusItemIcon` gives:
+        // the outline is one loop that never crosses itself, so the two rules
+        // draw the same figure, and winding is Cairo's default anyway.
+        cairo_fill(cairo)
+    }
+
+    /// Fills the mark in `fill` over an `edge`-coloured stroke `edgeWidth`
+    /// pixels wide, half of which shows outside the fill — so the mark reads on
+    /// a light background and a dark one alike, for a picture drawn without
+    /// knowing which it will land on.
+    static func outlinedMark(
+        _ cairo: OpaquePointer,
+        in frame: Frame,
+        fill: RGBColor,
+        edge: RGBColor,
+        edgeWidth: Double
+    ) {
+        guard appendMark(to: cairo, in: frame) else { return }
+        cairo_set_line_width(cairo, edgeWidth)
+        cairo_set_line_join(cairo, CAIRO_LINE_JOIN_ROUND)
+        cairo_set_source_rgba(cairo, edge.red, edge.green, edge.blue, 1)
+        cairo_stroke_preserve(cairo)
+        cairo_set_source_rgba(cairo, fill.red, fill.green, fill.blue, 1)
+        cairo_fill(cairo)
+    }
+
+    /// Replaces Cairo's current path with the mark fitted into `frame`, in
+    /// device space. False when the mark has no area to fit.
+    private static func appendMark(to cairo: OpaquePointer, in frame: Frame) -> Bool {
         let mark = PaperclipMark.outline()
-        guard let placement = fit(mark, in: frame) else { return }
+        guard let placement = fit(mark, in: frame) else { return false }
         cairo_save(cairo)
         cairo_translate(cairo, placement.translateX, placement.translateY)
         cairo_scale(cairo, placement.scale, placement.scale)
         cairo_new_path(cairo)
         addSegments(of: mark, to: cairo)
         cairo_restore(cairo)
-        cairo_set_source_rgba(cairo, color.red, color.green, color.blue, alpha)
-        // Winding rather than even-odd for the reason `StatusItemIcon` gives:
-        // the outline is one loop that never crosses itself, so the two rules
-        // draw the same figure, and winding is Cairo's default anyway.
-        cairo_fill(cairo)
+        return true
     }
 
     /// The placement that fits `path` into `frame`, aspect kept and centred —

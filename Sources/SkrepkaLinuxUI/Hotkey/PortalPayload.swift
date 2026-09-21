@@ -12,6 +12,16 @@ struct PortalResponse: Sendable, Equatable {
         else { return nil }
         return PortalResponse(code: code, results: results)
     }
+
+    /// `org.freedesktop.portal.Request.Response`'s code in words: 0 is
+    /// success, 1 the user cancelled, 2 the request ended some other way.
+    static func describe(code: UInt32) -> String {
+        switch code {
+        case 0: "done"
+        case 1: "cancelled in the desktop's prompt"
+        default: "the desktop ended the request without doing it (response \(code))"
+        }
+    }
 }
 
 struct PortalActivation: Sendable, Equatable {

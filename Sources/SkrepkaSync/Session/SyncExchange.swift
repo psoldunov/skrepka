@@ -9,10 +9,43 @@ import Foundation
 public struct SyncExchange: Sendable {
     public let runtime: SyncRuntime
     public let initiator: SyncInitiator
+    /// An item to fetch before any other, whatever its age — the one a peer
+    /// just pushed without its bytes. See ``PeerLink/fetchPushed(_:)``.
+    public let priority: String?
+    /// Told about every item whose bytes this exchange fetched and stored,
+    /// with the bytes it fetched.
+    private let onFetched: LivePushSink
+    /// Bytes this exchange may fetch — ``PeerLink/payloadBudgetPerSync``
+    /// outside a test.
+    let budget: Int
 
-    public init(runtime: SyncRuntime, initiator: SyncInitiator) {
+    public init(
+        runtime: SyncRuntime,
+        initiator: SyncInitiator,
+        priority: String? = nil,
+        onFetched: @escaping LivePushSink = { _, _ in }
+    ) {
+        self.init(
+            runtime: runtime,
+            initiator: initiator,
+            priority: priority,
+            budget: PeerLink.payloadBudgetPerSync,
+            onFetched: onFetched
+        )
+    }
+
+    init(
+        runtime: SyncRuntime,
+        initiator: SyncInitiator,
+        priority: String?,
+        budget: Int,
+        onFetched: @escaping LivePushSink
+    ) {
         self.runtime = runtime
         self.initiator = initiator
+        self.priority = priority
+        self.budget = budget
+        self.onFetched = onFetched
     }
 
     /// Runs the exchange and answers how many items this device did not have
@@ -80,12 +113,13 @@ public struct SyncExchange: Sendable {
     ) async throws {
         let servable = Self.servableRepresentations(localItems)
         let held = Self.contentHeld(afterApplying: plan, to: Set(servable.keys))
-        var budget = PeerLink.payloadBudgetPerSync
+        var budget = self.budget
 
         // Newest first: what the user is about to reach for is what they copied
         // most recently, and a budget that runs out should run out on the oldest
-        // items rather than on the ones on screen.
-        for meta in offered.sorted(by: { $0.createdAt > $1.createdAt }) {
+        // items rather than on the ones on screen. A pushed item waiting for
+        // its bytes goes ahead of all of them.
+        for meta in fetchOrder(offered) {
             guard budget > 0 else { return }
             guard held.contains(meta.contentHash) else { continue }
             let missing = meta.representations.filter {
@@ -101,10 +135,26 @@ public struct SyncExchange: Sendable {
                 continue
             }
             try await runtime.store.capture(meta, payloads: fetched)
+            await onFetched(meta, fetched)
+        }
+    }
+
+    private func fetchOrder(_ offered: [SyncClipMeta]) -> [SyncClipMeta] {
+        offered.sorted { lhs, rhs in
+            let lhsFirst = lhs.contentHash == priority
+            let rhsFirst = rhs.contentHash == priority
+            guard lhsFirst == rhsFirst else { return lhsFirst }
+            return lhs.createdAt > rhs.createdAt
         }
     }
 
     /// The bytes of one item's missing representations, spending from `budget`.
+    ///
+    /// A representation is fetched only if its offered size fits what is left,
+    /// and the fetch itself is capped there, so a peer that understated a size
+    /// cannot spend more than the budget either. What does not fit is left for
+    /// a later round, which re-offers it — two 20 MB pictures are one round's
+    /// work each, not 40 MB of one.
     private func fetch(
         _ missing: [RepresentationDescriptor],
         of meta: SyncClipMeta,
@@ -112,10 +162,11 @@ public struct SyncExchange: Sendable {
     ) async throws -> [RepresentationKey: Data] {
         var fetched: [RepresentationKey: Data] = [:]
         for descriptor in missing {
-            guard budget > 0 else { break }
+            guard descriptor.byteCount <= budget else { continue }
             let bytes = try await initiator.fetchPayload(
                 contentHash: meta.contentHash,
-                key: descriptor.key
+                key: descriptor.key,
+                atMost: budget
             )
             // An empty final chunk at offset zero is how a peer says it cannot
             // serve those bytes after all — evicted since it offered them, or

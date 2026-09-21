@@ -1,4 +1,5 @@
 import Foundation
+import SkrepkaSync
 
 // swift-crypto is source-identical to CryptoKit — on Apple platforms it
 // compiles its API surface away and re-exports CryptoKit, so `SHA256` here is
@@ -141,6 +142,7 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
         } else {
             hasher.update(data: Data(text.utf8))
         }
+        hash(bundleIn: payload, kind: kind, into: &hasher)
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
@@ -154,6 +156,24 @@ public struct ClipItem: Identifiable, Sendable, Hashable {
     /// first, which is exactly what the order is not allowed to decide — and a
     /// lone file never reaches here, so its hash stays what it has always been
     /// and re-copying it still lands on its own row instead of duplicating it.
+    /// Folds the copied files' contents into a file copy's identity, when the
+    /// copy carries them — see `FileBundleReader`.
+    ///
+    /// A path alone names a place, not what is there: a screenshot tool that
+    /// writes every shot to one path would otherwise have each new shot
+    /// collapse onto the first row, and a peer paste the first shot's bytes.
+    /// With the contents in the hash, new contents are a new row and an
+    /// identical re-copy still de-duplicates. A copy with no bundle — a folder,
+    /// or one over the limit — keeps the path-only hash it always had, which is
+    /// also all a 0.2 peer ever sees.
+    private static func hash(bundleIn payload: ClipPayload, kind: ClipKind, into hasher: inout SHA256) {
+        guard kind.isFileSystemEntry, let bundle = payload.data(forType: FileBundle.storageType) else {
+            return
+        }
+        hasher.update(data: Data(FileBundle.storageType.utf8))
+        hasher.update(data: bundle)
+    }
+
     private static func hash(selection urls: [URL], into hasher: inout SHA256) {
         for url in urls.map(\.absoluteString).sorted() {
             hasher.update(data: Data(url.utf8))

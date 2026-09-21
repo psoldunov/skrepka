@@ -51,6 +51,7 @@ extension SyncResponder {
         // it was paired, and the identity proved inside the tunnel is the one to
         // believe.
         try await trust.refreshPeerIdentity(peer)
+        peerFilter = CapabilityFilter(capabilities: peer.capabilities)
         return session.localIdentity.hello
     }
 }

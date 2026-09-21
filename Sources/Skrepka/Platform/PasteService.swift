@@ -29,8 +29,12 @@ struct PasteService {
     ///   Mac capture it as a fresh copy and push it back — a loop that ends
     ///   with older content overwriting a newer clipboard. A paste the user
     ///   picked leaves it off, so it still reaches their other devices.
+    /// - `fileItems` replaces `contents` for a file row another device
+    ///   recorded: one dictionary per pasteboard item, from
+    ///   ``ForeignFilePasteboard``. Nil writes `contents` as held.
     struct Request {
         let contents: ClipContents
+        let fileItems: [[String: Data]]?
         let plainText: String
         let style: PasteStyle
         let sourceBundleID: String?
@@ -63,10 +67,12 @@ struct PasteService {
 
     private func write(_ request: Request) {
         let isPlainText = request.style == .plainText
+        // `forClipboard`: a local file row also stores its files' contents, up
+        // to 32 MB under a private type no app reads, for sync to send.
         let effective =
             isPlainText
             ? request.contents.payload.plainTextOnly(request.plainText)
-            : request.contents.payload
+            : request.contents.payload.forClipboard
         let pasteboard = NSPasteboard.general
         if request.staysOnThisMac {
             // `NSPasteboardContentsCurrentHostOnly`: "the pasteboard contents
@@ -77,20 +83,32 @@ struct PasteService {
             pasteboard.clearContents()
         }
 
-        let item = NSPasteboardItem()
-        for (type, data) in effective.representations {
-            item.setData(data, forType: NSPasteboard.PasteboardType(type))
-        }
-        // nspasteboard.org convention: name the app the content came from, so
-        // other clipboard managers do not attribute restored content to Skrepka.
-        item.setString(
-            request.sourceBundleID ?? "",
-            forType: NSPasteboard.PasteboardType(PasteboardType.source)
-        )
-
         // Pasting as plain text is a request for the names, not the files.
+        if !isPlainText, let fileItems = request.fileItems, let first = fileItems.first {
+            let head = Self.pasteboardItem(first)
+            Self.markSource(of: head, as: request.sourceBundleID)
+            pasteboard.writeObjects([head] + fileItems.dropFirst().map(Self.pasteboardItem))
+            return
+        }
+
+        let item = Self.pasteboardItem(effective.representations)
+        Self.markSource(of: item, as: request.sourceBundleID)
         let others = isPlainText ? [] : request.contents.additionalFileURLs
         pasteboard.writeObjects([item] + others.map(Self.pasteboardItem(forFileAt:)))
+    }
+
+    private static func pasteboardItem(_ representations: [String: Data]) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        for (type, data) in representations {
+            item.setData(data, forType: NSPasteboard.PasteboardType(type))
+        }
+        return item
+    }
+
+    /// nspasteboard.org convention: name the app the content came from, so
+    /// other clipboard managers do not attribute restored content to Skrepka.
+    private static func markSource(of item: NSPasteboardItem, as sourceBundleID: String?) {
+        item.setString(sourceBundleID ?? "", forType: NSPasteboard.PasteboardType(PasteboardType.source))
     }
 
     /// One pasteboard item per file the payload is not already carrying, which

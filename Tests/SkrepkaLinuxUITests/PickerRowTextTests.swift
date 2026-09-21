@@ -66,4 +66,37 @@ struct PickerRowTextTests {
             document(kind: "selection"), now: Date(), relativeAge: age)
         #expect(text.subtitle == "Selection · 10 seconds ago")
     }
+
+    private func fileDocument(status: String) -> ClipDocument {
+        ClipDocument(
+            contentHash: "h",
+            preview: "shot.png",
+            kind: "file",
+            isPinned: false,
+            createdAt: Date(),
+            byteCount: nil,
+            representations: [],
+            fileCount: 1,
+            filesStatus: status
+        )
+    }
+
+    @Test func fileRowWhoseContentsStayedBehindSaysSo() {
+        let row = fileDocument(status: ClipDocument.FilesStatusName.notSynced)
+        let text = PickerRowTextBuilder.make(row, now: Date(), relativeAge: age)
+        #expect(text.subtitle == "File · contents not synced · 10 seconds ago")
+    }
+
+    /// The Mac picker's words while the files are still on their way.
+    @Test func fileRowWhoseContentsAreOnTheirWaySaysSo() {
+        let row = fileDocument(status: ClipDocument.FilesStatusName.pending)
+        let text = PickerRowTextBuilder.make(row, now: Date(), relativeAge: age)
+        #expect(text.subtitle == "File · contents not synced yet · 10 seconds ago")
+    }
+
+    @Test func syncedFileRowSaysNothingExtra() {
+        let row = fileDocument(status: ClipDocument.FilesStatusName.synced)
+        let text = PickerRowTextBuilder.make(row, now: Date(), relativeAge: age)
+        #expect(text.subtitle == "File · 10 seconds ago")
+    }
 }

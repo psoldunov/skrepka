@@ -14,16 +14,46 @@ import Foundation
 /// independently, and the old one only ever says no to things.
 final class SettingsHost {
     private let application: UnsafeMutablePointer<GtkApplication>
-    private let connect: DaemonLink.Connect
+    private let connect: PreferencesJobs.Connect
+    private let autostart: AutostartEntry
+    /// The desktop's look, as last reported — a window built later is drawn in
+    /// it too.
+    private var appearance: AppearancePreference?
+    /// The shortcut, as the portal session last reported it.
+    private var shortcut: GlobalShortcutsState = .connecting
     /// The window on screen, if any.
     private var open: SettingsWindow?
     /// Windows that have closed and whose links are still winding up, by
     /// identity — each removes itself when its link reports it is done.
     private var closing: [ObjectIdentifier: SettingsWindow] = [:]
 
-    init(application: UnsafeMutablePointer<GtkApplication>, connect: @escaping DaemonLink.Connect) {
+    init(
+        application: UnsafeMutablePointer<GtkApplication>,
+        autostart: AutostartEntry = .standard(),
+        connect: @escaping PreferencesJobs.Connect
+    ) {
         self.application = application
+        self.autostart = autostart
         self.connect = connect
+    }
+
+    /// Restyles for the desktop's look: the stylesheet at once, and the
+    /// window on screen, if any.
+    func apply(_ appearance: AppearancePreference) {
+        self.appearance = appearance
+        SettingsStyle.apply(appearance)
+        open?.apply(appearance)
+    }
+
+    /// Passes on where the global shortcut stands, for the General pane.
+    func setShortcut(_ state: GlobalShortcutsState) {
+        shortcut = state
+        open?.setShortcut(state)
+    }
+
+    /// Brings `section` forward in the window on screen.
+    func select(_ section: SettingsSection) {
+        open?.select(section)
     }
 
     /// Shows the window, building it if it is not open.
@@ -59,9 +89,14 @@ final class SettingsHost {
     }
 
     private func makeWindow() throws -> SettingsWindow {
+        if appearance == nil { apply(.unknown) }
         let inbox = try MainLoopInbox<SyncEvent>()
-        let link = DaemonLink(connect: connect) { inbox.post($0) }
-        let window = try SettingsWindow(application: application, link: link, inbox: inbox)
+        let connect = connect
+        let link = DaemonLink(connect: { try await connect() }, report: { inbox.post($0) })
+        let services = SettingsWindow.Services(
+            link: link, inbox: inbox, connect: connect, autostart: autostart, shortcut: shortcut)
+        let window = try SettingsWindow(application: application, services: services)
+        if let appearance { window.apply(appearance) }
         let key = ObjectIdentifier(window)
         window.onClosed = { [weak self, weak window] in
             guard let self, let window else { return }

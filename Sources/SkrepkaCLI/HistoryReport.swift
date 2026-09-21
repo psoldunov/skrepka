@@ -32,20 +32,25 @@ public enum HistoryReport {
         let kind = clip.kind.rightPadded(to: 6)
         let when = Self.stamp(clip.createdAt, in: timeZone)
         let size = clip.byteCount.map(Self.humanSize).map { " (\($0))" } ?? ""
-        return "\(number) \(pin) \(hash)  \(kind)  \(when)  \(clip.preview)\(size)"
+        let files = Self.filesNote(clip.filesStatus)
+        return "\(number) \(pin) \(hash)  \(kind)  \(when)  \(clip.preview)\(size)\(files)"
     }
 
-    /// Fixed-width, ISO-ordered, and deliberately not localised: the output is
-    /// read next to a terminal history and pasted into issues, where a
-    /// locale-dependent date is one more thing to disambiguate.
-    static func stamp(_ date: Date, in timeZone: TimeZone) -> String {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let fields = [parts.month, parts.day, parts.hour, parts.minute].map {
-            String($0 ?? 0).leftPadded(to: 2, with: "0")
+    /// The pickers' words for a file row from another device whose files have
+    /// not arrived, in brackets at the end of the line. Spelled here rather
+    /// than taken from SkrepkaCore, which this target deliberately does not
+    /// link.
+    static func filesNote(_ status: String?) -> String {
+        switch status {
+        case ClipDocument.FilesStatusName.notSynced: " [contents not synced]"
+        case ClipDocument.FilesStatusName.pending: " [contents not synced yet]"
+        default: ""
         }
-        return "\(fields[0])-\(fields[1]) \(fields[2]):\(fields[3])"
+    }
+
+    /// ``ReportStamp``'s format, which the doctor report shares.
+    static func stamp(_ date: Date, in timeZone: TimeZone) -> String {
+        ReportStamp.text(date, in: timeZone)
     }
 
     /// Round numbers rather than exact ones. Nobody acts on the difference

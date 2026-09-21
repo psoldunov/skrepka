@@ -128,6 +128,11 @@ extension Daemon {
         let wanted = descriptor(runtime: runtime, syncPort: UInt16(syncServer.port))
         do {
             try await discovery.updateAdvertisement(wanted)
+            // Published is published, whoever answers for it: a system whose
+            // avahi refuses to publish — SteamOS's does — is served by
+            // skrepkad's own responder, and `skrepka doctor` says so as
+            // information through ``responderLabel()`` rather than as a
+            // problem.
             isPublished = true
             responderProblem = nil
             watchAdvertisementFailures(discovery)
@@ -151,6 +156,20 @@ extension Daemon {
         guard isPublished else { return }
         await publishAdvertisement()
     }
+
+    /// What `skrepka doctor` names as the responder.
+    ///
+    /// `avahi` normally. When avahi refuses to publish and skrepkad's own
+    /// responder is serving instead, the label says so — the one place that
+    /// fact reaches the user, and deliberately not as a problem: the device is
+    /// published and peers can find it.
+    func responderLabel() async -> String {
+        guard let discovery, await discovery.isSelfPublishing else { return "avahi" }
+        return Self.selfPublishingLabel
+    }
+
+    static let selfPublishingLabel =
+        "avahi for browsing, skrepkad for publishing (avahi's publishing is disabled on this system)"
 
     private func descriptor(runtime: SyncRuntime, syncPort: UInt16) -> ServiceDescriptor {
         ServiceDescriptor(

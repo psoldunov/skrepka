@@ -26,7 +26,9 @@ public struct DaemonOptions: Sendable {
           --no-sync         watch the clipboard, but do not join the network
           --port N          sync listener port (default: any free port)
           --data-dir PATH   override $XDG_DATA_HOME/skrepka
-          --config PATH     override $XDG_CONFIG_HOME/skrepka/config.json
+          --config PATH     override the settings file (default: config.json in
+                            --data-dir when given, else
+                            $XDG_CONFIG_HOME/skrepka/config.json)
           --log-level LEVEL trace | debug | info | notice | warning | error |
                             critical (default: info)
           --version         print the version and exit
@@ -138,10 +140,18 @@ public struct DaemonOptions: Sendable {
         return dataDirectory.appending(path: "device.key", directoryHint: .notDirectory)
     }
 
+    /// The settings file: `--config`, else `config.json` in `--data-dir`, else
+    /// the XDG default.
+    ///
+    /// A daemon pointed at another data directory is another instance, so it
+    /// keeps its own settings too — and a test daemon on a temporary directory
+    /// never reads, or renames aside, the developer's real config.
     public func settingsURL(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL {
-        configURL ?? SessionPaths.configURL(environment: environment)
+        if let configURL { return configURL }
+        guard let dataDirectory else { return SessionPaths.configURL(environment: environment) }
+        return dataDirectory.appending(path: "config.json", directoryHint: .notDirectory)
     }
 
     private static func value(_ rest: inout ArraySlice<String>, for flag: String) throws -> String {

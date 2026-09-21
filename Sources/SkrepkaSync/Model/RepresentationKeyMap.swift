@@ -69,6 +69,20 @@ public enum RepresentationKeyMap {
                 the origin machine, so the URI crosses as text and not as a live file reference.
                 """
         ),
+        // Not in design §8's table, added 2026-09-21. The contents of the
+        // copied files, which is what a peer can actually paste — see
+        // ``FileBundle``. No Linux target, because no clipboard carries it: it
+        // is a row so both stores keep the bytes, and a receiver turns it into
+        // files of its own before anything reaches a clipboard.
+        Entry(
+            canonical: FileBundle.canonicalKey,
+            uti: FileBundle.storageType,
+            linuxTargets: [],
+            loss: """
+                None on the wire. Folders are not carried, and a copy over the payload ceiling \
+                carries no bundle at all; a receiver pastes those as the files' names.
+                """
+        ),
     ]
 
     /// macOS types with no canonical form at all, and why.

@@ -33,6 +33,7 @@ struct LivePushReceiver {
     private enum Refusal: String {
         case pickerOpen = "the picker was open"
         case noUsableRepresentation = "no representation could be put on this pasteboard"
+        case superseded = "something was copied or pushed since, or sync stopped"
     }
 
     private let watcher: ClipboardWatcher
@@ -42,14 +43,19 @@ struct LivePushReceiver {
     /// A closure rather than a reference to the panel controller, so this type
     /// stays testable and does not reach into `AppCoordinator`'s private state.
     private let isPickerVisible: @MainActor () -> Bool
+    /// Where the files a pushed file copy carries are written before they go
+    /// on the pasteboard. Nil pastes such a copy as its files' names.
+    private let fileCache: FileCache?
 
     init(
         watcher: ClipboardWatcher,
         pasteService: PasteService = PasteService(),
+        fileCache: FileCache?,
         isPickerVisible: @escaping @MainActor () -> Bool
     ) {
         self.watcher = watcher
         self.pasteService = pasteService
+        self.fileCache = fileCache
         self.isPickerVisible = isPickerVisible
     }
 
@@ -65,29 +71,58 @@ struct LivePushReceiver {
     /// frontmost. Synthesising ⌘V here would type a peer's clipboard into the
     /// user's document.
     ///
-    /// **Only ever called with bytes that came inline**, so an item over
-    /// `SyncLimits.livePushInlineLimit` reaches this device's history and never
-    /// its clipboard. `.noUsableRepresentation` below is the refusal that
-    /// records it. That is a limitation of this phase, not a defence: see
-    /// ``SyncCoordinator/receiveLivePush(_:inline:)`` for why fetching the
-    /// missing bytes needs a request lock on `SyncInitiator` before it can be
-    /// wired, and `docs/linux-sync/phase-3-runbook.md` step 4.
-    func write(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async {
+    /// Called with the bytes that came inline, or — for an item over
+    /// `SyncLimits.livePushInlineLimit` — with the bytes fetched straight
+    /// after the push; see ``SyncCoordinator/receiveFetchedPush(_:payloads:)``.
+    ///
+    /// **A file copy never pastes the sender's path.** Its files are written
+    /// here and pasted as local files, or its names are pasted when none came —
+    /// see ``ForeignFilePasteboard``.
+    ///
+    /// **`claim` is asked after that work, immediately before the write.**
+    /// Materialising and transcoding take a moment; a copy the user makes
+    /// meanwhile, or sync being switched off, must win over a peer's push. A
+    /// refused claim writes nothing, and files already materialised stay cached
+    /// for a later paste from history. The one suspension left between the
+    /// claim and the write is the hop to pause the watcher. Claiming before
+    /// that hop rather than after it means a copy landing inside it is still
+    /// recorded, where after it the pause would discard it.
+    func write(
+        _ meta: SyncClipMeta,
+        payloads: [RepresentationKey: Data],
+        claim: @MainActor () -> Bool
+    ) async {
         guard !isPickerVisible() else { return refuse(.pickerOpen) }
         let representations = RepresentationKeyMap.utiKeyed(payloads)
         guard !representations.isEmpty else { return refuse(.noUsableRepresentation) }
+        let fileItems = await ForeignFilePasteboard.items(
+            for: ForeignFilePasteboard.Row(
+                kind: ClipKind(rawValue: meta.kind) ?? .text,
+                representations: representations,
+                preview: meta.preview,
+                contentHash: meta.contentHash,
+                // Pushed by a peer, so recorded there: its paths are not ours.
+                isForeign: true
+            ),
+            cache: fileCache
+        )
+        // Asked again: materialising and transcoding take a moment, and the
+        // user may have opened the picker meanwhile.
+        guard !isPickerVisible() else { return refuse(.pickerOpen) }
+        guard claim() else { return refuse(.superseded) }
 
         // Skrepka is about to own the pasteboard; do not re-record our own write.
         await watcher.pause()
         _ = await pasteService.deliver(
             PasteService.Request(
-                // No files: what arrives from a peer is bytes, and the paths the
-                // other machine copied from are not paths this one has. A push
-                // therefore writes one pasteboard item, which is what it held.
+                // No file URLs: the paths the other machine copied from are not
+                // paths this one has. A file copy's local files, when it brought
+                // any, are in `fileItems`.
                 contents: ClipContents(
                     payload: ClipPayload(representations: representations),
                     fileURLs: []
                 ),
+                fileItems: fileItems,
                 plainText: meta.preview,
                 style: .rich,
                 // The peer's, so another clipboard manager on this Mac

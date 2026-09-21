@@ -174,7 +174,10 @@ extension SyncCoordinator {
             report: { [weak self] deviceID, event in
                 await self?.apply(event, to: deviceID)
             },
-            describeFailure: SyncFailureText.describe
+            describeFailure: SyncFailureText.describe,
+            onPushFetched: { [weak self] meta, payloads in
+                await self?.receiveFetchedPush(meta, payloads: payloads)
+            }
         )
     }
 

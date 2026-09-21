@@ -49,6 +49,7 @@ public actor SyncResponder {
     let store: any HistoryStoring
     let confirmPairing: PairingConfirmation
     private let onLivePush: LivePushSink
+    private let onPushWithoutBytes: PushFetchRequest
     let now: @Sendable () -> Date
 
     var proposal: PairingProposal?
@@ -62,10 +63,15 @@ public actor SyncResponder {
     /// — nil and non-nil answer it just as well as the bytes would.
     private var offeredHashes: Set<String> = []
 
+    /// What this connection's peer said it takes, set by `hello`. See ``CapabilityFilter``.
+    var peerFilter = CapabilityFilter.none
+
     /// - Parameter onLivePush: told about content the peer pushed live, after
     ///   it has been stored. Defaults to doing nothing, which is what a
     ///   headless peer wants: `skrepka-sync-probe` stores a live push and has
     ///   no clipboard to put it on.
+    /// - Parameter onPushWithoutBytes: told about a stored live push that came
+    ///   without its bytes. Defaults to nothing: the next exchange fetches them.
     public init(
         connection: SyncConnection,
         session: PairingSession,
@@ -73,6 +79,7 @@ public actor SyncResponder {
         store: any HistoryStoring,
         confirmPairing: @escaping PairingConfirmation,
         onLivePush: @escaping LivePushSink = { _, _ in },
+        onPushWithoutBytes: @escaping PushFetchRequest = { _, _ in },
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.connection = connection
@@ -81,6 +88,7 @@ public actor SyncResponder {
         self.store = store
         self.confirmPairing = confirmPairing
         self.onLivePush = onLivePush
+        self.onPushWithoutBytes = onPushWithoutBytes
         self.now = now
     }
 
@@ -185,11 +193,15 @@ public actor SyncResponder {
         }
         try await store.capture(meta, payloads: inline)
         await onLivePush(meta, inline)
+        if inline.isEmpty, !meta.isConcealed, !meta.representations.isEmpty {
+            await onPushWithoutBytes(connection.peerDeviceID, meta)
+        }
         return []
     }
 
     private func answerIndexRequest(since cursor: Date?) async throws -> [SyncMessage] {
-        let items = try await store.syncIndex(since: cursor)
+        // Filtered before it is recorded: what is withheld may not be asked for.
+        let items = peerFilter.items(try await store.syncIndex(since: cursor))
         recordOffer(items)
         return [
             .indexOffer(

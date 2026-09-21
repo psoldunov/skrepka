@@ -39,6 +39,10 @@ public actor SyncInitiator {
     /// ``InboundClock``.
     private let now: @Sendable () -> Date
 
+    /// What the peer said it can take, learned from its `hello`. Until the
+    /// handshake it advertises nothing — see ``CapabilityFilter``.
+    private var peerFilter = CapabilityFilter.none
+
     /// Fails unless the connection reached the device the caller meant to dial.
     ///
     /// ``PinPolicy/pinned(_:)`` carries the *whole* paired set, and the
@@ -152,6 +156,7 @@ public actor SyncInitiator {
         // device that dialled to pair holds `unknown` as the peer's platform,
         // and never pushes to it.
         try await trust.refreshPeerIdentity(peer)
+        peerFilter = CapabilityFilter(capabilities: peer.capabilities)
         return peer
     }
 
@@ -179,9 +184,16 @@ public actor SyncInitiator {
     /// ``SyncConnection/send(_:)`` is actor-isolated, so two frames cannot
     /// interleave *within* a message, and a `livePush` between two messages is
     /// just the next thing the peer's responder loop reads.
+    ///
+    /// Filtered through what the peer advertised first, so a peer that keeps
+    /// no file bundles is neither told about one nor sent its bytes — and the
+    /// inline limit is then measured over what actually travels.
     public func push(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async throws {
         try await connection.send(
-            .livePush(meta: meta, inline: LivePushPayload.inline(payloads))
+            .livePush(
+                meta: peerFilter.meta(meta),
+                inline: LivePushPayload.inline(peerFilter.payloads(payloads))
+            )
         )
     }
 
@@ -223,7 +235,15 @@ public actor SyncInitiator {
     /// local descriptor list is complete: ``SyncClipMeta/combining(_:)``
     /// deliberately does not union representation lists, because a list is a
     /// claim about what its owner can serve.
-    public func fetchPayload(contentHash: String, key: RepresentationKey) async throws -> Data {
+    ///
+    /// `atMost` caps what the peer may send, whatever it offered; the payload
+    /// ceiling is the default and the hard upper bound.
+    public func fetchPayload(
+        contentHash: String,
+        key: RepresentationKey,
+        atMost limit: Int = SyncLimits.maximumPayloadBytes
+    ) async throws -> Data {
+        let limit = min(limit, SyncLimits.maximumPayloadBytes)
         var bytes = Data()
         while true {
             try await connection.send(
@@ -240,7 +260,7 @@ public actor SyncInitiator {
                 )
             }
             bytes += chunk.bytes
-            guard bytes.count <= SyncLimits.maximumPayloadBytes else {
+            guard bytes.count <= limit else {
                 throw SyncProtocolError.payloadTooLarge(bytes: bytes.count)
             }
             if chunk.isFinal { return bytes }

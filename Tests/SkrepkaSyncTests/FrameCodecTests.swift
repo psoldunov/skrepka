@@ -87,7 +87,7 @@ struct FrameCodecTests {
     func decodesTwoFramesFromOneBuffer() throws {
         let first = SyncMessage.ping(nonce: 1)
         let second = SyncMessage.indexRequest(since: SyncFixtures.time(3))
-        let third = SyncMessage.itemMeta(SyncFixtures.meta("aa"))
+        let third = SyncMessage.itemMeta(SyncFixtures.meta(SyncFixtures.wireHash("aa")))
 
         let encodedFirst = try FrameCodec.encode(first)
         let encodedSecond = try FrameCodec.encode(second)

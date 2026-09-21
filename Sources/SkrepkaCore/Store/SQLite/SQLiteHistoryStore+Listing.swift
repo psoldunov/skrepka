@@ -40,17 +40,24 @@
             /// bytes, so this stays separate from `representationTypes`: callers
             /// can draw a capability without claiming a preview they cannot send.
             public let localRepresentationTypes: [String]
+            /// The device that recorded the row, as hex — nil for a row
+            /// recorded here before this device had a sync identity. What
+            /// tells a file row from another machine, whose paths do not
+            /// exist here, from one copied on this one.
+            public let originDeviceID: String?
 
             public init(
                 summary: ClipSummary,
                 contentHash: String,
                 representationTypes: [String],
-                localRepresentationTypes: [String]
+                localRepresentationTypes: [String],
+                originDeviceID: String? = nil
             ) {
                 self.summary = summary
                 self.contentHash = contentHash
                 self.representationTypes = representationTypes
                 self.localRepresentationTypes = localRepresentationTypes
+                self.originDeviceID = originDeviceID
             }
         }
 
@@ -72,6 +79,9 @@
             let indexes = try representationIndexes(.everything)
             let localTypes = try locallyHeldRepresentationTypes()
             let hashes = Dictionary(rows.map { ($0.id, $0.contentHash) }) { first, _ in first }
+            let origins = Dictionary(
+                rows.compactMap { row in row.originDeviceID.map { (row.id, $0) } }
+            ) { first, _ in first }
             let ordered = ClipProjection(ordered: rows.map(SQLiteClipMapping.summary(from:))).items
             return ordered.map { summary in
                 ClipListing(
@@ -83,7 +93,8 @@
                     // crash is still a crash.
                     contentHash: hashes[summary.id] ?? "",
                     representationTypes: (indexes[summary.id]?.keys).map { $0.sorted() } ?? [],
-                    localRepresentationTypes: localTypes[summary.id] ?? []
+                    localRepresentationTypes: localTypes[summary.id] ?? [],
+                    originDeviceID: origins[summary.id]
                 )
             }
         }

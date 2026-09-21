@@ -82,7 +82,7 @@ final class AppController {
             togglePicker()
         case .openSettings:
             openSettings()
-        case .background, .help, .quit:
+        case .background, .help, .quit, .status:
             break
         }
     }
@@ -137,10 +137,18 @@ final class AppController {
 
     private func wire() {
         picker?.onOpenSettings = { [weak self] in self?.openSettings() }
-        appearance.onChange = { [weak self] preference in self?.picker?.apply(preference) }
+        appearance.onChange = { [weak self] preference in
+            self?.picker?.apply(preference)
+            self?.settings.apply(preference)
+        }
         shortcuts.onActivated = { [weak self] shortcutID, _ in
             guard shortcutID == Self.pickerShortcutID else { return }
             self?.togglePicker()
+        }
+        shortcuts.onStateChanged = { [weak self] state in
+            guard let self else { return }
+            AppLog.note("shortcut: \(state.summary) (app ID \(shortcuts.registration))")
+            settings.setShortcut(state)
         }
         tray?.onActivate = { [weak self] in self?.togglePicker() }
         tray?.onActivationToken = { [weak self] token in self?.activationToken = token }

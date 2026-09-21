@@ -38,18 +38,15 @@ on the Deck.
 Neither stops the session on its own. Both are worth recognising before the
 first `journalctl`.
 
-- **`could not publish the service: avahi refused EntryGroupNew…`** means
-  avahi-daemon is refusing service publication from a user program. In avahi's
-  `dbus-protocol.c` that call is refused for `disable-user-service-publishing=yes`,
-  for too many clients, or for too many objects on one client. On a fresh daemon
-  it is the first. While it lasts, other devices cannot see the Deck, so the Mac
-  cannot dial it; the Deck can still discover and dial the Mac, and sync and live
-  push run only over connections the Deck opens. `skrepka doctor` and the journal
-  print the remedy: under `[publish]` in `/etc/avahi/avahi-daemon.conf`, set
-  `disable-user-service-publishing=no`, then `sudo systemctl restart
-  avahi-daemon`. `sudo` on the Deck needs a password, set with `passwd`.
-  **Unverified:** whether an edit under `/etc` survives a SteamOS update.
-  Record what happened, and whether the edit was needed.
+- **`avahi refuses to publish, so skrepkad publishes this device itself`** is
+  expected on a Deck, and not a problem. SteamOS's avahi is built to publish
+  nothing — `disable-publishing=yes` and `disable-user-service-publishing=yes`
+  in `/etc/avahi/avahi-daemon.conf`, found in the first session — so skrepkad
+  answers mDNS for its own service instead, and logs `answering mDNS` once per
+  network interface. `skrepka doctor` names the responder as "avahi for
+  browsing, skrepkad for publishing". Nothing under `/etc` needs changing. Check
+  it from the Mac with `dns-sd -B _skrepka._tcp local`: the Deck should be
+  listed.
 - **`Failed to set thread priority for worker thread: pqc=… errno=13`** is
   benign. Swift's libdispatch (`_dispatch_worker_thread` in `src/queue.c`) tries
   to renice a worker thread to imitate a quality-of-service class, and an
@@ -130,9 +127,11 @@ that one directory.
    - **Pass:** a Skrepka paperclip icon is there, drawn in the panel's text
      colour, and a right click shows Open Skrepka, Clear History…, Settings… and
      Quit Skrepka. There is no problem row at the top.
-   - **Finding, not a failure:** no icon. Record whether `pgrep -a skrepka-gui`
-     finds the process. The tray is tested against a fake watcher on a private
-     bus, not against Plasma's.
+   - **Finding, not a failure:** no icon — what the first session saw, although
+     the same build shows its icon in the Plasma 6.4.3 container
+     (`scripts/kde-smoke.sh`). Record the output of `skrepka-gui --status` (its
+     `tray:` line says whether the StatusNotifierWatcher accepted the icon) and
+     `journalctl --user -t skrepka-gui -b`.
 
 **When master is ahead of the latest release,** build on the Mac with
 `scripts/build-deck.sh` and carry both tarballs in `build/deck/` over any way
@@ -248,18 +247,19 @@ with it. Copy a few things first, in Kate and Firefox, so the picker has rows.
 
 1. Open Kate and start typing a sentence; leave the caret in the middle of a
    word.
-2. Press **Meta+Shift+V**. The first time, the desktop asks you to confirm or
-   assign the shortcut for Skrepka — accept Meta+Shift+V. The shortcut runs
-   through `org.freedesktop.portal.GlobalShortcuts`, id `show-picker`, and this
-   is its first run against Plasma's portal.
-   - **Pass:** the picker appears centred over Kate, in the desktop's dark or
-     light setting and accent colour. Kate loses keyboard focus but keeps its
-     caret and its text.
-   - **Fail:** no prompt and no picker. Run `skrepka-gui --picker` in Konsole to
-     see whether the picker itself works, then record which half failed: the
-     portal (no prompt, nothing bound) or the layer-shell placement (a window
-     that is not an overlay). KWin's layer-shell support was inferred from
-     reading its source, so a live rejection is the finding.
+2. Press **Meta+Shift+V**. The first time the app starts, Plasma shows a
+   "Global Shortcuts Requested" dialog for Skrepka — accept Meta+Shift+V. The
+   shortcut runs through `org.freedesktop.portal.GlobalShortcuts`, id
+   `show-picker`. 0.2.1 never got this far: see the first session's findings in
+   [phase-7-linux-gui.md](phase-7-linux-gui.md#first-steam-deck-session-2026-09-21).
+   - **Pass:** the picker appears centred across the screen with its top 18% of
+     the way down, over Kate, in the desktop's dark or light setting and accent
+     colour, with a shadow that fades out. Kate loses keyboard focus but keeps
+     its caret and its text. `skrepka-gui --status` reads `shortcut: bound to
+     Meta+Shift+V`.
+   - **Fail:** no dialog and no picker. Record `skrepka-gui --status` — its
+     `shortcut:` and `app ID:` lines say what the portal answered — and run
+     `skrepka-gui --picker` in Konsole to see whether the picker itself works.
    - **Fallback, not a failure:** if Plasma has no working portal, bind
      `skrepka-gui --picker` as a custom shortcut in System Settings → Keyboard →
      Shortcuts, and record that.
@@ -278,6 +278,9 @@ with it. Copy a few things first, in Kate and Firefox, so the picker has rows.
    Text and Delete.
    - **Pass:** each does what it says. A pinned row shows the pin glyph and sorts
      first.
+   - Then click anywhere outside the picker, and separately switch to Kate with
+     Alt+Tab while it is open. **Pass:** either closes it, as on the Mac. The
+     click itself does not reach the window under it.
 6. Click the tray icon.
    - **Pass:** the picker opens, and a second click closes it.
 7. Open the picker and click the gear.

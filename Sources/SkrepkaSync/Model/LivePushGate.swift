@@ -33,6 +33,10 @@ import Foundation
 public struct LivePushGate: Sendable {
     private var recentlyReceived = RecentHashes()
     private var handoff = ClipboardHandoff()
+    /// A push that arrived without its bytes and may still be written once
+    /// they land. Cleared by anything that makes it no longer the newest
+    /// thing the user would expect on the clipboard.
+    private var awaitingBytes: String?
 
     public init() {}
 
@@ -41,9 +45,38 @@ public struct LivePushGate: Sendable {
     /// Called **before** the write, not after: the write is what the watcher
     /// might see, so a guard updated afterwards would be updated after the race
     /// it exists to lose.
+    ///
+    /// Supersedes a push still waiting for its bytes, unless it is that push.
     public mutating func noteReceived(_ contentHash: String, at now: Date) {
         recentlyReceived.remember(contentHash, at: now)
         handoff.received(contentHash)
+        if awaitingBytes != contentHash { awaitingBytes = nil }
+    }
+
+    /// A peer pushed this without its bytes, and they are being fetched — see
+    /// `PeerLink.fetchPushed(_:)`. Nothing is written yet.
+    ///
+    /// Replaces any push already waiting: the newest one is the only one worth
+    /// putting on the clipboard.
+    public mutating func noteAwaitingBytes(_ contentHash: String) {
+        awaitingBytes = contentHash
+    }
+
+    /// The bytes of a push that arrived without them have landed: whether they
+    /// may be written to the clipboard now. When the answer is yes the write is
+    /// already noted, exactly as ``noteReceived(_:at:)`` would — so a caller
+    /// writes straight after a `true` and calls nothing else first.
+    ///
+    /// No when anything happened since the push that the user would expect to
+    /// find on the clipboard instead: a copy on this device, recorded or not,
+    /// or another push written. Minutes-late bytes replacing what the user
+    /// just copied is the failure this exists to prevent; the item is in
+    /// history either way.
+    public mutating func claimFetched(_ contentHash: String, at now: Date) -> Bool {
+        guard awaitingBytes == contentHash else { return false }
+        awaitingBytes = nil
+        noteReceived(contentHash, at: now)
+        return true
     }
 
     /// Something was copied on this device and recorded: whether it may be
@@ -61,6 +94,7 @@ public struct LivePushGate: Sendable {
         at now: Date
     ) -> Bool {
         handoff.captured(contentHash)
+        awaitingBytes = nil
         guard !isConcealed, !handoff.isHandedOver(contentHash) else { return false }
         return !recentlyReceived.contains(contentHash, at: now)
     }
@@ -73,5 +107,6 @@ public struct LivePushGate: Sendable {
     /// handed-over content coming back unrecorded is still the hand-over.
     public mutating func noteUnrecordedCopy(_ contentHash: String? = nil) {
         handoff.captured(contentHash)
+        awaitingBytes = nil
     }
 }

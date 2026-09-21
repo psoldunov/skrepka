@@ -27,7 +27,8 @@ public struct PickerRowText: Equatable, Sendable {
 /// preview and a separate line count where `ClipSummary` carries the original
 /// text — so the line-count and size fields have to come straight off the
 /// document. The order is the same as `ClipRowView.subtitle`:
-/// type · image size · byte size · line count · age.
+/// type · image size · byte size · line count · age, with "contents not
+/// synced" before the age on a file row whose files stayed behind.
 public enum PickerRowTextBuilder {
     /// - Parameter relativeAge: the age string, injected so the assembly is
     ///   testable without a clock or a locale — production passes
@@ -41,6 +42,7 @@ public enum PickerRowTextBuilder {
         if let size = imageSizeText(document) { parts.append(size) }
         if let size = byteSizeText(document) { parts.append(size) }
         if let lines = lineCountText(document) { parts.append(lines) }
+        if let files = filesStatusText(document) { parts.append(files) }
         parts.append(relativeAge(document.createdAt, now))
         return PickerRowText(title: document.preview, subtitle: parts.joined(separator: " · "))
     }
@@ -75,6 +77,18 @@ public enum PickerRowTextBuilder {
             return nil
         }
         return "\(lines) lines"
+    }
+
+    /// "contents not synced" on a file row from another device whose files did
+    /// not come — it pastes as their names, and the row says so beforehand —
+    /// and "…yet" while they are still on their way. The Mac picker's words,
+    /// from the one place both take them.
+    static func filesStatusText(_ document: ClipDocument) -> String? {
+        switch document.filesStatus {
+        case ClipDocument.FilesStatusName.notSynced: SyncedFilesStatus.notSynced.rowNote
+        case ClipDocument.FilesStatusName.pending: SyncedFilesStatus.pending.rowNote
+        default: nil
+        }
     }
 }
 

@@ -30,6 +30,7 @@ extension Daemon {
 
     func performOpenPairing(for duration: Duration) async throws -> PairingWindowDocument {
         guard let runtime else { throw PairingWindowError.syncIsOff }
+        let generation = syncGeneration
         if let server = pairingServer, pairingWindowEnds != nil {
             // Already open. Extending it rather than refusing, because a second
             // `skrepka pair` while the first window is up is a user retrying,
@@ -46,7 +47,7 @@ extension Daemon {
         // Re-checked after the await: `stop()` may have run while the listener
         // was binding, and a pairing port left open on a stopping daemon is the
         // one thing that must not survive.
-        guard !isStopping, self.runtime != nil else {
+        guard isSyncCurrent(generation) else {
             await server.stop()
             throw PairingWindowError.syncIsOff
         }
@@ -118,7 +119,11 @@ extension Daemon {
     /// `skrepkad` runs under systemd and `skrepka pair` may never be typed. A
     /// pairing accepted because nobody was watching is the outcome this must
     /// not have.
-    func confirmPairing(_ proposal: PairingProposal, direction: String) async -> Bool {
+    ///
+    /// `generation` is the stack the connection arrived on; a stale one is a
+    /// refusal, and `SyncResponder` records the peer only on `true`.
+    func confirmPairing(_ proposal: PairingProposal, direction: String, generation: Int) async -> Bool {
+        guard isSyncCurrent(generation) else { return false }
         let (answers, sink) = AsyncStream<Bool>.makeStream()
         let deviceID = proposal.peer.deviceID
         let pairing = PendingPairing(
@@ -136,8 +141,9 @@ extension Daemon {
 
         let accepted = await Self.firstAnswer(answers, timeout: pairingAnswerTimeout)
         forget(deviceID, proposalID: pairing.id)
-        if accepted { await pairedSetMayHaveChanged() }
-        return accepted
+        guard accepted, isSyncCurrent(generation) else { return false }
+        await pairedSetMayHaveChanged()
+        return true
     }
 
     /// Drops a proposal, unless a newer one from the same device has already
@@ -279,7 +285,7 @@ public enum PairingWindowError: Error, Sendable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .syncIsOff:
-            "sync is turned off on this device, so it cannot pair. Restart skrepkad without --no-sync."
+            "sync is turned off on this device, so it cannot pair. Turn it on with `skrepka config set sync.enabled on`, or restart skrepkad without --no-sync."
         }
     }
 }

@@ -40,6 +40,8 @@
                     try apply(action, rejectedConcealed: &rejectedConcealed)
                 }
             }
+            // A peer's tombstone removes rows too, and their files with them.
+            sweepFileCache()
 
             if rejectedConcealed > 0 {
                 SkrepkaLog.store.error(
@@ -70,11 +72,12 @@
                 return
             }
             try database.transaction {
-                guard let held = try clipRow(contentHash: meta.contentHash) else {
+                if let held = try clipRow(contentHash: meta.contentHash) {
+                    try fillPayload(of: held.id, from: meta, payloads: payloads)
+                } else {
                     try insertLearned(meta, payloads: payloads)
-                    return
                 }
-                try fillPayload(of: held.id, from: meta, payloads: payloads)
+                try recordBundledPicture(of: meta, payloads: payloads)
             }
         }
 

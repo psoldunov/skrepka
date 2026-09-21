@@ -279,8 +279,8 @@ checks.
    tile, because reading it to preview it — `ThumbnailProducing` and
    `GdkPixbufThumbnailMaker` — is not built. [D-9](open-questions.md#d-9) is
    why the protocol waited for a second conformance.
-2. **Retention and exclusions in Settings** (step 5). The Sync pane is all
-   Settings has. The rest waits on daemon members that can set them.
+2. ~~**Retention and exclusions in Settings** (step 5).~~ Done after the first
+   Deck session — see below. Exclusions are not possible on Wayland.
 3. **Verification on the Deck.** Everything in "What was not" above.
 
 Done and no longer listed: the picker's rows, the daemon connection, the global
@@ -289,6 +289,35 @@ shortcut and the tray.
 And [OQ-16](open-questions.md#oq-16) is decided, as
 [D-11](open-questions.md#d-11): Return puts the clip on the clipboard and
 closes the picker, and the user pastes with Ctrl+V.
+
+### First Steam Deck session, 2026-09-21
+
+0.2.1 on a Deck OLED — SteamOS 3.8, Plasma 6.4.3, Wayland — beside two Macs.
+**The layer-shell picker works on real KWin**, over the desktop, in the
+desktop's colours; that answers the "Not demonstrated: KDE" note below for the
+picker. Everything else the session found, with its cause:
+
+| Seen on the Deck | Cause | Now |
+|---|---|---|
+| The shadow ends in a hard rectangle | 40px of blur in a 22px transparent margin | The overlay covers the output (`PaletteWindow+Overlay.swift`); the shadow fades out |
+| Only Esc closes the picker | Exclusive keyboard focus never ends by itself, and nothing caught a click away | A click on the transparent overlay, or the window going inactive, closes it — KWin does move focus off an exclusive layer surface, sway does not |
+| Meta+Shift+V does nothing | GTK reads the Settings portal on the shared session connection inside `gtk_init`, after which xdg-desktop-portal refuses `Registry.Register` ("Connection already associated with an application ID"); 0.2.1 gave up there | The shortcut client registers on a private connection (`GlobalShortcuts.swift`) and carries on if refused. KDE's successful `BindShortcuts` returns empty results, now followed by `ListShortcuts` (`ShortcutStep.swift`) |
+| No tray icon | Unknown. The same build shows its icon in the KDE container below, and the icon appeared on the Deck once the fixed build was installed — whose `install.sh` starts the app as a systemd unit rather than a child of Konsole | `skrepka-gui --status` and the journal report the registration |
+| Images and files arrive as the other machine's path | A file copy crossed the wire as its path (`text/uri-list`), never its contents; pictures over 256 KB were never written to the other clipboard live | Files travel as a `FileBundle` representation (read at copy time, ≤ 32 MB and 1000 files) behind a `files` capability; receivers materialise them into their own cache and never write a foreign path; large pushes are fetched at once (`Sources/SkrepkaCore/FileSync/`, `Sources/SkrepkaSync/Model/FileBundle*.swift`) |
+| Settings window buttons blank under Breeze | Breeze-GTK draws title buttons as `background-image` assets with a transparent icon; the window's `background: none` cleared them | Explicit `background-image: none` and an opaque icon colour (`SettingsStyle+Layout.swift`) |
+| "Pair…" disabled for Macs ready to pair | The daemon read a peer's TXT once; the Mac updates it in place when pairing opens, and avahi's ServiceBrowser says nothing about a TXT-only change | One avahi TXT `RecordBrowser` per sighted peer (`AvahiDiscovery+RecordWatch.swift`) |
+| The Deck never appears on the Macs | Valve's avahi build (`holo-3.8`) ships `disable-publishing=yes`, `disable-user-service-publishing=yes`, `publish-addresses=no` | skrepkad answers mDNS for its own service when avahi refuses (`Sources/SkrepkaLinuxPlatform/MDNS/`) |
+| Settings barebones and unstyled | `SettingsStyle.install()` was never called; only the Sync pane existed | Rebuilt: a sidebar with General, History, Privacy, Sync and Status, in the picker's palette; retention and the sync switch settable through interface version 4 |
+
+**A Plasma 6.4.3 session in a container.** `scripts/kde-image.sh` builds an
+image from SteamOS 3.8's own package repositories — the Deck's KWin,
+plasma-workspace, kglobalacceld, xdg-desktop-portal and -kde, GTK and GLib, to
+the package release — and `scripts/kde-smoke.sh` installs a release or a local
+tarball into a fresh headless session and checks the tray, the shortcut, the
+picker's shadow and click-away. Against 0.2.1 it reproduced the shortcut, the
+shadow and click-away, and showed the tray working. KWin composites with
+QPainter there, since the container has no GPU; OpenGL-only effects such as
+blur are absent.
 
 ## Work
 

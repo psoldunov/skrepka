@@ -52,6 +52,7 @@ extension AvahiDiscovery {
                 )
             }
         }
+        freeRecordWatches()
         for sink in eventSinks.values { sink.finish() }
         eventSinks = [:]
     }
@@ -101,6 +102,10 @@ extension AvahiDiscovery {
             interface: AvahiNames.Interface.serviceBrowser, member: AvahiNames.Browser.itemRemove)
         let failures = try await signals(
             interface: AvahiNames.Interface.serviceBrowser, member: AvahiNames.Browser.failure)
+        // Before `ServiceBrowserNew`, so no record browser a sighting creates
+        // can report before anything is listening. See
+        // `AvahiDiscovery+RecordWatch.swift`.
+        browseTasks.append(contentsOf: try await subscribeToRecordSignals())
 
         let path = try await newServiceBrowser()
         browserPath = path
@@ -108,8 +113,8 @@ extension AvahiDiscovery {
         recordBrowseWorking()
         emit(.ready)
 
-        browseTasks.append(consume(items, at: path) { .appeared($0) })
-        browseTasks.append(consume(removals, at: path) { .disappeared($0) })
+        browseTasks.append(consume(items, at: path, isArrival: true))
+        browseTasks.append(consume(removals, at: path, isArrival: false))
         browseTasks.append(consumeFailures(failures, at: path))
     }
 
@@ -134,7 +139,7 @@ extension AvahiDiscovery {
     private func consume(
         _ signals: AsyncStream<DBusMessage>,
         at path: String,
-        as event: @escaping @Sendable (DiscoveredPeer) -> DiscoveryEvent
+        isArrival: Bool
     ) -> Task<Void, Never> {
         Task { [weak self] in
             for await message in signals {
@@ -142,8 +147,19 @@ extension AvahiDiscovery {
                 guard message.path == path, let item = AvahiSignals.browseItem(message.body) else {
                     continue
                 }
-                await self?.emit(event(item.peer))
+                await self?.browsed(item, isArrival: isArrival)
             }
+        }
+    }
+
+    /// Reports one browse result, and starts or stops following its record.
+    private func browsed(_ item: AvahiSignals.BrowseItem, isArrival: Bool) {
+        if isArrival {
+            emit(.appeared(item.peer))
+            noteSighting(item)
+        } else {
+            emit(.disappeared(item.peer))
+            noteDeparture(item)
         }
     }
 

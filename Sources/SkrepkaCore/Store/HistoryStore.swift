@@ -63,6 +63,11 @@
         /// ``HistoryStoreSyncError/deviceIdentityUnavailable``.
         public var localDeviceID: SyncDeviceID?
 
+        /// Where files received from peers are written. Nil until the app sets
+        /// it, and then every removal of a row removes that row's files — see
+        /// ``sweepFileCache()``.
+        public var fileCache: FileCache?
+
         /// Not private: `HistoryStore+Relays.swift` hands it to a scan that reads
         /// through a context of its own, off the main actor.
         let container: ModelContainer

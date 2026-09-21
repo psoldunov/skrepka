@@ -59,6 +59,7 @@ final class PickerListView {
         menu.onPin = { [weak self] hash in self?.onPin?(hash) }
         menu.onCopyPlain = { [weak self] hash in self?.onCopyPlain?(hash) }
         menu.onDelete = { [weak self] hash in self?.onDelete?(hash) }
+        menu.onClosed = { [weak self] in self?.onMenuClosed?() }
     }
 
     /// A list-wide motion controller arms hover: a pointer already inside when
@@ -114,6 +115,11 @@ final class PickerListView {
             gtk_widget_add_controller(row, secondary)
         }
     }
+
+    /// Whether a row's context menu is on screen.
+    var isMenuOpen: Bool { menu.isOpen }
+    /// Called once a row's context menu has closed.
+    var onMenuClosed: (() -> Void)?
 
     /// Opens the context menu on the selected row — the keyboard path to it.
     func openMenuForSelection() {

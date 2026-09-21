@@ -39,6 +39,8 @@ struct DaemonServiceInterfaceTests {
         SkrepkaInterface.Member.delete: (["s"], ["s"]),
         SkrepkaInterface.Member.clear: (["b"], ["s"]),
         SkrepkaInterface.Member.preview: (["s", "u"], ["s"]),
+        SkrepkaInterface.Member.settings: ([], ["s"]),
+        SkrepkaInterface.Member.setSettings: (["s"], ["s"]),
     ]
 
     static func service() throws -> DaemonService {

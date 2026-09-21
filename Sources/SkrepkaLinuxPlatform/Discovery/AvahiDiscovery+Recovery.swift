@@ -215,6 +215,8 @@ extension AvahiDiscovery {
         browseTasks = []
         browserPath = nil
         isBrowseReady = false
+        // Gone with the daemon, like the service browser: nothing to free.
+        forgetRecordWatches()
         startBrowse()
     }
 

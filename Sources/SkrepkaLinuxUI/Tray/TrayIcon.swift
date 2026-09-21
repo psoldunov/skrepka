@@ -29,12 +29,24 @@ public final class TrayIcon {
         pixmaps = [22, 32, 48].compactMap(TrayPixmap.render)
     }
 
+    /// Where the icon stands, as one line for `skrepka-gui --status`.
+    public var statusSummary: String {
+        if let startupError { return "failed — \(startupError)" }
+        if isHosted { return "shown: \(busName) registered with the tray (\(watcherOwner ?? "?"))" }
+        if watcherOwner == nil {
+            return "waiting — no StatusNotifierWatcher on the session bus, so no tray to join"
+        }
+        if !ownsName { return "waiting for the bus name \(busName)" }
+        return "registering \(busName) with the tray"
+    }
+
     public func start() {
         guard nameOwner == nil else { return }
         do {
             try exportObjects()
         } catch {
             startupError = String(describing: error)
+            AppLog.note("tray: could not export the icon: \(error)")
             return
         }
         nameOwner = DBusNameOwner(
@@ -57,6 +69,9 @@ public final class TrayIcon {
                 self?.registerWithWatcher()
             },
             vanished: { [weak self] in
+                if self?.isHosted == true {
+                    AppLog.note("tray: the StatusNotifierWatcher went away; waiting for it to return")
+                }
                 self?.watcherOwner = nil
                 self?.isHosted = false
             }
@@ -167,9 +182,11 @@ public final class TrayIcon {
             case .success:
                 isHosted = true
                 startupError = nil
+                AppLog.note("tray: registered \(busName) with the StatusNotifierWatcher (\(owner))")
             case .failure(let error):
                 isHosted = false
                 startupError = error.description
+                AppLog.note("tray: the StatusNotifierWatcher refused the icon: \(error.description)")
             }
         }
     }

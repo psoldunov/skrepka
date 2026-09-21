@@ -73,6 +73,22 @@ struct CLIReportTests {
         )
     }
 
+    @Test("`list` marks a file entry whose contents did not sync")
+    func unsyncedFilesAreMarked() throws {
+        let clip = ClipDocument(
+            contentHash: "0123456789ab",
+            preview: "shot.png",
+            kind: "file",
+            isPinned: false,
+            createdAt: try stamp(),
+            byteCount: nil,
+            representations: ["text/uri-list"],
+            filesStatus: ClipDocument.FilesStatusName.notSynced
+        )
+        let text = HistoryReport.text(HistoryDocument(clips: [clip], total: 1), timeZone: .gmt)
+        #expect(text == "  1   01234567  file    01-02 03:04  shot.png [contents not synced]")
+    }
+
     @Test("an empty history says so rather than printing nothing")
     func emptyHistoryText() {
         #expect(HistoryReport.text(HistoryDocument(clips: [], total: 0)) == "No clipboard history yet.")
@@ -98,7 +114,7 @@ struct CLIReportTests {
 
     @Test("`doctor` leads with the problems")
     func diagnosticsText() throws {
-        let text = DiagnosticsReport.text(diagnostics(try stamp()), timeZone: .gmt)
+        let text = DoctorReport.text(diagnostics(try stamp()), timeZone: .gmt)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         #expect(lines.first == "PROBLEMS")
         #expect(lines.dropFirst().first == "  - Nothing on this session can watch the clipboard.")
@@ -117,7 +133,7 @@ struct CLIReportTests {
         )
         let problem = "Peer discovery or publishing is not working: \(refusal)"
         let report = diagnostics(try stamp(), problems: [problem])
-        let text = DiagnosticsReport.text(report, timeZone: .gmt)
+        let text = DoctorReport.text(report, timeZone: .gmt)
         let json = try SkrepkaDocumentCoding.encode(report)
 
         #expect(text.contains("disable-user-service-publishing=yes"))
@@ -130,7 +146,7 @@ struct CLIReportTests {
     func healthyDiagnosticsText() throws {
         let clean = diagnostics(try stamp(), problems: [])
         #expect(
-            DiagnosticsReport.text(clean, timeZone: .gmt).hasPrefix("Everything Skrepka checks is working."))
+            DoctorReport.text(clean, timeZone: .gmt).hasPrefix("Everything Skrepka checks is working."))
     }
 
     private func diagnostics(

@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-18T17:08:29.212Z",
+	"generatedAt": "2026-09-21T17:38:27.144Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -35,7 +35,8 @@
 					"search",
 					"preferences",
 					"core-diagnostics",
-					"branding"
+					"branding",
+					"file-sync"
 				]
 			},
 			{
@@ -58,6 +59,7 @@
 					"tests",
 					"scripts",
 					"linux-image",
+					"kde-image",
 					"probe"
 				]
 			},
@@ -152,7 +154,7 @@
 						"path": "Sources/SkrepkaLinuxUI/Picker"
 					}
 				],
-				"sublabel": "GTK4 layer-shell overlay, X11 fallback; macOS-style rows, search and actions over the daemon",
+				"sublabel": "full-output transparent layer-shell overlay, panel hung 18% down; closes on a click away or focus loss; plain-window fallback on X11",
 				"type": "frontend"
 			},
 			{
@@ -161,9 +163,12 @@
 				"sources": [
 					{
 						"path": "Sources/SkrepkaLinuxUI/Settings"
+					},
+					{
+						"path": "Sources/SkrepkaLinuxUI/Appearance"
 					}
 				],
-				"sublabel": "in-process window, opened from the tray and the picker's gear — pair both ways, unpair, live clipboard per device; pure SyncModel, one-call-at-a-time DaemonLink",
+				"sublabel": "sidebar — General, History, Privacy, Sync, Status — in the picker's palette; pure pane states; pair both ways; launch at login as the autostart entry's Hidden=true",
 				"type": "security"
 			},
 			{
@@ -180,7 +185,7 @@
 						"path": "packaging"
 					}
 				],
-				"sublabel": "skrepka-gui: GtkApplication dev.soldunov.Skrepka.App owns tray, shortcut, picker and Settings; ensures skrepkad runs",
+				"sublabel": "skrepka-gui: GtkApplication dev.soldunov.Skrepka.App owns tray, shortcut, picker and Settings; ensures skrepkad runs; --status reports tray and shortcut",
 				"type": "frontend"
 			},
 			{
@@ -197,7 +202,7 @@
 						"path": "Sources/SkrepkaLinuxUI/Hotkey"
 					}
 				],
-				"sublabel": "GDBus on GTK's loop: StatusNotifierItem + dbusmenu, GlobalShortcuts portal, appearance portal",
+				"sublabel": "GDBus on GTK's loop: StatusNotifierItem + dbusmenu; GlobalShortcuts portal on its own connection that registers the app ID first; appearance portal",
 				"type": "backend"
 			},
 			{
@@ -214,7 +219,7 @@
 						"path": "Sources/SkrepkaLinuxUI/Branding"
 					}
 				],
-				"sublabel": "main loop, layer-shell probe, C shim, Cairo paperclip mark; eventfd inbox carries Sendable values onto the loop thread",
+				"sublabel": "main loop, layer-shell probe, C shim, one CSS provider per window kind, Cairo paperclip mark; eventfd inbox carries Sendable values onto the loop thread",
 				"type": "backend"
 			},
 			{
@@ -231,8 +236,36 @@
 						"path": "Sources/SkrepkaCLI"
 					}
 				],
-				"sublabel": "skrepkad exports dev.soldunov.Skrepka1 (v3: SetLivePush, plus the picker's History, Search, CopyAs, Preview, SetPinned, Delete, HistoryChanged); answers one call at a time; the skrepka CLI is its other client",
+				"sublabel": "skrepkad exports dev.soldunov.Skrepka1 v4 (adds Settings and SetSettings: retention and a runtime sync switch, kept in config.json); answers one call at a time; the skrepka CLI is its other client",
 				"type": "backend"
+			},
+			{
+				"id": "linux-discovery",
+				"label": "Linux discovery & mDNS",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaLinuxPlatform/Discovery"
+					},
+					{
+						"path": "Sources/SkrepkaLinuxPlatform/MDNS"
+					}
+				],
+				"sublabel": "browses through avahi and follows each peer's TXT record; publishes through avahi, or answers mDNS itself where avahi refuses (SteamOS)",
+				"type": "backend"
+			},
+			{
+				"id": "file-sync",
+				"label": "File sync",
+				"sources": [
+					{
+						"path": "Sources/SkrepkaCore/FileSync"
+					},
+					{
+						"path": "Sources/SkrepkaSync/Model/FileBundle.swift"
+					}
+				],
+				"sublabel": "copied files read at copy time into a FileBundle (≤ 32 MB, 1000 files); a receiver writes them into its own cache and never pastes a foreign path",
+				"type": "security"
 			},
 			{
 				"id": "settings-ui",
@@ -362,7 +395,7 @@
 						"path": "Sources/Skrepka/Sync/SyncCoordinator+LivePush.swift"
 					}
 				],
-				"sublabel": "current-host-only write inside pause → resume; the live-push gate refuses the echo",
+				"sublabel": "current-host-only write inside pause → resume; the live-push gate refuses the echo; large pushes are fetched at once",
 				"type": "backend"
 			},
 			{
@@ -438,7 +471,7 @@
 						"path": "Sources/SkrepkaCore/Store/SQLite"
 					}
 				],
-				"sublabel": "Linux only — second HistoryStoring engine, schema v4; store created 0600",
+				"sublabel": "Linux only — second HistoryStoring engine, schema v4; store created 0600; retention settable at runtime",
 				"type": "database"
 			},
 			{
@@ -513,7 +546,7 @@
 						"path": "Sources/SkrepkaSync/Model"
 					}
 				],
-				"sublabel": "device id, LWW register, clip meta, limits, live-push policy and echo gate, Universal Clipboard relay test",
+				"sublabel": "device id, LWW register, clip meta, limits, live-push policy and echo gate, Universal Clipboard relay test, file bundle and the files capability",
 				"type": "backend"
 			},
 			{
@@ -524,7 +557,7 @@
 						"path": "Sources/SkrepkaSync/Wire"
 					}
 				],
-				"sublabel": "framed canonical CBOR — bounded depth, length and item count",
+				"sublabel": "framed canonical CBOR — bounded depth, length and item count; content hashes validated on the way in",
 				"type": "security"
 			},
 			{
@@ -568,7 +601,7 @@
 						"path": "Sources/SkrepkaSync/Session"
 					}
 				],
-				"sublabel": "dial, handshake, exchange, retry — a device pushes only where it dialled",
+				"sublabel": "dial, handshake, exchange, retry — a device pushes only where it dialled; bundles withheld from peers without the files capability",
 				"type": "backend"
 			},
 			{
@@ -621,7 +654,7 @@
 						"path": "scripts"
 					}
 				],
-				"sublabel": "doctor, doctor-linux, probe-runbook, linux, build-deck, install, bundle, notarize",
+				"sublabel": "doctor, doctor-linux, probe-runbook, linux, build-deck, kde-smoke, screenshot-settings, install, bundle, notarize",
 				"type": "backend"
 			},
 			{
@@ -636,6 +669,23 @@
 					}
 				],
 				"sublabel": "Swift 6.3.3, SwiftLint, libsqlite3, GTK4/gtk4-layer-shell; a host and an amd64 variant — required, not optional",
+				"type": "backend"
+			},
+			{
+				"id": "kde-image",
+				"label": "KDE test session",
+				"sources": [
+					{
+						"path": "docker/Dockerfile.kde"
+					},
+					{
+						"path": "docker/kde"
+					},
+					{
+						"path": "scripts/kde-smoke.sh"
+					}
+				],
+				"sublabel": "headless Plasma 6.4.3 from SteamOS 3.8's own packages — KWin, plasmashell, kglobalacceld, the KDE portal; the Deck's desktop without a Deck",
 				"type": "backend"
 			},
 			{
@@ -1184,7 +1234,7 @@
 			{
 				"from": "linux-settings",
 				"id": "e-linuxsettings-daemon",
-				"label": "session bus: Peers, PairWith, ConfirmPairing, Unpair, SetLivePush",
+				"label": "session bus: Peers, PairWith, ConfirmPairing, Unpair, SetLivePush, Settings, SetSettings, Clear, Diagnostics",
 				"to": "linux-daemon",
 				"variant": "security"
 			},
@@ -1202,6 +1252,44 @@
 				"to": "sqlite-store"
 			},
 			{
+				"from": "linux-daemon",
+				"id": "e-linuxdaemon-discovery",
+				"label": "browse, follow TXT, publish",
+				"to": "linux-discovery"
+			},
+			{
+				"from": "linux-discovery",
+				"id": "e-linuxdiscovery-peer",
+				"label": "answers mDNS itself where avahi refuses",
+				"to": "peer",
+				"variant": "dashed"
+			},
+			{
+				"from": "coordinator",
+				"id": "e-coordinator-filesync",
+				"label": "reads copied files at copy time",
+				"to": "file-sync"
+			},
+			{
+				"from": "linux-daemon",
+				"id": "e-linuxdaemon-filesync",
+				"label": "same, on Linux; materialises received files",
+				"to": "file-sync"
+			},
+			{
+				"from": "live-push",
+				"id": "e-livepush-filesync",
+				"label": "materialises received files, never a foreign path",
+				"to": "file-sync",
+				"variant": "security"
+			},
+			{
+				"from": "file-sync",
+				"id": "e-filesync-filesystem",
+				"label": "reads copied files; writes its own cache",
+				"to": "filesystem"
+			},
+			{
 				"from": "tests",
 				"id": "e-tests-linuxpicker",
 				"label": "key map, metrics, row text, model",
@@ -1211,7 +1299,7 @@
 			{
 				"from": "tests",
 				"id": "e-tests-linuxsettings",
-				"label": "sync model, pairing flow, one call at a time",
+				"label": "sync model, pane states, autostart file, one call at a time",
 				"to": "linux-settings",
 				"variant": "dashed"
 			},
@@ -1268,6 +1356,20 @@
 				"from": "scripts",
 				"id": "e-scripts-linuxapp",
 				"label": "install.sh / setup-linux.sh: skrepka-gui, launcher + autostart entries, icons, D-Bus activation",
+				"to": "linux-app",
+				"variant": "dashed"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-kdeimage",
+				"label": "kde-image.sh builds it; kde-smoke.sh installs a tarball into it",
+				"to": "kde-image",
+				"variant": "dashed"
+			},
+			{
+				"from": "kde-image",
+				"id": "e-kdeimage-linuxapp",
+				"label": "checks tray, shortcut, picker shadow and click-away",
 				"to": "linux-app",
 				"variant": "dashed"
 			},

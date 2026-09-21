@@ -74,14 +74,31 @@ public enum CLIRunner {
             return try await doctor(isJSON: options.isJSON, proxy: proxy)
         case .copy, .pin, .unpin, .delete, .clear:
             return try await historyAction(options.command, proxy: proxy)
-        case .sync:
-            return CLIOutcome.report(try await proxy.syncNow(), whenSilent: "Synced.")
-        case .unpair(let fingerprint):
-            let result = try await proxy.unpair(fingerprint: fingerprint)
-            return CLIOutcome.report(result, whenSilent: "Forgotten.")
+        case .sync, .unpair:
+            return try await peerAction(options.command, proxy: proxy)
         case .pair(let peer, let seconds):
             return try await PairingSession(proxy: proxy).run(peer: peer, seconds: seconds)
+        case .config, .configure:
+            return try await config(options, proxy: proxy)
         }
+    }
+
+    private static func peerAction(_ command: CLIOptions.Command, proxy: DaemonProxy) async throws -> Int32 {
+        if case .unpair(let fingerprint) = command {
+            let result = try await proxy.unpair(fingerprint: fingerprint)
+            return CLIOutcome.report(result, whenSilent: "Forgotten.")
+        }
+        return CLIOutcome.report(try await proxy.syncNow(), whenSilent: "Synced.")
+    }
+
+    /// `config` prints the settings; `config set` changes one.
+    private static func config(_ options: CLIOptions, proxy: DaemonProxy) async throws -> Int32 {
+        if case .configure(let patch) = options.command {
+            return CLIOutcome.report(try await proxy.setSettings(patch), whenSilent: "Saved.")
+        }
+        let document = try await proxy.settings()
+        CLIConsole.say(try render(document, isJSON: options.isJSON, text: { SettingsReport.text($0) }))
+        return 0
     }
 
     private static func historyAction(
@@ -104,7 +121,7 @@ public enum CLIRunner {
         case .clear(let keepingPinned):
             return CLIOutcome.report(
                 try await proxy.clear(keepingPinned: keepingPinned), whenSilent: "Cleared.")
-        case .list, .pair, .peers, .doctor, .sync, .unpair, .help:
+        case .list, .pair, .peers, .doctor, .sync, .unpair, .config, .configure, .help:
             return 2
         }
     }
@@ -123,7 +140,7 @@ public enum CLIRunner {
     /// The daemon decides what counts as a problem; this only reports its list.
     private static func doctor(isJSON: Bool, proxy: DaemonProxy) async throws -> Int32 {
         let document = try await proxy.diagnostics()
-        CLIConsole.say(try render(document, isJSON: isJSON, text: { DiagnosticsReport.text($0) }))
+        CLIConsole.say(try render(document, isJSON: isJSON, text: { DoctorReport.text($0) }))
         return document.problems.isEmpty ? 0 : 1
     }
 

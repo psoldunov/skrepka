@@ -33,14 +33,23 @@ static void skrepka_dbus_method_call(GDBusConnection *connection, const gchar *s
 	                      parameters, invocation, exported->data);
 }
 
+// GDBus asserts that a get_property callback which returns NULL has set
+// `error` — `g_assert (error != NULL)` in gdbusconnection.c's Properties.Get
+// path — so a property the Swift handler does not answer would abort the
+// process rather than fail the one call. Answer an error instead.
 static GVariant *skrepka_dbus_get_property(GDBusConnection *connection, const gchar *sender,
                                            const gchar *object_path,
                                            const gchar *interface_name,
                                            const gchar *property_name, GError **error,
                                            gpointer user_data) {
 	SkrepkaDBusExport *exported = user_data;
-	return exported->get_property(connection, sender, object_path, interface_name,
-	                              property_name, error, exported->data);
+	GVariant *value = exported->get_property(connection, sender, object_path, interface_name,
+	                                         property_name, error, exported->data);
+	if (value == NULL && error != NULL && *error == NULL) {
+		g_set_error(error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_PROPERTY,
+		            "No such property: %s", property_name);
+	}
+	return value;
 }
 
 static void skrepka_dbus_export_free(gpointer user_data) {

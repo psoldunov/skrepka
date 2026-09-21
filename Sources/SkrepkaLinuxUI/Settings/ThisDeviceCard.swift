@@ -18,28 +18,34 @@ final class ThisDeviceCard {
     private let pairing: SettingsSwitchRow
 
     init() throws {
-        guard let card = GtkBuild.box(vertical: true, spacing: 0),
-            let nameLabel = GtkBuild.label("…"),
-            let codeLabel = GtkBuild.label("", classes: [SettingsStyle.monospace])
+        guard let nameLabel = SettingsWidgets.value("…"),
+            let codeLabel = SettingsWidgets.value("", isLiteral: true)
         else { throw SettingsError.widgetCreationFailed }
         // Copyable, because half of what this card is for is reading the code
         // out to somebody standing at the other machine, or pasting it.
         GtkBuild.makeCopyable(nameLabel)
         GtkBuild.makeCopyable(codeLabel)
 
-        let name = try SettingsRow(title: "Name", subtitle: nil)
+        let name = try SettingsRow(title: "Name", subtitle: nil, icon: ["computer-symbolic"])
         name.addTrailing(nameLabel)
         let code = try SettingsRow(
-            title: "This device's code", subtitle: "Shown on the other machine when you pair.")
+            title: "This device's code",
+            subtitle: "Shown on the other machine when you pair.",
+            icon: ["channel-secure-symbolic", "security-high-symbolic"])
         code.addTrailing(codeLabel)
-        let pairing = try SettingsSwitchRow(title: "Allow new devices to pair")
-
+        let pairing = try SettingsSwitchRow(
+            title: "Allow new devices to pair", icon: ["list-add-symbolic", "contact-new-symbolic"])
+        let card = try SettingsCard(
+            title: "This device",
+            footer: """
+                Skrepka shares history with devices you pair with, over the local \
+                network only. Nothing is sent to a server.
+                """)
         for row in [name.widget, code.widget, pairing.row.widget] {
-            GtkBuild.append(row, to: card)
+            card.add(row)
         }
-        guard let frame = GtkBuild.frame(around: card) else { throw SettingsError.widgetCreationFailed }
 
-        self.widget = frame
+        self.widget = card.widget
         self.nameLabel = nameLabel
         self.codeLabel = codeLabel
         self.pairing = pairing

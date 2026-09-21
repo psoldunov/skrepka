@@ -62,6 +62,61 @@ public enum PaletteMetrics {
         return max(minimumHeight, min(maximumHeight, share))
     }
 
+    /// How far down the output the panel's top edge hangs, in percent of the
+    /// output's height — `PickerPlacement.topInsetFraction` on macOS, as an
+    /// integer so the Deck's 800 pixels give exactly 144 rather than whatever
+    /// `0.18` rounds to in binary.
+    public static let topInsetPercent: Int32 = 18
+
+    /// Where a panel that wants `wantedHeight` goes on an output
+    /// `outputWidth` × `outputHeight`, both in logical pixels.
+    ///
+    /// The macOS placement: centred across, and hung from a fixed top edge
+    /// rather than centred down. A query that narrows the list shortens the
+    /// panel from the bottom, so the search field — at the top — never moves
+    /// under the caret. The top rises only where even the tallest panel this
+    /// output allows would otherwise run off the bottom.
+    ///
+    /// - Parameters:
+    ///   - outputWidth: 0 when the output is not known yet, like
+    ///     `outputHeight` in ``ceiling(outputHeight:)``.
+    public static func frame(wantedHeight: Int32, outputWidth: Int32, outputHeight: Int32) -> PaletteFrame {
+        let tallest = ceiling(outputHeight: outputHeight)
+        let preferredTop = outputHeight * topInsetPercent / 100
+        let top = max(0, min(preferredTop, outputHeight - tallest))
+        let panelWidth = outputWidth > 0 ? min(width, outputWidth) : width
+        return PaletteFrame(
+            x: max(0, (outputWidth - panelWidth) / 2),
+            y: top,
+            width: panelWidth,
+            height: min(max(wantedHeight, minimumHeight), tallest)
+        )
+    }
+
+    /// `frame`, grown to the smallest size the panel can be drawn at and kept on
+    /// the output.
+    ///
+    /// GTK warns about, and clips, a widget given less than it measured, which
+    /// a narrow or portrait output can do to the fixed width and a short one to
+    /// the height cap. A panel that has to grow past the cap moves up rather
+    /// than off the bottom.
+    public static func fit(
+        _ frame: PaletteFrame,
+        minimumWidth: Int32,
+        minimumHeight: Int32,
+        outputWidth: Int32,
+        outputHeight: Int32
+    ) -> PaletteFrame {
+        let width = max(frame.width, minimumWidth)
+        let height = max(frame.height, minimumHeight)
+        return PaletteFrame(
+            x: outputWidth > width ? (outputWidth - width) / 2 : 0,
+            y: outputHeight > 0 ? max(0, min(frame.y, outputHeight - height)) : frame.y,
+            width: width,
+            height: height
+        )
+    }
+
     /// Matches `PickerMetrics.rowHeight(for:)`.
     static func rowHeight(for item: ClipSummary) -> Int32 {
         guard !item.isConcealed else { return standardRowHeight }

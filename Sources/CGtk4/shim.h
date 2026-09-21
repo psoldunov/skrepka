@@ -83,19 +83,7 @@ static inline GtkSpinner *skrepka_as_spinner(GtkWidget *widget) {
 
 // MARK: - Style
 
-/// Adds `css` to every widget on the default display, above the theme.
-///
-/// In C because `GTK_STYLE_PROVIDER()` is a macro, and so the provider's one
-/// reference can be dropped here once the display holds its own.
-static inline void skrepka_install_css(const char *css) {
-	GdkDisplay *display = gdk_display_get_default();
-	if (display == NULL) { return; }
-	GtkCssProvider *provider = gtk_css_provider_new();
-	gtk_css_provider_load_from_string(provider, css);
-	gtk_style_context_add_provider_for_display(display, GTK_STYLE_PROVIDER(provider),
-	                                           GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-	g_object_unref(provider);
-}
+// Stylesheets are installed through `skrepka_css_load`, in style.h.
 
 /// Whether focusing a selectable label selects all of its text — GTK's
 /// `gtk-label-select-on-focus` setting, for this process's default display.
@@ -259,6 +247,8 @@ static inline unsigned long skrepka_connect(gpointer instance, const char *signa
 //   app.h      the app shell: printing to the terminal that invoked it
 //   gdbus.h    GDBus: the tray's StatusNotifierItem and menu, and the portals
 //   picker.h   the picker window: X11 placement and the keyboard grab
+//   style.h    stylesheets, and the Settings window's drop-downs and alerts
 #include "app.h"
 #include "gdbus.h"
 #include "picker.h"
+#include "style.h"

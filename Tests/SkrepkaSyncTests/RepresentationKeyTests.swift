@@ -17,7 +17,9 @@ struct RepresentationKeyTests {
 
     @Test("Every Linux target round-trips through its canonical media type")
     func linuxTargetRoundTripsThroughCanonical() throws {
-        for entry in RepresentationKeyMap.entries {
+        // A row with no Linux target at all — the file bundle — is one no
+        // clipboard carries, and has no primary target to agree with.
+        for entry in RepresentationKeyMap.entries where !entry.linuxTargets.isEmpty {
             for target in entry.linuxTargets {
                 #expect(RepresentationKeyMap.canonical(forLinuxTarget: target) == entry.canonical)
             }

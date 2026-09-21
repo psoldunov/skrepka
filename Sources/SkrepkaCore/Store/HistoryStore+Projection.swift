@@ -55,6 +55,10 @@
                     removals: removals
                 )
             )
+            // Every path that removes a row — deletion, clearing, eviction, a
+            // peer's tombstone, a relay — publishes it through here, so this is
+            // the one place a removed row's files can be sure to go with it.
+            if !removals.isEmpty { sweepFileCache() }
         }
 
         /// Rebuilds the list from the store.

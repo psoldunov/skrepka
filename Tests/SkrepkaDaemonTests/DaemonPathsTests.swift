@@ -82,4 +82,19 @@ struct DaemonPathsTests {
             options.deviceKeyURL(environment: ["XDG_DATA_HOME": "/data"]).path
                 == "/tmp/elsewhere/device.key")
     }
+
+    /// `--config` wins; `--data-dir` alone keeps the settings with the data it
+    /// names, as another instance would; neither is the XDG default.
+    @Test("the settings file: --config, else --data-dir, else XDG")
+    func settingsFileLocation() {
+        let environment = ["XDG_CONFIG_HOME": "/cfg"]
+        var options = DaemonOptions()
+        #expect(options.settingsURL(environment: environment).path == "/cfg/skrepka/config.json")
+
+        options.dataDirectory = URL(filePath: "/tmp/elsewhere", directoryHint: .isDirectory)
+        #expect(options.settingsURL(environment: environment).path == "/tmp/elsewhere/config.json")
+
+        options.configURL = URL(filePath: "/tmp/explicit.json", directoryHint: .notDirectory)
+        #expect(options.settingsURL(environment: environment).path == "/tmp/explicit.json")
+    }
 }

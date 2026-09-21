@@ -32,6 +32,11 @@ final class AppShell {
             controller?.quit()
             controller = nil
             return 0
+        case .success(.status):
+            // Answered without building a controller: a status check must not
+            // be what starts the tray it reports on.
+            reply(controller?.statusReport() ?? "skrepka-gui is not running.\n", false)
+            return controller == nil ? 1 : 0
         case .success(let command):
             running().perform(command)
             return 0
@@ -114,7 +119,8 @@ enum AppShellError: Error, CustomStringConvertible {
     var description: String {
         """
         skrepka-gui could not open a display. Run it from a desktop session — your \
-        history is also available from the skrepka command.
+        history is also available from the skrepka command. Over ssh, point it at \
+        the desktop's display first, e.g. WAYLAND_DISPLAY=wayland-0 skrepka-gui --status.
         """
     }
 }
