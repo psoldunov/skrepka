@@ -20,11 +20,15 @@ final class FakePickerDaemon: PickerDaemon, Sendable {
         HistoryDocument(clips: rows, total: rows.count)
     }
 
+    /// The daemon's `Search` semantics, so the demo's footer count and empty
+    /// state behave as the real picker's: a blank query is the whole history,
+    /// `total` counts the matches, and a non-zero `limit` trims them.
     func search(_ query: String, limit: UInt32) async throws -> HistoryDocument {
-        guard !query.isEmpty else { return HistoryDocument(clips: rows, total: rows.count) }
-        let needle = query.lowercased()
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return HistoryDocument(clips: rows, total: rows.count) }
         let matches = rows.filter { $0.preview.lowercased().contains(needle) }
-        return HistoryDocument(clips: matches, total: rows.count)
+        let clips = limit == 0 ? matches : Array(matches.prefix(Int(limit)))
+        return HistoryDocument(clips: clips, total: matches.count)
     }
 
     func copy(_ selector: ClipSelector, style: CopyStyle) async throws -> ActionDocument {

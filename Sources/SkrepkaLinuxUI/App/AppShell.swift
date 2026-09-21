@@ -48,6 +48,16 @@ final class AppShell {
         if let controller { return controller }
         let started = AppController(application: application)
         controller = started
+        // The tray's Quit reaches the controller directly, not through
+        // `--quit`, and a quit that waits for a Settings window to wind up
+        // leaves the app running for a moment. A command arriving then must
+        // build a fresh controller — with its own hold and event watch — rather
+        // than reuse one that has given both up. Identity-checked, so a late
+        // callback from an old controller never drops its replacement.
+        started.onQuit = { [weak self, weak started] in
+            guard let self, let started, self.controller === started else { return }
+            self.controller = nil
+        }
         started.start()
         return started
     }

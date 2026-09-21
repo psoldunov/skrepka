@@ -250,8 +250,10 @@ affected 0.2.0: the Settings window and a second `skrepka` command timed out.
 - the tray against a fake StatusNotifierWatcher on a private session bus;
 - the global-shortcut exchange against a fake portal: `CreateSession`,
   `BindShortcuts` and the `Activated` signal;
-- the daemon's `BusReplyConnection` fix, under a private bus in
-  `Tests/SkrepkaDaemonTests/DaemonBusReplyTests.swift`;
+- the daemon's `BusReplyConnection` fix, as a seam test in
+  `Tests/SkrepkaDaemonTests/BusReplyConnectionTests.swift`, and against the
+  built daemon on a private session bus — three `busctl` calls and repeated
+  `skrepka list` all answered;
 - the pure halves — the options, the key map, the row text, the picker model,
   the tray menu and properties, the appearance parser — in
   `Tests/SkrepkaLinuxUITests/`.

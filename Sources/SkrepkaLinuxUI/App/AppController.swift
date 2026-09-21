@@ -33,6 +33,9 @@ final class AppController {
     /// The activation token the tray last handed over, spent on the next
     /// window it opens — how KWin on Wayland lets that window take focus.
     var activationToken: String?
+    /// Called at the end of ``quit()``, once this controller has given up its
+    /// hold. The shell drops it, so the next command builds a fresh one.
+    var onQuit: (() -> Void)?
 
     init(application: UnsafeMutablePointer<GtkApplication>) {
         self.application = application
@@ -103,6 +106,7 @@ final class AppController {
         if !settings.isWindingUp {
             g_application_quit(skrepka_as_application(application))
         }
+        onQuit?()
     }
 
     // MARK: - Windows
