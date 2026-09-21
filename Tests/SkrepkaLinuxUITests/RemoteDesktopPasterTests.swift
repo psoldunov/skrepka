@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import SkrepkaLinuxUI
@@ -44,6 +45,40 @@ struct RemoteDesktopPasterTests {
         #expect(failure.description != PasteFailure.consentRefused.description)
         paster.paste { results.append($0) }
         #expect(portal.methods.last == "CreateSession")
+    }
+
+    @Test("a first grant waits for focus before injecting")
+    func firstGrantWaitsBeforeInjecting() {
+        let portal = FakeRemoteDesktopPortal()
+        let paster = RemoteDesktopPaster(
+            connection: { nil }, requester: portal.request, injector: portal.inject)
+
+        paster.paste { _ in }
+        portal.succeedCreation()
+        portal.respond(code: 0)
+        portal.succeedStart()
+
+        #expect(portal.injectedSessions.isEmpty)
+        paster.injectPending(session: "/session/skrepka", closeAfter: false)
+        #expect(portal.injectedSessions == ["/session/skrepka"])
+    }
+
+    @Test("a token-restored grant injects without waiting")
+    func restoredGrantInjectsImmediately() throws {
+        let stateDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let tokenStore = RestoreTokenStore(environment: ["XDG_STATE_HOME": stateDirectory.path])
+        try tokenStore.save("saved-token")
+        let portal = FakeRemoteDesktopPortal()
+        let paster = RemoteDesktopPaster(
+            connection: { nil }, tokenStore: tokenStore, requester: portal.request, injector: portal.inject)
+
+        paster.paste { _ in }
+        portal.succeedCreation()
+        portal.respond(code: 0)
+        portal.succeedStart()
+
+        #expect(portal.injectedSessions == ["/session/skrepka"])
+        try FileManager.default.removeItem(at: stateDirectory)
     }
 
     @Test("a portal Closed signal invalidates the cached session")
@@ -104,6 +139,7 @@ struct RemoteDesktopPasterTests {
         portal.succeedCreation()
         portal.respond(code: 0)
         portal.succeedStart()
+        paster.injectPending(session: "/session/skrepka", closeAfter: false)
 
         #expect(portal.injectedSessions == ["/session/skrepka"])
         #expect(second?.isSuccess == true)

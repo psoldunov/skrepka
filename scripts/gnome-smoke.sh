@@ -275,10 +275,6 @@ if [[ ${consent} == yes ]]; then
     skrepka-gnome-input key Tab; sleep 0.5
     skrepka-gnome-input key space
     sleep 1
-    skrepka-gnome-input key Tab; sleep 0.5
-    skrepka-gnome-input key Tab; sleep 0.5
-    skrepka-gnome-input key space
-    sleep 1
     skrepka-gnome-screenshot "${RUN}/shots/6-remote-desktop-consent-enabled.png" >/dev/null
     skrepka-gnome-input key alt+s
 fi

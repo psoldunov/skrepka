@@ -1,4 +1,22 @@
 extension RemoteDesktopPaster {
+    func scheduleInjection(session: String, closeAfter: Bool) {
+        pendingInjectionSession = session
+        pendingInjectionTimer = LoopTimer(milliseconds: Self.firstGrantInjectionDelay) { [weak self] in
+            self?.injectPending(session: session, closeAfter: closeAfter)
+        }
+    }
+
+    func injectPending(session: String, closeAfter: Bool) {
+        guard pendingInjectionSession == session else { return }
+        pendingInjectionTimer = nil
+        pendingInjectionSession = nil
+        guard let completion = takePending() else {
+            if closeAfter { close(session) }
+            return
+        }
+        inject(session: session, closeAfter: closeAfter, completion: completion)
+    }
+
     func inject(session: String, closeAfter: Bool, completion: @escaping Completion) {
         let finished: Completion = { [weak self] result in
             guard let self else { return }

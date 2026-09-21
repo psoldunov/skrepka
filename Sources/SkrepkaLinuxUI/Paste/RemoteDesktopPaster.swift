@@ -7,6 +7,8 @@ final class RemoteDesktopPaster {
     typealias Closer = (String) -> Void
 
     static let interface = "org.freedesktop.portal.RemoteDesktop"
+    /// Lets focus return to the target after GNOME dismisses its consent dialog.
+    static let firstGrantInjectionDelay: UInt32 = 500
     let connection: () -> DBusConnection?
     let tokenStore: RestoreTokenStore
     let requester: Requester?
@@ -17,6 +19,8 @@ final class RemoteDesktopPaster {
     var sessionClosed: DBusSignalSubscription?
     var closeTimer: LoopTimer?
     var pendingCloseSession: String?
+    var pendingInjectionTimer: LoopTimer?
+    var pendingInjectionSession: String?
 
     private var pending: Completion?
     private var isStarting = false
@@ -43,10 +47,11 @@ final class RemoteDesktopPaster {
             return
         }
         if let session {
+            cancelPendingPaste()
             inject(session: session, closeAfter: false, completion: completion)
             return
         }
-        pending?(.failure(PasteFailure.superseded))
+        cancelPendingPaste()
         pending = completion
         guard !isStarting else { return }
         isStarting = true
@@ -58,9 +63,8 @@ final class RemoteDesktopPaster {
     func setAutomaticPasteEnabled(_ enabled: Bool) {
         if enabled, !isAutomaticPasteEnabled { refusedThisRun = false }
         isAutomaticPasteEnabled = enabled
-        guard !enabled, let pending else { return }
-        self.pending = nil
-        pending(.failure(PasteFailure.superseded))
+        guard !enabled else { return }
+        cancelPendingPaste()
     }
 
     private func createSession() {
@@ -81,12 +85,13 @@ final class RemoteDesktopPaster {
     }
 
     private func selectDevices(session: String) {
+        let restoreToken = tokenStore.load()
         request(
             method: "SelectDevices",
             values: [
                 .objectPath(session),
                 RemoteDesktopPortalPayload.selectOptions(
-                    request: token("request"), restoreToken: tokenStore.load()),
+                    request: token("request"), restoreToken: restoreToken),
             ]
         ) { [weak self] result in
             guard let self else { return }
@@ -94,11 +99,11 @@ final class RemoteDesktopPaster {
                 self.close(session)
                 return self.fail("SelectDevices", result)
             }
-            self.start(session: session)
+            self.start(session: session, usedRestoreToken: restoreToken != nil)
         }
     }
 
-    private func start(session: String) {
+    private func start(session: String, usedRestoreToken: Bool) {
         request(
             method: "Start",
             values: [
@@ -113,11 +118,15 @@ final class RemoteDesktopPaster {
                 self.close(session)
                 return self.fail("Start", result)
             }
-            self.started(session: session, restoreToken: start.restoreToken)
+            self.started(
+                session: session,
+                restoreToken: start.restoreToken,
+                needsFocusDelay: !usedRestoreToken
+            )
         }
     }
 
-    private func started(session: String, restoreToken: String?) {
+    private func started(session: String, restoreToken: String?, needsFocusDelay: Bool) {
         isStarting = false
         if let restoreToken {
             do {
@@ -130,11 +139,16 @@ final class RemoteDesktopPaster {
             subscribeToSessionClosed(session)
         }
         AppLog.note("paste: RemoteDesktop session granted keyboard input")
-        guard let completion = takePending() else {
-            if restoreToken != nil { close(session) }
+        let closeAfter = restoreToken != nil
+        guard pending != nil else {
+            if closeAfter { close(session) }
             return
         }
-        inject(session: session, closeAfter: restoreToken != nil, completion: completion)
+        if needsFocusDelay {
+            scheduleInjection(session: session, closeAfter: closeAfter)
+        } else if let completion = takePending() {
+            inject(session: session, closeAfter: closeAfter, completion: completion)
+        }
     }
 
     private func fail(_ step: String, _ result: Result<PortalResponse, DBusError>) {
@@ -149,9 +163,18 @@ final class RemoteDesktopPaster {
         takePending()?(.failure(error))
     }
 
-    private func takePending() -> Completion? {
+    func takePending() -> Completion? {
         defer { pending = nil }
         return pending
+    }
+
+    private func cancelPendingPaste() {
+        pendingInjectionTimer?.cancel()
+        pendingInjectionTimer = nil
+        let delayedSession = pendingInjectionSession
+        pendingInjectionSession = nil
+        takePending()?(.failure(PasteFailure.superseded))
+        if let delayedSession, delayedSession != session { close(delayedSession) }
     }
 
     private func token(_ prefix: String) -> String {
