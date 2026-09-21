@@ -93,6 +93,13 @@ after its first answer, which left 0.2.0's Settings window and every later
 
 ### Fixed
 
+- **Universal Clipboard relays are no longer recorded as new copies.** A file or
+  screenshot copied on one Mac no longer appears again when Universal Clipboard
+  stages it on another Mac, and Sync no longer carries that relay back to the
+  sender. The first sync startup also removes relays earlier builds left in
+  history; peers discard and tombstone relays sent by older builds.
+- **The picker returns to the top after it closes.** Reopening it no longer starts
+  at the previous scroll position and then jumps while it resets the rows.
 - **`skrepkad` answered one D-Bus call and then none.** The D-Bus library's send
   waits for a reply to every message it writes, including the method return the
   daemon sends back. That wait sat inside the connection's read loop, so the loop
