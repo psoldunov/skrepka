@@ -10,7 +10,7 @@ Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path on a Mac. On Linux, re-running `install.sh`
 is.
 
-## Unreleased
+## [0.2.1](https://github.com/psoldunov/skrepka/releases/tag/v0.2.1) — 2026-09-21
 
 Linux gets a desktop app: a tray icon, the clipboard picker on a global
 shortcut, and Settings, in one program. It also fixes the daemon going deaf

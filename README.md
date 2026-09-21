@@ -83,7 +83,7 @@ command, through a D-Bus activation file the installer adds. Quitting the app
 leaves the daemon recording. `skrepka pin`, `unpin`, `delete`, `clear` and
 `copy --plain` do from a terminal what the picker does.
 
-- `bash -s -- --version v0.2.0` after the pipe pins a release.
+- `bash -s -- --version v0.2.1` after the pipe pins a release.
 - `bash -s -- --uninstall` removes everything except your history and this
   device's sync identity.
 - The app needs GTK 4.12 or newer from the host.

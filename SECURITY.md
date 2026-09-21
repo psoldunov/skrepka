@@ -8,7 +8,7 @@ what is in scope rather than leaving you to guess.
 
 | Version | Supported |
 | --- | --- |
-| Latest release ([0.2.0](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
+| Latest release ([0.2.1](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
 | Any earlier release | ❌ |
 | `master` | Best effort — fixes land here first |
 

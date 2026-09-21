@@ -112,7 +112,7 @@ needs no toolchain, only `curl`:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
-curl -fsSL <same url> | bash -s -- --version v0.2.0   a specific release
+curl -fsSL <same url> | bash -s -- --version v0.2.1   a specific release
 curl -fsSL <same url> | bash -s -- --uninstall        stop, disable, and remove
 ./install.sh                     inside an untarred release: install that one
 ./install.sh --tarball FILE      a release tarball already on disk
