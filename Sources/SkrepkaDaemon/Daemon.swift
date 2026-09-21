@@ -84,6 +84,15 @@ public actor Daemon {
     let settingsFile: DaemonSettingsFile
     var settings: DaemonSettings
 
+    /// The file-size limit every sync runtime this daemon builds reads, kept
+    /// in step with ``settings`` — see `SkrepkaSync.FileSyncLimit`. One for the
+    /// process, so a sync restart does not reset it.
+    let fileSync: FileSyncPolicy
+
+    /// Where fetches report their progress, for the `TransfersChanged` signal.
+    /// One for the process, so the signal pump outlives a sync restart.
+    let transfers = TransferMonitor()
+
     /// How long this daemon waits for an answer to a pairing proposal.
     ///
     /// A stored property rather than the static alone so a test can prove the
@@ -218,6 +227,7 @@ public actor Daemon {
             ? DeviceName.current(environment: environment) : options.displayName
         settingsFile = DaemonSettingsFile(url: options.settingsURL(environment: environment))
         settings = settingsFile.load(logger: logger)
+        fileSync = FileSyncPolicy(maximumBytes: settings.fileSync.maximumBytes)
         store = try SQLiteHistoryStore(
             location: options.storeURL(environment: environment),
             retention: settings.retentionPolicy
@@ -233,68 +243,4 @@ public actor Daemon {
     /// `nonisolated` because it is an immutable `let` to an actor: reaching it
     /// costs no hop, and every method on it is isolated in its own right.
     public nonisolated var historyStore: SQLiteHistoryStore { store }
-
-    // MARK: - Serialising the lifecycle
-
-    /// Runs `work` after everything already queued, and returns a handle to it.
-    ///
-    /// The daemon's own `enqueueLifecycle`. Bring-up, tear-down, opening the
-    /// pairing window and restarting a listener all mutate the same half-dozen
-    /// properties across several awaits, and an actor guarantees only that one
-    /// of them runs at a time between suspension points — not that one finishes
-    /// before the next begins.
-    ///
-    /// **Anything already inside queued work calls the `perform…` half
-    /// directly.** Awaiting this from within it waits for itself.
-    @discardableResult
-    func enqueue(_ work: @escaping @Sendable (Daemon) async -> Void) -> Task<Void, Never> {
-        let previous = lifecycleTail
-        let task = Task { [weak self] in
-            await previous?.value
-            guard let self else { return }
-            await work(self)
-        }
-        lifecycleTail = task
-        return task
-    }
-
-    /// ``enqueue(_:)`` for work that answers with something, or throws.
-    ///
-    /// The queue itself stays `Task<Void, Never>`: it exists to order the
-    /// lifecycle, and whether one piece of that work failed is the business of
-    /// whoever awaits the returned handle, not of the piece queued behind it.
-    ///
-    /// A separate name rather than an overload of ``enqueue(_:)``: the two
-    /// closure types differ only in `throws` and a return, which is exactly the
-    /// shape that makes an existing `enqueue { await $0.performStop() }` a
-    /// coin-toss for the type checker.
-    func enqueueAnswering<Answer: Sendable>(
-        _ work: @escaping @Sendable (Daemon) async throws -> Answer
-    ) -> Task<Answer, any Error> {
-        let previous = lifecycleTail
-        let task = Task { [weak self] in
-            await previous?.value
-            guard let self else { throw CancellationError() }
-            return try await work(self)
-        }
-        // `try?` rather than a handled error: the tail's only job is to make
-        // the next piece of queued work start after this one has finished, and
-        // the error is delivered — unswallowed — to the caller awaiting `task`.
-        lifecycleTail = Task { _ = try? await task.value }
-        return task
-    }
-}
-
-/// What one paired peer's link is doing, for the peer list.
-struct PeerProgress: Sendable, Hashable {
-    var state = "idle"
-    var name: String?
-    var platform: PeerPlatform = .unknown
-    var lastSyncedAt: Date?
-}
-
-/// A peer seen on the network, with the record it advertised.
-struct Sighting: Sendable {
-    let peer: DiscoveredPeer
-    let advertisement: PeerAdvertisement
 }

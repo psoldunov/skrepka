@@ -1,4 +1,5 @@
 import Foundation
+import SkrepkaLinuxPlatform
 
 // `skrepka-gui --status`: the parts of the app that can fail without anything
 // on screen saying so, as the running instance sees them. Printed in the
@@ -14,6 +15,7 @@ extension AppController {
             "picker:   \(pickerSummary)",
             "tray:     \(tray?.statusSummary ?? "could not be created — see the journal")",
             "shortcut: \(shortcuts.state.summary)",
+            "paste:    \(paste.mechanism.summary)",
             "app ID:   \(shortcuts.registration)",
             "daemon:   \(daemonProblem ?? "no problem reported")",
         ]

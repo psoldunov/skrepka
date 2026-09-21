@@ -9,10 +9,15 @@ final class GeneralPane {
         get { launch.onToggle }
         set { launch.onToggle = newValue }
     }
+    var onPasteAutomatically: ((Bool) -> Void)? {
+        get { paste.onToggle }
+        set { paste.onToggle = newValue }
+    }
 
     let page: SettingsPage
     private let shortcutRow: SettingsRow
     private let keys: KeycapRow
+    private let paste: SettingsSwitchRow
     private let launch: SettingsSwitchRow
 
     init() throws {
@@ -27,11 +32,10 @@ final class GeneralPane {
         shortcut.add(shortcutRow.widget)
 
         let pasting = try SettingsCard(title: "Pasting", footer: GeneralPaneState.pastingFooter)
-        let pasteRow = try SettingsRow(
-            title: GeneralPaneState.pastingTitle,
-            subtitle: GeneralPaneState.pastingSubtitle,
+        let paste = try SettingsSwitchRow(
+            title: "Paste automatically",
             icon: ["edit-paste-symbolic", "edit-copy-symbolic"])
-        pasting.add(pasteRow.widget)
+        pasting.add(paste.row.widget)
 
         let startup = try SettingsCard(title: "Startup")
         let launch = try SettingsSwitchRow(
@@ -44,12 +48,18 @@ final class GeneralPane {
         self.page = page
         self.shortcutRow = shortcutRow
         self.keys = keys
+        self.paste = paste
         self.launch = launch
     }
 
     func render(_ state: GeneralPaneState) {
         keys.render(keys: state.shortcutKeys, fallback: state.shortcutValue)
         shortcutRow.setSubtitle(state.shortcutSubtitle)
+        paste.render(
+            isOn: state.pasteAutomatically,
+            isEnabled: state.isPasteEditable,
+            subtitle: state.pasteSubtitle
+        )
         launch.render(isOn: state.launchAtLogin, isEnabled: true, subtitle: state.launchSubtitle)
     }
 }

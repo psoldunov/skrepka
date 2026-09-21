@@ -1,3 +1,4 @@
+import SkrepkaCore
 import SkrepkaSync
 import SwiftUI
 
@@ -46,6 +47,8 @@ struct SyncSettingsView: View {
             if sync.isEnabled {
                 SettingsRowSeparator()
                 pairingWindowRow
+                SettingsRowSeparator()
+                fileLimitRow
                 if let deviceID = sync.localDeviceID {
                     SettingsRowSeparator()
                     SettingsRow(
@@ -97,6 +100,37 @@ struct SyncSettingsView: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .accessibilityLabel("Allow new devices to pair")
+        }
+    }
+
+    /// How large a copy of files may be and still sync its contents.
+    ///
+    /// Both directions at once: a larger copy made here is not sent, and a
+    /// larger one a peer offers is not fetched — either way it arrives as the
+    /// files' names, which the subtitle says so nobody is surprised.
+    private var fileLimitRow: some View {
+        let current = sync.preferences.maximumFileSyncBytes
+        return SettingsRow(
+            title: "Sync files up to",
+            subtitle: "Larger copies of files reach other devices as their names.",
+            symbol: "doc.on.doc"
+        ) {
+            Picker(
+                "",
+                selection: Binding(
+                    get: { sync.preferences.maximumFileSyncBytes },
+                    // Called directly, like the switches above: the coordinator
+                    // orders the hand-off to sync itself.
+                    set: { sync.setFileSyncLimit($0) }
+                )
+            ) {
+                ForEach(FileSyncLimitLabel.choices(including: current), id: \.self) { choice in
+                    Text(FileSyncLimitLabel.text(for: choice)).tag(choice)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel("Sync files up to")
         }
     }
 

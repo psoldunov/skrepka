@@ -344,7 +344,12 @@ let package = Package(
             // expands only for `--static`, so the CX11 target contributes
             // -lXfixes and nothing else. Without this every Xlib symbol is an
             // undefined reference at link time.
-            linkerSettings: [.linkedLibrary("X11")]
+            linkerSettings: [
+                .linkedLibrary("X11"),
+                // XTest stays optional at runtime; libdl is enough to discover
+                // libXtst.so.6 without making it a launch-time dependency.
+                .linkedLibrary("dl"),
+            ]
         ),
         // The headless proof. Logs every clipboard change and can write a
         // selection back, with no GUI and no history store — the Linux
@@ -377,7 +382,9 @@ let package = Package(
         // `Sources/CGtk4/picker.h`. All four are on any machine that has GTK 4.
         .target(
             name: "SkrepkaLinuxUI",
-            dependencies: ["SkrepkaCore", "SkrepkaIPC", "CGtk4"],
+            dependencies: [
+                "SkrepkaCore", "SkrepkaIPC", "SkrepkaLinuxPlatform", "CGtk4",
+            ],
             swiftSettings: sharedSwiftSettings,
             linkerSettings: [
                 .linkedLibrary("gtk-4"),

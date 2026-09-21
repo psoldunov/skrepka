@@ -27,14 +27,16 @@ extension Daemon {
             return HistoryDocument(clips: [], total: 0)
         }
         let local = await localDeviceHex(ifAnyOf: listing)
-        let clips = listing.map { Self.clipDocument($0, localDeviceHex: local) }
+        let fileLimit = settings.fileSync.maximumBytes
+        let clips = listing.map { Self.clipDocument($0, localDeviceHex: local, fileLimit: fileLimit) }
         let limited = limit == 0 ? clips : Array(clips.prefix(Int(limit)))
         return HistoryDocument(clips: limited, total: clips.count)
     }
 
     static func clipDocument(
         _ listing: SQLiteHistoryStore.ClipListing,
-        localDeviceHex: String? = nil
+        localDeviceHex: String? = nil,
+        fileLimit: Int = FileSyncLimit.ceiling
     ) -> ClipDocument {
         let summary = listing.summary
         return ClipDocument(
@@ -64,7 +66,7 @@ extension Daemon {
             fileCount: summary.fileCount > 0 ? summary.fileCount : nil,
             isConcealed: summary.isConcealed,
             hasPreview: !summary.isConcealed && Self.hasPicture(listing),
-            filesStatus: Self.filesStatus(listing, localDeviceHex: localDeviceHex)
+            filesStatus: Self.filesStatus(listing, localDeviceHex: localDeviceHex, fileLimit: fileLimit)
         )
     }
 
@@ -80,17 +82,24 @@ extension Daemon {
 
     /// Whether a file row from another device brought its files, as the
     /// document spells it. Nil for anything else.
-    static func filesStatus(_ listing: SQLiteHistoryStore.ClipListing, localDeviceHex: String?) -> String? {
+    static func filesStatus(
+        _ listing: SQLiteHistoryStore.ClipListing,
+        localDeviceHex: String?,
+        fileLimit: Int = FileSyncLimit.ceiling
+    ) -> String? {
         let status = SyncedFilesStatus.of(
             kind: listing.summary.kind,
             isForeign: isForeign(origin: listing.originDeviceID, local: localDeviceHex),
             offeredTypes: Set(listing.representationTypes),
-            heldTypes: Set(listing.localRepresentationTypes)
+            heldTypes: Set(listing.localRepresentationTypes),
+            offeredBundleBytes: listing.fileBundleBytes,
+            fileLimit: fileLimit
         )
         return switch status {
         case .synced: ClipDocument.FilesStatusName.synced
         case .pending: ClipDocument.FilesStatusName.pending
         case .notSynced: ClipDocument.FilesStatusName.notSynced
+        case .overLimit: ClipDocument.FilesStatusName.overLimit
         case nil: nil
         }
     }

@@ -31,8 +31,13 @@ public enum SyncCapability {
 public struct CapabilityFilter: Sendable, Hashable {
     public let capabilities: Set<String>
 
-    public init(capabilities: some Sequence<String>) {
+    /// The largest bundle this device will send — its own
+    /// ``FileSyncLimit`` — whatever the peer accepts.
+    public let fileByteLimit: Int
+
+    public init(capabilities: some Sequence<String>, fileByteLimit: Int = FileSyncLimit.ceiling) {
         self.capabilities = Set(capabilities)
+        self.fileByteLimit = fileByteLimit
     }
 
     /// Advertises nothing, so everything optional is withheld.
@@ -40,13 +45,23 @@ public struct CapabilityFilter: Sendable, Hashable {
 
     public var acceptsFiles: Bool { capabilities.contains(SyncCapability.files) }
 
+    /// This filter, also withholding every bundle over `bytes`.
+    ///
+    /// Applied where history leaves this device rather than only where a copy
+    /// is read, because the limit can be lowered after a bundle was captured:
+    /// "files over 5 MB do not sync" has to hold for the 20 MB copy recorded
+    /// yesterday as well as for the next one.
+    public func limitingFiles(to bytes: Int) -> CapabilityFilter {
+        CapabilityFilter(capabilities: capabilities, fileByteLimit: bytes)
+    }
+
     /// `meta` with every representation this peer may not be offered removed.
     ///
     /// Only the descriptor list changes. `contentHash` is over the content the
     /// item was copied as, not over the list of forms it is offered in, so the
     /// same item described with and without a bundle is still one item.
     public func meta(_ meta: SyncClipMeta) -> SyncClipMeta {
-        guard !acceptsFiles, meta.representations.contains(where: Self.isBundle) else { return meta }
+        guard meta.representations.contains(where: isWithheld) else { return meta }
         return SyncClipMeta(
             contentHash: meta.contentHash,
             kind: meta.kind,
@@ -58,22 +73,32 @@ public struct CapabilityFilter: Sendable, Hashable {
             imageHeight: meta.imageHeight,
             sourceBundleID: meta.sourceBundleID,
             originDeviceID: meta.originDeviceID,
-            representations: meta.representations.filter { !Self.isBundle($0) }
+            representations: meta.representations.filter { !isWithheld($0) }
         )
     }
 
     public func items(_ items: [SyncClipMeta]) -> [SyncClipMeta] {
-        acceptsFiles ? items : items.map(meta)
+        items.map(meta)
     }
 
     /// Payload bytes with the same representations removed as ``meta(_:)``
     /// removes from the descriptor list.
     public func payloads(_ payloads: [RepresentationKey: Data]) -> [RepresentationKey: Data] {
-        guard !acceptsFiles else { return payloads }
-        return payloads.filter { $0.key.canonical != FileBundle.canonicalKey }
+        payloads.filter { key, bytes in offers(key, byteCount: bytes.count) }
     }
 
-    private static func isBundle(_ descriptor: RepresentationDescriptor) -> Bool {
-        descriptor.key.canonical == FileBundle.canonicalKey
+    /// Whether `byteCount` bytes under `key` may go to this peer — the same
+    /// rule ``meta(_:)`` applies to a descriptor, for a responder asked for
+    /// bytes it never listed.
+    public func offers(_ key: RepresentationKey, byteCount: Int) -> Bool {
+        key.canonical != FileBundle.canonicalKey || admitsBundle(of: byteCount)
+    }
+
+    private func isWithheld(_ descriptor: RepresentationDescriptor) -> Bool {
+        !offers(descriptor.key, byteCount: descriptor.byteCount)
+    }
+
+    private func admitsBundle(of byteCount: Int) -> Bool {
+        acceptsFiles && FileSyncLimit.admits(byteCount, under: fileByteLimit)
     }
 }

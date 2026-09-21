@@ -74,6 +74,21 @@
             #expect(store.syncedFilesStatus(for: id) == .synced)
         }
 
+        @Test("A peer's bundle over this Mac's limit says so, and is pending again under a higher one")
+        func peerBundleOverLimit() async throws {
+            let store = try SyncFixtures.makeStore()
+            let bundle = try Self.bundle()
+            let meta = Self.fileMeta(offering: [
+                RepresentationDescriptor(key: FileBundle.key, byteCount: bundle.count)
+            ])
+            try await store.capture(meta, payloads: [:])
+            let id = try #require(store.items.first?.id)
+            #expect(store.syncedFilesStatus(for: id, fileLimit: bundle.count - 1) == .overLimit)
+            #expect(store.syncedFilesStatus(for: id, fileLimit: bundle.count) == .pending)
+            #expect(store.entryID(forContentHash: Self.hash) == id)
+            #expect(store.entryID(forContentHash: String(repeating: "0", count: 64)) == nil)
+        }
+
         @Test("Before sync loads this Mac's identity, a local copy is still local")
         func unknownIdentityFallsBackToFileList() async throws {
             let store = try SyncFixtures.makeStore()

@@ -206,7 +206,9 @@ extension SyncCoordinator {
             ),
             trust: trust,
             store: store,
-            group: group
+            group: group,
+            fileSync: fileSync,
+            transfers: transfers
         )
         self.runtime = runtime
 

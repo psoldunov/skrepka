@@ -22,22 +22,32 @@ public struct SettingsPatch: SkrepkaDocument, Hashable {
     public var maximumAgeDays: Int?
     // swiftlint:disable:next discouraged_optional_boolean
     public var syncEnabled: Bool?  // Three states on purpose: nil leaves sync alone.
+    /// ``SettingsDocument/FileSync/maximumBytes``. Since version 5.
+    public var maximumFileSyncBytes: Int?
+    /// ``SettingsDocument/Paste/isAutomatic``; nil leaves it alone. Since version 5.
+    public var pasteAutomatically: Bool?  // swiftlint:disable:this discouraged_optional_boolean
 
     public init(
         maximumItems: Int? = nil,
         maximumAgeDays: Int? = nil,
         // swiftlint:disable:next discouraged_optional_boolean
         syncEnabled: Bool? = nil,  // Nil means "no change", as for every field here.
+        maximumFileSyncBytes: Int? = nil,
+        // swiftlint:disable:next discouraged_optional_boolean
+        pasteAutomatically: Bool? = nil,  // Nil means "no change".
         version: UInt32 = SkrepkaInterface.version
     ) {
         self.version = version
         self.maximumItems = maximumItems
         self.maximumAgeDays = maximumAgeDays
         self.syncEnabled = syncEnabled
+        self.maximumFileSyncBytes = maximumFileSyncBytes
+        self.pasteAutomatically = pasteAutomatically
     }
 
     /// Whether the patch changes nothing at all.
     public var isEmpty: Bool {
         maximumItems == nil && maximumAgeDays == nil && syncEnabled == nil
+            && maximumFileSyncBytes == nil && pasteAutomatically == nil
     }
 }

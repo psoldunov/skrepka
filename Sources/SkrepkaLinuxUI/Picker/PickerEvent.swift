@@ -12,13 +12,18 @@ public enum PickerEvent: Sendable {
     case results(query: String, rows: [ClipDocument])
     /// The picture one entry holds, for the row to draw.
     case preview(hash: String, document: PreviewDocument)
-    /// A copy landed on the clipboard; the picker closes.
-    case copied
+    /// Whether choosing an entry pastes it, for the footer and paste gate.
+    case settings(pasteAutomatically: Bool)
+    /// A copy landed on the clipboard; the picker closes, then may paste.
+    case copied(automatically: Bool)
     /// An action was attempted and refused, with a sentence for the footer.
     case failed(String)
     /// The daemon could not be reached, with a headline and a remedy for the
     /// empty state.
     case unreachable(headline: String, detail: String)
+    /// How far each arriving entry has got, by content hash, from 0 to 1. The
+    /// whole state every time; an entry not named has nothing arriving.
+    case transfers([String: Double])
 }
 
 extension PickerEvent {

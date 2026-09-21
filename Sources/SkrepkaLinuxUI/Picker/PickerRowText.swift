@@ -87,6 +87,7 @@ public enum PickerRowTextBuilder {
         switch document.filesStatus {
         case ClipDocument.FilesStatusName.notSynced: SyncedFilesStatus.notSynced.rowNote
         case ClipDocument.FilesStatusName.pending: SyncedFilesStatus.pending.rowNote
+        case ClipDocument.FilesStatusName.overLimit: SyncedFilesStatus.overLimit.rowNote
         default: nil
         }
     }

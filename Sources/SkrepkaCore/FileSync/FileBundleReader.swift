@@ -45,9 +45,14 @@ public enum FileBundleReader {
     ///
     /// Concealed copies are left alone: they never cross the wire, so there is
     /// nothing to read them for.
+    ///
+    /// `limit` is the user's file-size limit — `SkrepkaSync.FileSyncLimit` —
+    /// clamped to the protocol ceiling. At 0 nothing is read at all: "don't
+    /// sync file contents" also means "don't keep them".
     @concurrent
     public static func attachingBundle(to item: ClipItem, limit: Int = limit) async -> ClipItem {
-        guard item.kind.isFileSystemEntry, !item.isConcealed, !item.fileURLs.isEmpty,
+        let limit = FileSyncLimit.clamped(limit)
+        guard limit > 0, item.kind.isFileSystemEntry, !item.isConcealed, !item.fileURLs.isEmpty,
             item.payload.data(forType: FileBundle.storageType) == nil,
             case .bundle(let bundle) = read(item.fileURLs, limit: limit),
             let encoded = encodedWithinLimit(bundle, limit: limit)

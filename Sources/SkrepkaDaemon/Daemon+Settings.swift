@@ -2,9 +2,11 @@ import Foundation
 import Logging
 import SkrepkaCore
 import SkrepkaIPC
+import SkrepkaSync
 
-// The `Settings` and `SetSettings` members: retention and the sync switch,
-// read and changed while the daemon runs. Since interface version 4.
+// The `Settings` and `SetSettings` members: retention, the sync switch, the
+// file-size limit and automatic paste, read and changed while the daemon runs.
+// Since interface version 4; the last two since 5.
 extension Daemon {
     /// How often an idle daemon re-applies retention, so an age limit ages
     /// entries out of a history nobody is copying into.
@@ -20,7 +22,9 @@ extension Daemon {
             ),
             sync: SettingsDocument.Sync(isEnabled: isSyncWanted, isLockedOff: isSyncLockedOff),
             history: await historyCounts(),
-            protectedMarkers: Self.protectedMarkers
+            protectedMarkers: Self.protectedMarkers,
+            fileSync: SettingsDocument.FileSync(maximumBytes: settings.fileSync.maximumBytes),
+            paste: SettingsDocument.Paste(isAutomatic: settings.paste.automatic)
         )
     }
 
@@ -56,6 +60,12 @@ extension Daemon {
             return .refused("could not save the settings: \(error)")
         }
         settings = next
+        // Before the rest, which awaits: the next offer, push or fetch reads
+        // the new limit, and the next copy is read under it.
+        await fileSync.setMaximumBytes(next.fileSync.maximumBytes)
+        // A row's "not synced" note depends on the limit, so every client
+        // redraws its list rather than showing yesterday's answer.
+        if previous.fileSync != next.fileSync { notifyHistoryChanged() }
         var problems: [String] = []
         if let problem = await applyRetentionChange(from: previous, to: next) { problems.append(problem) }
         if let problem = await performReconcileSync() { problems.append(problem) }

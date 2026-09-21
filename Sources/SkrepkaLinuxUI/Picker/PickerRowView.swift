@@ -19,6 +19,12 @@ enum PickerRowView {
     private static let standardHeight: Int32 = 46
     private static let imageHeight: Int32 = 64
 
+    /// A built row, and the subtitle line a transfer's progress bar replaces.
+    struct Built {
+        let row: UnsafeMutablePointer<GtkWidget>
+        let transfer: PickerTransferSlot
+    }
+
     /// - Parameter texture: the decoded thumbnail, or nil until one arrives —
     ///   an image row shows a placeholder tile of the right height meanwhile, so
     ///   the list does not jump when the picture lands.
@@ -27,19 +33,19 @@ enum PickerRowView {
         text: PickerRowText,
         index: Int,
         texture: OpaquePointer?
-    ) -> UnsafeMutablePointer<GtkWidget>? {
+    ) -> Built? {
         guard let row = gtk_list_box_row_new(),
             let rowCast = skrepka_as_list_box_row(row),
             let body = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 11, "skrepka-rowbody"),
             let tile = tile(document, texture: texture),
-            let text = textColumn(text)
+            let column = textColumn(text)
         else { return nil }
 
         let isImageRow = document.hasPreview && !document.isConcealed
         gtk_widget_set_size_request(body, -1, isImageRow ? imageHeight : standardHeight)
         gtk_widget_set_valign(tile, GTK_ALIGN_CENTER)
         Build.append(body, tile)
-        Build.append(body, text)
+        Build.append(body, column.widget)
         if document.isPinned, let pin = Build.icon(pinNames, "skrepka-pin") {
             gtk_widget_set_valign(pin, GTK_ALIGN_CENTER)
             Build.append(body, pin)
@@ -49,7 +55,7 @@ enum PickerRowView {
             Build.append(body, badge)
         }
         gtk_list_box_row_set_child(rowCast, body)
-        return row
+        return Built(row: row, transfer: column.transfer)
     }
 
     // "view-pin-symbolic" draws a real pin in Breeze and Adwaita alike;
@@ -59,17 +65,19 @@ enum PickerRowView {
     // row must not end up wearing GTK's broken-image placeholder instead.
     private static let pinNames = ["view-pin-symbolic", "starred-symbolic", "bookmark-new-symbolic"]
 
-    /// The title over the subtitle, both leading and truncated, filling the row.
-    private static func textColumn(_ text: PickerRowText) -> UnsafeMutablePointer<GtkWidget>? {
+    /// The title over the subtitle, both leading and truncated, filling the row
+    /// — with the subtitle's stand-in for a transfer beside it, hidden.
+    private static func textColumn(
+        _ text: PickerRowText
+    ) -> (widget: UnsafeMutablePointer<GtkWidget>, transfer: PickerTransferSlot)? {
         guard let column = Build.box(GTK_ORIENTATION_VERTICAL, spacing: 2),
-            let title = Build.leadingLabel(text.title, "skrepka-title"),
-            let subtitle = Build.leadingLabel(text.subtitle, "skrepka-subtitle")
+            let title = Build.leadingLabel(text.title, "skrepka-title")
         else { return nil }
         gtk_widget_set_hexpand(column, 1)
         gtk_widget_set_valign(column, GTK_ALIGN_CENTER)
         Build.append(column, title)
-        Build.append(column, subtitle)
-        return column
+        guard let transfer = PickerTransferSlot.make(subtitle: text.subtitle, in: column) else { return nil }
+        return (column, transfer)
     }
 
     /// The leading visual: a real preview for an image row with its picture

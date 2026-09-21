@@ -1,7 +1,7 @@
 import Foundation
 import NIOCore
 
-/// The five things every sync connection needs, built once when sync starts.
+/// The things every sync connection needs, built once when sync starts.
 ///
 /// One value rather than five parameters threaded through the listener, the
 /// links and the responders. They are never needed separately — anything that
@@ -33,6 +33,20 @@ public struct SyncRuntime: Sendable {
     /// paired peers should not run four of them.
     public let group: any EventLoopGroup
 
+    /// How large a copy of files may be and still sync its contents, read at
+    /// the moment each offer, push and fetch needs it.
+    ///
+    /// Built by whoever owns the setting and passed in, so the value survives
+    /// the runtime being rebuilt. A default policy is the ceiling — what a
+    /// headless peer and every test that predates the setting want.
+    public let fileSync: FileSyncPolicy
+
+    /// Where fetches report their progress for a picker row to draw.
+    ///
+    /// Passed in for the same reason as ``fileSync``: whatever subscribes to it
+    /// has to keep receiving across a sync restart.
+    public let transfers: TransferMonitor
+
     public var deviceID: SyncDeviceID { certificate.deviceID }
     public var platform: PeerPlatform { pairing.localIdentity.platform }
 
@@ -41,12 +55,16 @@ public struct SyncRuntime: Sendable {
         pairing: PairingSession,
         trust: any TrustStore,
         store: any HistoryStoring,
-        group: any EventLoopGroup
+        group: any EventLoopGroup,
+        fileSync: FileSyncPolicy = FileSyncPolicy(),
+        transfers: TransferMonitor = TransferMonitor()
     ) {
         self.certificate = certificate
         self.pairing = pairing
         self.trust = trust
         self.store = store
         self.group = group
+        self.fileSync = fileSync
+        self.transfers = transfers
     }
 }

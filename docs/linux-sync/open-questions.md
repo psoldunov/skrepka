@@ -15,7 +15,8 @@ and an afternoon. Each says what it blocks, how to answer it, and what changes
 under each answer. **Ten of the first fourteen were answered on 2026-09-05**;
 four of those need hardware rather than time, and
 **[OQ-15](#oq-15) was raised on 2026-09-06** by the Phase 3 review and is
-mitigated rather than closed. As they close, edit the entry in place with the
+mitigated rather than closed. **[D-11](#d-11) was revised on 2026-09-21** when
+automatic paste shipped. As they close, edit the entry in place with the
 answer, the date, and where it was verified — an unrecorded answer gets
 researched twice. [OQ-16](#oq-16) is decided too, recorded as [D-11](#d-11)
 rather than closed in place, because it was the project owner's call rather
@@ -29,7 +30,7 @@ Taken 2026-09-05, except [D-10](#d-10) and [D-11](#d-11). Summary:
 
 | # | Decision |
 |---|---|
-| [D-11](#d-11) | **The picker does not synthesise a paste.** Return puts the clip on the clipboard and closes the picker; the user pastes with Ctrl+V. The wlroots virtual-keyboard/KDE RemoteDesktop pair comes later, behind a setting. |
+| [D-11](#d-11) | **The picker pastes automatically by default.** It uses XTest on X11, virtual-keyboard-v1 on wlroots and the RemoteDesktop portal elsewhere on Wayland; failure stays copy-only. |
 | [D-10](#d-10) | **A Steam Deck OLED is the Linux test rig**, Desktop Mode only — a stand-in for a proper Linux box, not a shipping target. Builds reach it through a user-scope `install.sh`. |
 | [D-6](#d-6) | **Build all eight phases.** Phases 3 and 6 stay as escape hatches, not plans. |
 | [D-2](#d-2) | Mac↔Mac ships because it falls out of the same code — **Mac↔Linux is the goal**, and the positioning follows that. |
@@ -44,15 +45,17 @@ Taken 2026-09-05, except [D-10](#d-10) and [D-11](#d-11). Summary:
 <a id="d-11"></a>
 ### D-11 — How does the picker paste into the app underneath, on Wayland?
 
-**Decided 2026-09-18: option 3 for v1.** Return puts the chosen clip on the
-clipboard and closes the picker; the user pastes with Ctrl+V. Option 2 —
-`zwp_virtual_keyboard_manager_v1` on wlroots plus the KDE RemoteDesktop portal —
-comes later, behind a setting. Option 1, `ydotool`/uinput, is rejected: it
-costs the `/dev/uinput` permission that [D-10](#d-10)'s no-root install
-refuses to ask for.
+**Revised 2026-09-21: paste automatically by default.** After the daemon has
+written the clipboard, the picker closes, waits for focus to return and sends
+Ctrl+V. X11 uses runtime-loaded XTest; wlroots compositors advertising
+`zwp_virtual_keyboard_manager_v1` use that protocol; other Wayland sessions use
+`org.freedesktop.portal.RemoteDesktop`, with persistent consent. If injection
+is unavailable or refused, the clipboard remains populated and one notice says
+to paste manually. The setting can turn this off.
 
-This settles [OQ-16](#oq-16), which raised the question and did the research;
-the reasoning it recorded stands.
+`ydotool`/uinput remains rejected: it costs the `/dev/uinput` permission that
+[D-10](#d-10)'s no-root install refuses to ask for. This revises the 2026-09-18
+copy-only decision and settles [OQ-16](#oq-16) with the two-code-path option.
 
 <a id="d-10"></a>
 ### D-10 — What Linux machine does this get tested on, and how do builds reach it?
@@ -445,7 +448,7 @@ its answer, the date, and where it was verified.
 | [OQ-13](#oq-13) | swift-format, SwiftLint, Periphery on Linux; SwiftPM multi-target build | **answered** — and `scripts/doctor-linux.sh` now exists | Phase 4's quality gate |
 | [OQ-14](#oq-14) | What do CrossPaste / ClipCascade / ClipSync actually do on the wire? | **answered** — only CrossPaste syncs history, and none of the three syncs deletion | nothing, but it was 20 minutes |
 | [OQ-15](#oq-15) | The pairing code lets whoever moves second choose its inputs | **mitigated 2026-09-06** — widened to 64 bits; commit-then-reveal still owed | a wire change to make before this ships |
-| [OQ-16](#oq-16) | How does the picker paste into the app underneath, on Wayland? | **decided 2026-09-18, as [D-11](#d-11)** — no mechanism works on both KWin and Sway, so v1 does not synthesise a paste | Phase 7's "done when" #2, rewritten rather than met |
+| [OQ-16](#oq-16) | How does the picker paste into the app underneath, on Wayland? | **shipped 2026-09-21, as revised [D-11](#d-11)** — compositor-specific virtual-keyboard and RemoteDesktop paths | Phase 7's "done when" #2 |
 
 **Amended 2026-09-08:** [OQ-16](#oq-16) joins them and is different in kind —
 it needs no hardware, it needs a decision, and unlike the other four it blocks
@@ -1361,8 +1364,8 @@ base is one machine ([D-8](#d-8)) and expensive once it is not.
 <a id="oq-16"></a>
 ### OQ-16 — How does the picker paste into the app underneath, on Wayland?
 
-**Raised 2026-09-08, while building Phase 7. Decided 2026-09-18, as
-[D-11](#d-11).**
+**Raised 2026-09-08, decided copy-only on 2026-09-18, and revised when
+automatic paste shipped on 2026-09-21 as [D-11](#d-11).**
 
 [Phase 7](phase-7-linux-gui.md) says the picker is done when "Return pastes into
 the app underneath". Nothing anywhere in this repository or these documents says
@@ -1400,12 +1403,12 @@ both target machines.
    is what several Linux clipboard managers already do. It also means Phase 7's
    "done when" #2 is rewritten rather than met.
 
-**Recommendation, for whoever decides:** (3) for the first version and (2)
-behind a setting afterwards. Option 1 trades the project's no-root install — one
-of [D-10](#d-10)'s stated properties — for one keystroke, which is a bad trade
-for a clipboard manager. Option 3 ships, and it does not foreclose option 2.
+**Shipped answer:** option 2, plus XTest for a true X11 session. Capability
+probing chooses the path from live Wayland globals and a live X connection, not
+from the session-type environment variable. RemoteDesktop stores its rotating
+restore token under the XDG state directory. GNOME/KWin portal behaviour still
+needs live verification; wlroots virtual keyboard is exercised under headless
+Sway.
 
-**What it blocked.** Phase 7's "done when" #2, as written — see
-[D-11](#d-11) for the decision and [`phase-7-linux-gui.md`](phase-7-linux-gui.md)
-for the rewritten criterion. Everything else in Phase 7 — the palette, the
-picker, the hotkey, the tray, settings — was always independent of it.
+**What it blocked.** Nothing now. Phase 7's "done when" #2 is met by the revised
+[D-11](#d-11); copy-only remains the failure mode on unsupported sessions.

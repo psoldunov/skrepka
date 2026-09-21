@@ -17,11 +17,15 @@ final class SyncPane {
     var onDismissBanner: (() -> Void)?
     /// The master switch, flipped to the value given.
     var onSharing: ((Bool) -> Void)?
+    /// The file-size limit chosen, in bytes; 0 stops file contents syncing.
+    var onFileLimit: ((Int) -> Void)?
 
     let page: SettingsPage
 
     private let banner: SyncBanner
     private let sharing: SettingsSwitchRow
+    private let fileLimit: SettingsDropDownRow
+    private var drawnFileLimit: FileLimitState?
     private let thisDevice: ThisDeviceCard
     private let devices: DeviceList
 
@@ -32,10 +36,16 @@ final class SyncPane {
             title: "Share history with paired devices",
             icon: ["emblem-shared-symbolic", "emblem-synchronizing-symbolic", "view-refresh-symbolic"])
         sharingCard.add(sharing.row.widget)
+        let fileLimit = try SettingsDropDownRow(
+            title: "Sync files up to",
+            subtitle: "Larger copies of files reach other devices as their names.",
+            icon: ["document-send-symbolic", "folder-documents-symbolic", "text-x-generic-symbolic"])
+        sharingCard.add(fileLimit.row.widget)
 
         self.page = page
         self.banner = try SyncBanner()
         self.sharing = sharing
+        self.fileLimit = fileLimit
         self.thisDevice = try ThisDeviceCard()
         self.devices = try DeviceList()
 
@@ -48,6 +58,12 @@ final class SyncPane {
     private func connect() {
         thisDevice.onPairingSwitch = { [weak self] isOn in self?.onPairingSwitch?(isOn) }
         sharing.onToggle = { [weak self] isOn in self?.onSharing?(isOn) }
+        fileLimit.onSelect = { [weak self] index in
+            guard let values = self?.drawnFileLimit?.choice.values, values.indices.contains(index) else {
+                return
+            }
+            self?.onFileLimit?(values[index])
+        }
         banner.onDismiss = { [weak self] in self?.onDismissBanner?() }
         devices.onPair = { [weak self] id in self?.onPair?(id) }
         devices.onUnpair = { [weak self] id in self?.onUnpair?(id) }
@@ -63,5 +79,11 @@ final class SyncPane {
 
     func renderSharing(_ state: SharingSwitchState) {
         sharing.render(isOn: state.isOn, isEnabled: state.isEnabled, subtitle: state.subtitle)
+    }
+
+    func renderFileLimit(_ state: FileLimitState) {
+        guard state != drawnFileLimit else { return }
+        drawnFileLimit = state
+        fileLimit.render(state.choice, isEnabled: state.isEnabled)
     }
 }

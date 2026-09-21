@@ -57,6 +57,7 @@ public final class PaletteWindow {
 
     let window: UnsafeMutablePointer<GtkWindow>
     let windowWidget: UnsafeMutablePointer<GtkWidget>
+    private let keyController: OpaquePointer
     /// The full-output overlay the panel is laid out in, on a layer-shell
     /// session; nil for a plain window.
     var overlay: UnsafeMutablePointer<GtkWidget>?
@@ -71,6 +72,10 @@ public final class PaletteWindow {
     var hasBeenActive = false
     /// The look at focus taken once the row menu has closed.
     private var focusRecheck: LoopTimer?
+    private var currentModifiers: PickerModifiers = []
+    private var modifierWait = ModifierReleaseWait()
+    private var modifierWaitTimer: LoopTimer?
+    private var modifierReleaseActions: [() -> Void] = []
 
     public init() throws {
         guard let panel = PickerPanel(),
@@ -82,6 +87,7 @@ public final class PaletteWindow {
         self.panel = panel
         self.window = window
         self.windowWidget = windowWidget
+        self.keyController = keys
 
         gtk_window_set_decorated(window, 0)
         gtk_widget_add_css_class(windowWidget, "skrepka-picker")
@@ -185,14 +191,51 @@ public final class PaletteWindow {
 
     // MARK: - Keys
 
+    /// Runs `action` when Shift, Alt, Ctrl and Super are up, or after one
+    /// second. The deadline keeps a lost release event from blocking paste.
+    func afterModifiersReleased(_ action: @escaping () -> Void) {
+        modifierReleaseActions.append(action)
+        guard modifierReleaseActions.count == 1 else { return }
+        guard modifierWait.begin(with: currentModifiers) == .wait else {
+            finishModifierWait()
+            return
+        }
+        modifierWaitTimer = LoopTimer(milliseconds: 1_000) { [weak self] in
+            guard let self else { return }
+            _ = modifierWait.timedOut()
+            finishModifierWait()
+        }
+    }
+
+    func recordModifiers(_ rawValue: UInt32) {
+        currentModifiers = PickerModifiers(rawValue: rawValue)
+        guard modifierWait.isWaiting,
+            modifierWait.modifiersChanged(to: currentModifiers) == .proceed
+        else { return }
+        finishModifierWait()
+    }
+
+    private func finishModifierWait() {
+        modifierWaitTimer?.cancel()
+        modifierWaitTimer = nil
+        let actions = modifierReleaseActions
+        modifierReleaseActions.removeAll()
+        for action in actions { action() }
+    }
+
     private func connectKeys(_ keys: OpaquePointer) {
         gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE)
+        connectKeySignal(keys, "key-pressed", unsafeBitCast(Self.onKeyPressed, to: GCallback.self))
+        connectKeySignal(keys, "modifiers", unsafeBitCast(Self.onModifiersChanged, to: GCallback.self))
+        gtk_widget_add_controller(windowWidget, keyController)
+    }
+
+    private func connectKeySignal(_ keys: OpaquePointer, _ name: String, _ callback: GCallback) {
         skrepka_connect(
             UnsafeMutableRawPointer(keys),
-            "key-pressed",
-            unsafeBitCast(Self.onKeyPressed, to: GCallback.self),
+            name,
+            callback,
             Unmanaged.passRetained(self).toOpaque(),
             Self.onContextReleased)
-        gtk_widget_add_controller(windowWidget, keys)
     }
 }

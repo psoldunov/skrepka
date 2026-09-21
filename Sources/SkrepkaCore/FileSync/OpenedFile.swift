@@ -13,6 +13,13 @@ import Foundation
 #if canImport(CoreFoundation)
     import CoreFoundation
 #endif
+// And a cold debug build can name CDispatch instead: the declaring module is
+// whichever one the importer first read `sys/stat.h` through, which depends on
+// the order targets happen to compile in. Importing every candidate is the
+// only answer that does not flap.
+#if canImport(CDispatch)
+    import CDispatch
+#endif
 
 /// One regular file's bytes, read through a single descriptor.
 ///

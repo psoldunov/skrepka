@@ -3,9 +3,7 @@ import Foundation
 import SkrepkaCore
 import SkrepkaIPC
 
-/// The picker, assembled: the window, the daemon link, and the model that ties
-/// a key press to what the daemon is asked and what the list then shows.
-///
+/// The picker, assembled: the window, daemon link and model.
 /// This is the whole surface the app shell drives — build it hidden, prefetch,
 /// and open it on the hotkey. Everything the daemon says arrives on the
 /// concurrency pool and is applied here on GTK's loop thread through a
@@ -13,6 +11,7 @@ import SkrepkaIPC
 public final class PickerController {
     /// Opens Settings; the picker closes first. Wired by the app shell.
     public var onOpenSettings: (() -> Void)?
+    var paster: (any PasteHandling)?
 
     private let window: PaletteWindow
     private let link: PickerLink
@@ -74,6 +73,7 @@ public final class PickerController {
     }
 
     public func show() {
+        link.refreshSettings()
         hoverArmed = false
         model = PickerModel(rows: historyRows).reset()
         window.panel.footer.showError(nil)
@@ -164,6 +164,7 @@ public final class PickerController {
 
     private func choose(_ hash: String, style: CopyStyle) {
         window.panel.footer.showError(nil)
+        link.refreshSettings()
         link.copy(hash: hash, style: style)
     }
 
@@ -181,10 +182,24 @@ public final class PickerController {
         render(rebuild: true)
         link.delete(hash: hash)
     }
+}
 
-    // MARK: - Applying daemon events
+// MARK: - Applying daemon events, and rendering
 
+// An extension for length alone: the class body is the controller's state and
+// the intent it sends, this is what comes back and how it is drawn. Same file,
+// so the private state stays private.
+extension PickerController {
     private func handle(_ event: PickerEvent) {
+        switch event {
+        case .history, .results, .preview, .transfers: applyList(event)
+        case .settings, .copied, .failed, .unreachable: applyOutcome(event)
+        }
+    }
+
+    /// What the daemon said about the rows: which there are, their pictures,
+    /// and how far each arriving one has got.
+    private func applyList(_ event: PickerEvent) {
         switch event {
         case .history(let rows):
             historyRows = rows
@@ -194,12 +209,31 @@ public final class PickerController {
             apply(rows: rows)
         case .preview(let hash, let document):
             store(preview: document, for: hash)
-        case .copied:
-            hide()
+        case .transfers(let fractions):
+            window.panel.list.showTransfers(fractions)
+        case .settings, .copied, .failed, .unreachable:
+            break
+        }
+    }
+
+    /// What became of something the user asked for.
+    private func applyOutcome(_ event: PickerEvent) {
+        switch event {
+        case .settings(let automatically):
+            window.panel.footer.showPasteAutomatically(automatically)
+            paster?.setAutomaticPasteEnabled(automatically)
+        case .copied(let automatically):
+            PickerPasteAction.complete(
+                isAutomatic: automatically,
+                paster: paster,
+                afterModifiersReleased: window.afterModifiersReleased,
+                hide: hide)
         case .failed(let message):
             window.panel.footer.showError(message)
         case .unreachable(let headline, let detail):
             window.panel.showEmpty(.unreachable(headline: headline, detail: detail))
+        case .history, .results, .preview, .transfers:
+            break
         }
     }
 

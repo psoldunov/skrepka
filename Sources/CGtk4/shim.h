@@ -81,6 +81,10 @@ static inline GtkSpinner *skrepka_as_spinner(GtkWidget *widget) {
 	return GTK_SPINNER(widget);
 }
 
+static inline GtkProgressBar *skrepka_as_progress_bar(GtkWidget *widget) {
+	return GTK_PROGRESS_BAR(widget);
+}
+
 // MARK: - Style
 
 // Stylesheets are installed through `skrepka_css_load`, in style.h.

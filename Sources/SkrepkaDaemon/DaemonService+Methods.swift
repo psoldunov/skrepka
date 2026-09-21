@@ -19,12 +19,17 @@ extension DaemonService {
                 DBusObjectServer.Interface(
                     name: SkrepkaInterface.name,
                     methods: readMethods() + clipboardMethods() + pickerMethods() + peerMethods()
-                        + pairingWindowMethods() + pairingAnswerMethods() + settingsMethods(),
+                        + pairingWindowMethods() + pairingAnswerMethods() + settingsMethods()
+                        + transferMethods(),
                     signals: [
                         DBusObjectServer.Signal(name: SkrepkaInterface.Signal.historyChanged),
                         DBusObjectServer.Signal(
                             name: SkrepkaInterface.Signal.pairingRequested,
                             args: [DBusObjectServer.MethodArg(name: "proposal", type: "s")]
+                        ),
+                        DBusObjectServer.Signal(
+                            name: SkrepkaInterface.Signal.transfersChanged,
+                            args: [DBusObjectServer.MethodArg(name: "transfers", type: "s")]
                         ),
                     ]
                 )

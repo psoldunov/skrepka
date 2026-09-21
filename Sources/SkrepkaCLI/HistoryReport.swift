@@ -44,6 +44,7 @@ public enum HistoryReport {
         switch status {
         case ClipDocument.FilesStatusName.notSynced: " [contents not synced]"
         case ClipDocument.FilesStatusName.pending: " [contents not synced yet]"
+        case ClipDocument.FilesStatusName.overLimit: " [contents over the sync size limit]"
         default: ""
         }
     }

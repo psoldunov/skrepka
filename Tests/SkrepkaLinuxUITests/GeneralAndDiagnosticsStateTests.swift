@@ -1,5 +1,6 @@
 import Foundation
 import SkrepkaIPC
+import SkrepkaLinuxPlatform
 import Testing
 
 @testable import SkrepkaLinuxUI
@@ -48,6 +49,47 @@ struct GeneralAndDiagnosticsStateTests {
         #expect(state.shortcutKeys.isEmpty)
         #expect(state.shortcutValue == "Not set")
         #expect(state.shortcutSubtitle == "The prompt was dismissed.")
+    }
+
+    @Test("automatic paste follows the daemon and names the live mechanism")
+    func automaticPaste() {
+        let preferences = PreferencesFixtures.ready(
+            PreferencesFixtures.settings(pasteAutomatically: false))
+        let state = GeneralPaneState(
+            shortcut: .connecting,
+            autostart: AutostartStatus(isEnabled: false),
+            preferences: preferences,
+            pasteMechanism: .remoteDesktopPortal
+        )
+        #expect(!state.pasteAutomatically)
+        #expect(state.isPasteEditable)
+        #expect(state.pasteSubtitle.contains("ask once"))
+        #expect(state.pasteSubtitle.contains("Ctrl+Shift+V"))
+    }
+
+    @Test("automatic paste is disabled for a daemon whose settings predate it")
+    func automaticPasteNeedsVersionFive() {
+        let old = PreferencesFixtures.settings(version: 4)
+        let current = PreferencesFixtures.settings(version: 5)
+
+        #expect(
+            !GeneralPaneState(
+                shortcut: .connecting,
+                autostart: AutostartStatus(isEnabled: false),
+                preferences: PreferencesFixtures.ready(old)
+            ).isPasteEditable)
+        #expect(
+            GeneralPaneState(
+                shortcut: .connecting,
+                autostart: AutostartStatus(isEnabled: false),
+                preferences: PreferencesFixtures.ready(current)
+            ).isPasteEditable)
+    }
+
+    @Test("the picker action label follows the automatic-paste setting")
+    func pickerActionLabel() {
+        #expect(PickerFooter.actionLabel(isAutomatic: true) == "Paste")
+        #expect(PickerFooter.actionLabel(isAutomatic: false) == "Copy")
     }
 
     @Test("a failed launch-at-login change puts the error where the subtitle was")

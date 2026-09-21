@@ -1,6 +1,7 @@
 import Foundation
 import SkrepkaCore
 import SkrepkaIPC
+import SkrepkaSync
 import Testing
 
 @testable import SkrepkaDaemon
@@ -49,6 +50,47 @@ struct DaemonSettingsFileTests {
         let directory = file.url.deletingLastPathComponent().path
         let names = try FileManager.default.contentsOfDirectory(atPath: directory)
         #expect(names == ["config.json"])
+    }
+
+    @Test("a file written before the file limit and paste settings reads them as their defaults")
+    func olderFileReadsNewSectionsAsDefaults() throws {
+        let file = Self.file()
+        try Self.write(
+            #"{"version":1,"retention":{"maximumItems":250,"maximumAgeDays":7},"sync":{"enabled":true}}"#,
+            to: file)
+        let (read, outcome) = file.read()
+        #expect(outcome == .loaded)
+        #expect(read.retention.maximumItems == 250)
+        #expect(read.fileSync == DaemonSettings.default.fileSync)
+        #expect(read.fileSync.maximumBytes == FileSyncLimit.ceiling)
+        #expect(read.paste.automatic)
+    }
+
+    @Test("the file limit and paste switch are saved and read back")
+    func newSectionsRoundTrip() throws {
+        let file = Self.file()
+        let changed = DaemonSettings.default.applying(
+            SettingsPatch(maximumFileSyncBytes: 5 * 1024 * 1024, pasteAutomatically: false))
+        try file.save(changed)
+        let (read, outcome) = file.read()
+        #expect(outcome == .loaded)
+        #expect(read.fileSync.maximumBytes == 5 * 1024 * 1024)
+        #expect(!read.paste.automatic)
+    }
+
+    @Test("a file limit no client could set sets the file aside")
+    func badFileLimitIsQuarantined() throws {
+        let file = Self.file()
+        try Self.write(
+            #"{"version":1,"retention":{"maximumItems":250,"maximumAgeDays":7},"sync":{"enabled":true},"#
+                + #""fileSync":{"maximumBytes":-1},"paste":{"automatic":true}}"#,
+            to: file)
+        let (read, outcome) = file.read()
+        #expect(read == .default)
+        guard case .quarantined = outcome else {
+            Issue.record("expected the file to be set aside, got \(outcome)")
+            return
+        }
     }
 
     @Test("the documented shape reads as written")

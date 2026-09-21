@@ -95,16 +95,22 @@
             let arrived = SQLiteRepresentationMapping.rows(from: meta, payloads: payloads)
                 .filter { $0.bytes != nil }
             guard !arrived.isEmpty else { return }
+            // An upsert rather than an update: a representation the row was
+            // learned without — a bundle a peer withheld under its file-size
+            // limit and offers now that the limit is higher — has no row to
+            // update, and dropping its bytes would have it fetched again every
+            // round. Held bytes are never replaced, as before, so a peer still
+            // cannot overwrite what this device captured itself; the Mac's store
+            // fills missing representations the same way.
             let statement = try database.prepare(
                 """
-                UPDATE clip_representation SET bytes = ?, byte_count = ?
-                WHERE clip_id = ? AND "type" = ? AND bytes IS NULL
+                INSERT INTO clip_representation (clip_id, "type", byte_count, bytes) VALUES (?, ?, ?, ?)
+                ON CONFLICT (clip_id, "type") DO UPDATE SET bytes = excluded.bytes, byte_count = excluded.byte_count
+                WHERE clip_representation.bytes IS NULL
                 """
             )
             for row in arrived {
-                try statement.bind([
-                    .value(row.bytes), .value(row.byteCount), .value(clipID), .value(row.type),
-                ])
+                try statement.bind(row.bindings(clipID: clipID))
                 try statement.run()
             }
         }

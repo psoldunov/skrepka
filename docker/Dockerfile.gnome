@@ -1,0 +1,79 @@
+# Ubuntu 26.04 LTS's GNOME 50 desktop in a box, run as a headless Wayland
+# session so Skrepka can be tested against Mutter, GNOME's GlobalShortcuts and
+# RemoteDesktop portal backend, and Ubuntu's AppIndicator tray host.
+#
+# Build with scripts/gnome-image.sh (tag skrepka-gnome:26.04); run with
+# scripts/gnome.sh. The image is amd64 because Skrepka's release tarball is
+# x86_64-only. OrbStack runs it under Rosetta on Apple Silicon.
+#
+# Rendering is Mesa llvmpipe. There is no GPU, so GPU-only GNOME Shell effects
+# are not representative; application surfaces, focus, shortcuts and portals
+# still follow the real GNOME/Mutter paths.
+
+FROM ubuntu:26.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gnome-shell \
+        gnome-shell-extension-appindicator \
+        xdg-desktop-portal \
+        xdg-desktop-portal-gnome \
+        xwayland \
+        libgtk-4-1 \
+        gir1.2-gtk-4.0 \
+        python3 \
+        python3-gi \
+        dbus-daemon \
+        dbus-x11 \
+        libglib2.0-bin \
+        dconf-service \
+        gsettings-desktop-schemas \
+        mesa-utils \
+        libgl1-mesa-dri \
+        mesa-vulkan-drivers \
+        pipewire \
+        wireplumber \
+        wl-clipboard \
+        xclip \
+        curl \
+        ca-certificates \
+        jq \
+        procps \
+        libarchive-tools \
+        sudo \
+        fonts-dejavu-core \
+        adwaita-icon-theme-full \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/bsdtar /usr/local/bin/tar
+
+# GNU tar 1.35's directory creation path returns ENOSYS under OrbStack's amd64
+# Rosetta translation. bsdtar reads the same release archives without relying
+# on that syscall, so /usr/local/bin/tar shadows GNU tar inside this test image.
+RUN usermod -s /bin/bash ubuntu \
+    && mkdir -p /home/ubuntu \
+    && chown ubuntu:ubuntu /home/ubuntu \
+    && echo 'ubuntu ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/ubuntu \
+    && install -d -m 1777 /tmp/.X11-unix
+
+COPY docker/gnome/session.sh /usr/local/bin/skrepka-gnome-session
+COPY docker/gnome/eval.py /usr/local/bin/skrepka-gnome-eval
+COPY docker/gnome/screenshot.sh /usr/local/bin/skrepka-gnome-screenshot
+COPY docker/gnome/windows.sh /usr/local/bin/skrepka-gnome-windows
+COPY docker/gnome/input.py /usr/local/bin/skrepka-gnome-input
+RUN chmod 0755 /usr/local/bin/skrepka-gnome-*
+
+USER ubuntu
+WORKDIR /home/ubuntu
+ENV XDG_RUNTIME_DIR=/tmp/xdg-runtime-ubuntu \
+    XDG_CONFIG_HOME=/home/ubuntu/.config \
+    XDG_DATA_HOME=/home/ubuntu/.local/share \
+    XDG_STATE_HOME=/home/ubuntu/.local/state \
+    XDG_CACHE_HOME=/home/ubuntu/.cache \
+    XDG_CURRENT_DESKTOP=ubuntu:GNOME \
+    XDG_SESSION_DESKTOP=ubuntu \
+    XDG_SESSION_TYPE=wayland \
+    DESKTOP_SESSION=ubuntu \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
+    LANG=C.UTF-8

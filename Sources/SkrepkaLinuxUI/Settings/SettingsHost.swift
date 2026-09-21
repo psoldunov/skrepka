@@ -1,5 +1,6 @@
 import CGtk4
 import Foundation
+import SkrepkaLinuxPlatform
 
 /// The Settings window, opened from the tray, the picker's gear button and the
 /// launcher's Settings action — as often as it is asked for.
@@ -16,6 +17,8 @@ final class SettingsHost {
     private let application: UnsafeMutablePointer<GtkApplication>
     private let connect: PreferencesJobs.Connect
     private let autostart: AutostartEntry
+    private let pasteMechanism: PasteMechanism
+    private let pasteAutomaticallyChanged: (Bool) -> Void
     /// The desktop's look, as last reported — a window built later is drawn in
     /// it too.
     private var appearance: AppearancePreference?
@@ -30,10 +33,14 @@ final class SettingsHost {
     init(
         application: UnsafeMutablePointer<GtkApplication>,
         autostart: AutostartEntry = .standard(),
+        pasteMechanism: PasteMechanism = .copyOnly,
+        pasteAutomaticallyChanged: @escaping (Bool) -> Void = { _ in },
         connect: @escaping PreferencesJobs.Connect
     ) {
         self.application = application
         self.autostart = autostart
+        self.pasteMechanism = pasteMechanism
+        self.pasteAutomaticallyChanged = pasteAutomaticallyChanged
         self.connect = connect
     }
 
@@ -94,7 +101,14 @@ final class SettingsHost {
         let connect = connect
         let link = DaemonLink(connect: { try await connect() }, report: { inbox.post($0) })
         let services = SettingsWindow.Services(
-            link: link, inbox: inbox, connect: connect, autostart: autostart, shortcut: shortcut)
+            link: link,
+            inbox: inbox,
+            connect: connect,
+            autostart: autostart,
+            shortcut: shortcut,
+            pasteMechanism: pasteMechanism,
+            pasteAutomaticallyChanged: pasteAutomaticallyChanged
+        )
         let window = try SettingsWindow(application: application, services: services)
         if let appearance { window.apply(appearance) }
         let key = ObjectIdentifier(window)

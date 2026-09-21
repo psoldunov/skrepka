@@ -11,21 +11,24 @@ import SkrepkaCore
 ///
 /// Answers that cannot change are kept: files that arrived stay arrived, and
 /// a sender that attached none never attaches them later. A row still waiting
-/// for its bytes is asked again on the next draw, which is how its note goes
-/// away once they land.
+/// for its bytes, or over the file-size limit, is asked again on the next draw
+/// — which is how its note goes away once they land, or once the limit is
+/// raised.
 final class SyncedFilesNoteCache {
     private let store: HistoryStore
+    private let fileLimit: () -> Int
     private var settled: [UUID: SyncedFilesStatus?] = [:]
 
-    init(store: HistoryStore) {
+    init(store: HistoryStore, fileLimit: @escaping () -> Int) {
         self.store = store
+        self.fileLimit = fileLimit
     }
 
     func note(for item: ClipSummary) -> String? {
         guard item.kind.isFileSystemEntry, item.byteCount == nil, !item.isConcealed else { return nil }
         if let known = settled[item.id] { return known?.rowNote }
-        let status = store.syncedFilesStatus(for: item.id)
-        if status != .pending { settled[item.id] = status }
+        let status = store.syncedFilesStatus(for: item.id, fileLimit: fileLimit())
+        if status?.canChange != true { settled[item.id] = status }
         return status?.rowNote
     }
 }

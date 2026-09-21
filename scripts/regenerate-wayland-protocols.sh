@@ -65,8 +65,36 @@ for xml in "${XML_DIR}"/*.xml; do
 	# --strict fails the run on a DTD violation rather than emitting code from a
 	# malformed description. A vendored file that has been edited by hand is
 	# exactly the case worth catching here.
-	wayland-scanner --strict client-header "${xml}" "${INCLUDE_DIR}/${stem}-client-protocol.h"
-	wayland-scanner --strict private-code "${xml}" "${TARGET}/${stem}-protocol.c"
+	header="${INCLUDE_DIR}/${stem}-client-protocol.h"
+	code="${TARGET}/${stem}-protocol.c"
+	wayland-scanner --strict client-header "${xml}" "${header}"
+	wayland-scanner --strict private-code "${xml}" "${code}"
+
+	if [[ "${stem}" == "virtual-keyboard-unstable-v1" ]]; then
+		# This target is C-only. Drop scanner's C++ wrapper and spell hidden
+		# visibility with a pragma, avoiding reserved compiler identifiers that
+		# the strict C checker correctly rejects in repository-owned output.
+		python3 - "${header}" "${code}" <<'PY'
+from pathlib import Path
+import sys
+
+header, code = map(Path, sys.argv[1:])
+text = header.read_text()
+text = text.replace('#ifdef  __cplusplus\nextern "C" {\n#endif\n\n', '')
+text = text.replace('\n#ifdef  __cplusplus\n}\n#endif\n\n', '\n')
+header.write_text(text)
+
+text = code.read_text()
+start = text.index('#ifndef __has_attribute')
+end = text.index('\nextern const struct wl_interface', start)
+text = text[:start] + text[end:]
+text = text.replace('WL_PRIVATE ', '')
+marker = 'const struct wl_interface zwp_virtual_keyboard_v1_interface ='
+text = text.replace(marker, '#pragma GCC visibility push(hidden)\n' + marker)
+text += '\n#pragma GCC visibility pop\n'
+code.write_text(text)
+PY
+	fi
 
 	# private-code, not public-code: these symbols are linked into one static
 	# library and nothing outside it resolves them, so exporting them from the

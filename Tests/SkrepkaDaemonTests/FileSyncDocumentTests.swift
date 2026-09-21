@@ -81,6 +81,42 @@ struct FileSyncDocumentTests {
         #expect(status[names] == ClipDocument.FilesStatusName.notSynced)
     }
 
+    @Test(
+        "a foreign bundle over this device's limit is reported as over it, and pending again under a higher one"
+    )
+    func overLimitIsReported() async throws {
+        let (daemon, _) = try ForeignFileWriteTests.daemon()
+        let hash = String(repeating: "5", count: 64)
+        // The fixture offers a 64-byte bundle.
+        try await daemon.historyStore.capture(
+            try Self.fileMeta(hash: hash, withBundle: true), payloads: Self.uriPayload)
+
+        #expect(await daemon.applySettings(SettingsPatch(maximumFileSyncBytes: 0)).ok)
+        let overLimit = await daemon.historyDocument(limit: 0).clips.first { $0.contentHash == hash }
+        #expect(overLimit?.filesStatus == ClipDocument.FilesStatusName.overLimit)
+
+        #expect(await daemon.applySettings(SettingsPatch(maximumFileSyncBytes: 1024 * 1024)).ok)
+        let pending = await daemon.historyDocument(limit: 0).clips.first { $0.contentHash == hash }
+        #expect(pending?.filesStatus == ClipDocument.FilesStatusName.pending)
+    }
+
+    @Test("a copy of files over the limit is recorded without its contents")
+    func captureHonoursTheLimit() async throws {
+        let (daemon, directory) = try ForeignFileWriteTests.daemon()
+        #expect(await daemon.applySettings(SettingsPatch(maximumFileSyncBytes: 0)).ok)
+        let file = directory.appending(path: "big.txt")
+        try Data("contents".utf8).write(to: file)
+
+        let answer = await daemon.submit(
+            SubmitRequest(representations: [
+                "text/uri-list": Data(file.absoluteString.utf8).base64EncodedString()
+            ]))
+        #expect(answer.ok)
+        let entry = try #require(try await daemon.historyStore.listing().first)
+        let contents = try #require(await daemon.historyStore.contents(for: entry.summary.id))
+        #expect(contents.payload.data(forType: FileBundle.storageType) == nil)
+    }
+
     @Test("a synced picture file previews as its picture")
     func bundledPictureIsPreviewed() async throws {
         let (daemon, _) = try ForeignFileWriteTests.daemon()

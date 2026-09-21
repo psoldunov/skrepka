@@ -38,7 +38,8 @@ actor FakePreferencesDaemon: SettingsDaemon {
         document = PreferencesFixtures.settings(
             maximumItems: patch.maximumItems ?? document.retention.maximumItems,
             maximumAgeDays: patch.maximumAgeDays ?? document.retention.maximumAgeDays,
-            syncEnabled: patch.syncEnabled ?? document.sync.isEnabled)
+            syncEnabled: patch.syncEnabled ?? document.sync.isEnabled,
+            pasteAutomatically: patch.pasteAutomatically ?? document.paste.isAutomatic)
         return answer
     }
 
@@ -84,13 +85,17 @@ enum PreferencesFixtures {
         maximumAgeDays: Int = 30,
         syncEnabled: Bool = true,
         isLockedOff: Bool = false,
-        markers: [String] = ["x-kde-passwordManagerHint = secret"]
+        pasteAutomatically: Bool = true,
+        markers: [String] = ["x-kde-passwordManagerHint = secret"],
+        version: UInt32 = SkrepkaInterface.version
     ) -> SettingsDocument {
         SettingsDocument(
             retention: SettingsDocument.Retention(maximumItems: maximumItems, maximumAgeDays: maximumAgeDays),
             sync: SettingsDocument.Sync(isEnabled: syncEnabled, isLockedOff: isLockedOff),
             history: SettingsDocument.HistoryCounts(entries: 42, pinned: 3, images: 5),
-            protectedMarkers: markers
+            protectedMarkers: markers,
+            paste: SettingsDocument.Paste(isAutomatic: pasteAutomatically),
+            version: version
         )
     }
 

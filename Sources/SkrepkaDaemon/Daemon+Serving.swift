@@ -95,7 +95,8 @@ extension Daemon {
             },
             onPushWithoutBytes: { [weak self] sender, meta in
                 await self?.fetchPushed(meta, from: sender, generation: generation)
-            }
+            },
+            fileSync: runtime.fileSync
         )
         // Keyed, and the task removes its own entry when it finishes. An
         // append-only list of these grew by one for every connection the daemon

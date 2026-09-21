@@ -1,4 +1,5 @@
 import CGtk4
+import SkrepkaLinuxPlatform
 
 /// The Settings window: a sidebar of sections on the left and the chosen
 /// section's page on the right, under a title bar drawn in the same colours.
@@ -31,6 +32,8 @@ final class SettingsWindow {
         let connect: PreferencesJobs.Connect
         let autostart: AutostartEntry
         let shortcut: GlobalShortcutsState
+        let pasteMechanism: PasteMechanism
+        let pasteAutomaticallyChanged: (Bool) -> Void
     }
 
     init(application: UnsafeMutablePointer<GtkApplication>, services: Services) throws {

@@ -25,23 +25,43 @@ but not files.
 
 ### Added
 
+- **Choosing a Linux history entry now pastes it automatically by default.**
+  Skrepka uses XTest on X11, a Wayland virtual keyboard on sway and Hyprland,
+  and the Remote Desktop portal on KDE and GNOME. The portal may ask once for
+  keyboard-control permission. If injection fails, the entry stays copied and
+  Skrepka asks you once to press Ctrl+V; terminals may require Ctrl+Shift+V.
+  The behaviour can be turned off in Settings or with
+  `skrepka config set paste.automatic off`.
 - **Copied files travel with the copy.** When you copy files — in Finder,
   Dolphin, or a screenshot tool that puts the file on the clipboard — Skrepka
-  reads them at once, up to 32 MB and 1000 files per copy, and a paired device
-  receives the files themselves. Pasting there gives real files in its own
-  cache, and for a picture also the picture, so a file manager pastes a file
-  and a chat app or editor pastes the image. A folder, or a copy over the
-  limit, pastes as the file names, and its row says "contents not synced".
+  reads them at once, up to the file-size limit (32 MB unless you lower it) and
+  1000 files per copy, and a paired device receives the files themselves.
+  Pasting there gives real files in its own cache, and for a picture also the
+  picture, so a file manager pastes a file and a chat app or editor pastes the
+  image. A folder, or a copy over the limit, pastes as the file names, and its
+  row says "contents not synced".
   Nothing ever pastes a path that exists only on the other machine.
 - **Pictures over 256 KB arrive on the other clipboard within seconds.** They
   used to reach its history on the next half-minute exchange and never its
   clipboard. Nothing is written if you copied something else in the meantime.
+- **Choose how large a copy of files may be and still sync — on the Mac and on
+  Linux.** Settings → Sync → Sync files up to: Off, 1, 5, 10, 20 or 32 MB, 32 MB
+  by default as before; `skrepka config set sync.file-limit <MB|off>` on Linux.
+  Each device applies its own limit both ways: a larger copy made there is not
+  read or sent, and a larger one another device offers is not fetched. Either
+  way the copy still arrives, as the files' names: a row the sender held back
+  says "contents not synced", and one this device declined says "contents over
+  the sync size limit" until its limit is raised.
+- **A row shows its progress while its bytes arrive.** A file or picture larger
+  than one 256 KB chunk, on its way from another device, draws a progress bar
+  and a percentage in place of its bottom line of text, in the Mac's picker and
+  the Linux one, until it has landed.
 
 - **Linux Settings has the Mac's panes, and looks like the picker.** A sidebar
   sized for the Deck's touch screen leads to five panes, drawn in the picker's
   colours and the desktop's accent, dark or light:
-  - **General:** the global shortcut and where to change it, a note that you
-    paste with Ctrl+V, and Launch at login.
+  - **General:** the global shortcut and where to change it, Paste
+    automatically, and Launch at login.
   - **History:** how many entries, pinned entries and images there are; Keep at
     most and Discard after; and Clear…, keeping pinned entries or not.
   - **Privacy:** what is never recorded — anything a password manager marks
@@ -63,8 +83,9 @@ but not files.
 - **`skrepka-gui --status`** says whether the tray icon was accepted, whether the
   global shortcut is bound and to which keys, and how the picker is shown. The
   app also writes this to the journal: `journalctl --user -t skrepka-gui`.
-- **The daemon's D-Bus interface is version 4,** with `Settings` and
-  `SetSettings`.
+- **The daemon's D-Bus interface is version 5,** with `Settings` and
+  `SetSettings` (the file-size limit and automatic paste among them), and
+  `Transfers` with the `TransfersChanged` signal for arriving entries.
 
 ### Changed
 
@@ -110,9 +131,10 @@ but not files.
 
 ### Known limitations
 
-- **Copied files are kept in history,** up to 32 MB per copy, until retention
-  removes the entry — so history takes more disk than it did when a file copy
-  was only a path. Keep at most and Discard after bound it.
+- **Copied files are kept in history,** up to the file-size limit — 32 MB per
+  copy unless you lower it — until retention removes the entry, so history
+  takes more disk than it did when a file copy was only a path. Keep at most,
+  Discard after and Sync files up to bound it; Off keeps none.
 - **A file copied before this update becomes a new entry the next time it is
   copied,** because an entry for files now includes their contents.
 - **The built-in announcer speaks IPv4 only,** and does not break the tie when

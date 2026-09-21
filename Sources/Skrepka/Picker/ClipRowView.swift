@@ -18,6 +18,10 @@ struct ClipRowView: View {
     let stackImages: [NSImage]
     /// Whether a synced file row's files came — see `PickerModel.filesNote(for:)`.
     let filesNote: String?
+    /// How far the row's bytes have got on their way from a peer, or nil —
+    /// see `PickerModel.transferFraction(for:)`. While it is set the subtitle
+    /// gives way to a progress bar, in the same line.
+    let transferFraction: Double?
 
     var body: some View {
         HStack(spacing: 11) {
@@ -30,14 +34,18 @@ struct ClipRowView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
 
-                subtitle
-                    .font(.system(size: 11))
-                    .lineLimit(1)
-                    .foregroundStyle(
-                        isSelected
-                            ? AnyShapeStyle(Color.white.opacity(0.75))
-                            : AnyShapeStyle(.secondary)
-                    )
+                if let transferFraction {
+                    TransferBarView(fraction: transferFraction, isSelected: isSelected)
+                } else {
+                    subtitle
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                        .foregroundStyle(
+                            isSelected
+                                ? AnyShapeStyle(Color.white.opacity(0.75))
+                                : AnyShapeStyle(.secondary)
+                        )
+                }
             }
 
             Spacer(minLength: 8)

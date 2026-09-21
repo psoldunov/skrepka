@@ -78,6 +78,16 @@ struct FileBundleReaderTests {
         #expect(await FileBundleReader.attachingBundle(to: attached) == attached)
     }
 
+    @Test("A limit of zero reads nothing at all, and a limit under the files bundles nothing")
+    func limitIsHonoured() async throws {
+        let url = try Fixtures.writeTextFile("twelve bytes", named: "note.txt")
+        let item = ClipItem(kind: .file, text: "note.txt", payload: Fixtures.fileURLPayload(url))
+        #expect(await FileBundleReader.attachingBundle(to: item, limit: 0) == item)
+        #expect(await FileBundleReader.attachingBundle(to: item, limit: 5) == item)
+        let bundled = await FileBundleReader.attachingBundle(to: item, limit: 1_024)
+        #expect(bundled.payload.data(forType: FileBundle.storageType) != nil)
+    }
+
     @Test("Text, concealed copies and folders are left as they are")
     func nothingToAttach() async throws {
         let text = ClipItem(kind: .text, text: "hi", payload: ClipPayload(representations: [:]))

@@ -6,6 +6,7 @@
 #if os(Linux)
 
     import Foundation
+    import SkrepkaSync
 
     extension SQLiteHistoryStore {
         /// One row, as something outside the process can name and act on it.
@@ -45,19 +46,25 @@
             /// tells a file row from another machine, whose paths do not
             /// exist here, from one copied on this one.
             public let originDeviceID: String?
+            /// The size the row's index gives its file bundle, held or not —
+            /// what tells a bundle still to come from one over this device's
+            /// file-size limit. Nil for a row with no bundle.
+            public let fileBundleBytes: Int?
 
             public init(
                 summary: ClipSummary,
                 contentHash: String,
                 representationTypes: [String],
                 localRepresentationTypes: [String],
-                originDeviceID: String? = nil
+                originDeviceID: String? = nil,
+                fileBundleBytes: Int? = nil
             ) {
                 self.summary = summary
                 self.contentHash = contentHash
                 self.representationTypes = representationTypes
                 self.localRepresentationTypes = localRepresentationTypes
                 self.originDeviceID = originDeviceID
+                self.fileBundleBytes = fileBundleBytes
             }
         }
 
@@ -94,7 +101,8 @@
                     contentHash: hashes[summary.id] ?? "",
                     representationTypes: (indexes[summary.id]?.keys).map { $0.sorted() } ?? [],
                     localRepresentationTypes: localTypes[summary.id] ?? [],
-                    originDeviceID: origins[summary.id]
+                    originDeviceID: origins[summary.id],
+                    fileBundleBytes: indexes[summary.id]?[FileBundle.storageType]
                 )
             }
         }

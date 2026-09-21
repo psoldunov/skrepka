@@ -28,6 +28,7 @@ extension PaletteWindow {
         data: gpointer?
     ) -> gboolean {
         guard let palette = palette(from: data) else { return 0 }
+        palette.recordModifiers(state)
         let command = PickerKeyMap.command(
             keysym: keysym,
             keycode: keycode,
@@ -46,6 +47,12 @@ extension PaletteWindow {
         {
             keyPressed($0, keysym: $1, keycode: $2, state: $3, data: $4)
         }
+
+    static let onModifiersChanged: @convention(c) (OpaquePointer?, UInt32, gpointer?) -> gboolean = {
+        guard let palette = palette(from: $2) else { return 0 }
+        palette.recordModifiers($1)
+        return 0
+    }
 
     /// Drops the retain ``connectKeys(_:)`` took, when GLib destroys the
     /// closure — the only moment releasing is neither too early nor never.

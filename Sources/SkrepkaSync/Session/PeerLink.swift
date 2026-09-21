@@ -241,7 +241,8 @@ public actor PeerLink {
             connection: connection,
             session: runtime.pairing,
             trust: runtime.trust,
-            expecting: peerDeviceID
+            expecting: peerDeviceID,
+            fileSync: runtime.fileSync
         )
         self.initiator = initiator
 
