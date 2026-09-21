@@ -25,6 +25,9 @@ public struct CLIOptions: Sendable, Hashable {
         case doctor
         case sync
         case unpair(fingerprint: String)
+        /// `config`: print the settings. `configure`: `config set`.
+        case config
+        case configure(SettingsPatch)
         case help
     }
 
@@ -60,6 +63,11 @@ public struct CLIOptions: Sendable, Hashable {
           skrepka doctor [--json]               what is working on this machine
           skrepka sync                          exchange indexes with every peer now
           skrepka unpair <fingerprint>          forget a paired device
+          skrepka config [--json]               retention, sync and what history holds
+          skrepka config set <key> <value>      change one setting:
+                                                  retention.items  N | unlimited
+                                                  retention.days   N | unlimited
+                                                  sync.enabled     on | off
           skrepka help                          this text
 
         NOTES
@@ -97,7 +105,7 @@ extension CLIOptions {
     /// against it: which options are legal depends on the verb, and the verb is
     /// known before its arguments are.
     enum Verb: String, Sendable, Hashable {
-        case list, copy, pin, unpin, delete, clear, pair, peers, doctor, sync, unpair
+        case list, copy, pin, unpin, delete, clear, pair, peers, doctor, sync, unpair, config
 
         init(_ name: String) throws {
             guard let verb = Verb(rawValue: name) else { throw CLIError.unknownCommand(name) }
@@ -106,7 +114,7 @@ extension CLIOptions {
 
         var acceptsJSON: Bool {
             switch self {
-            case .list, .peers, .doctor: true
+            case .list, .peers, .doctor, .config: true
             case .copy, .pin, .unpin, .delete, .clear, .pair, .sync, .unpair: false
             }
         }
@@ -130,7 +138,9 @@ extension CLIOptions {
             var rest = arguments[...]
             while let token = rest.first {
                 rest = rest.dropFirst()
-                if token.hasPrefix("-") {
+                // `config set retention.items -5` is a value the daemon
+                // refuses with a reason, not an unknown flag.
+                if token.hasPrefix("-"), !(verb == .config && Int(token) != nil) {
                     try apply(token, for: verb, from: &rest)
                 } else {
                     positionals.append(token)
@@ -192,6 +202,7 @@ extension CLIOptions {
                 return .sync
             case .copy, .pin, .unpin, .delete, .clear: return try historyAction(verb)
             case .unpair: return .unpair(fingerprint: try fingerprint(verb))
+            case .config: return try ConfigArguments.command(positionals: positionals, isJSON: isJSON)
             case .pair:
                 try none(verb)
                 return .pair(peer: try namedPeer(), seconds: seconds)
@@ -209,7 +220,7 @@ extension CLIOptions {
             case .clear:
                 try none(verb)
                 return .clear(keepingPinned: keepPinned)
-            case .list, .pair, .peers, .doctor, .sync, .unpair:
+            case .list, .pair, .peers, .doctor, .sync, .unpair, .config:
                 throw CLIError.unknownCommand(verb.rawValue)
             }
         }

@@ -34,7 +34,11 @@ extension AvahiDiscovery {
         case .unchanged:
             return
         case .record:
-            try await updateRecord(descriptor)
+            if let announcer {
+                try await updateBySelf(descriptor, on: announcer)
+            } else {
+                try await updateRecord(descriptor)
+            }
         case .republish:
             // ``dropAdvertisement()`` rather than ``stopAdvertising()``: this
             // advertisement is being replaced, not ended, and finishing the
@@ -81,6 +85,11 @@ extension AvahiDiscovery {
             )
             path = try await newEntryGroup()
         } catch {
+            // `disable-user-service-publishing=yes` lands here.
+            if Self.isPublishingRefusal(error) {
+                try await publishBySelf(descriptor, after: error)
+                return
+            }
             throw DiscoveryError.advertisingFailed(reason: describe(error))
         }
 
@@ -96,6 +105,11 @@ extension AvahiDiscovery {
             // created and not owned. One `catch` covers them all, which is why
             // the `Free` is here rather than at each throw.
             await discardEntryGroup(at: path)
+            // `disable-publishing=yes` lands here, as `AddService` refused.
+            if Self.isPublishingRefusal(error) {
+                try await publishBySelf(descriptor, after: error)
+                return
+            }
             throw error
         }
     }

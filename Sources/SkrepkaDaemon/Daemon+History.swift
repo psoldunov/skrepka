@@ -16,7 +16,8 @@ extension Daemon {
         }
         let byID = Dictionary(listing.map { ($0.summary.id, $0) }) { first, _ in first }
         let matched = Matcher().filter(listing.map(\.summary), query: query)
-        let clips = matched.compactMap { byID[$0.id] }.map(Self.clipDocument)
+        let local = await localDeviceHex(ifAnyOf: listing)
+        let clips = matched.compactMap { byID[$0.id] }.map { Self.clipDocument($0, localDeviceHex: local) }
         let limited = limit == 0 ? clips : Array(clips.prefix(Int(limit)))
         return HistoryDocument(clips: limited, total: clips.count)
     }
@@ -32,7 +33,7 @@ extension Daemon {
         case .plain:
             return await copy(
                 selector,
-                targetBuilder: Self.plainWritableTargets,
+                targetBuilder: \.plainTargets,
                 emptyTargetDetail: "that entry has no text to copy as plain text"
             )
         }
@@ -101,7 +102,9 @@ extension Daemon {
         guard let contents = await store.contents(for: entry.summary.id) else {
             return .unavailable("that entry has no bytes on this device yet", contentHash: entry.contentHash)
         }
-        guard let picture = Self.picture(in: contents.payload.representations) else {
+        // A synced image file previews as the picture its bundle holds.
+        let representations = ForeignFileGuard.withBundledPicture(contents.payload.representations)
+        guard let picture = Self.picture(in: representations) else {
             return .unavailable("that entry has no picture to preview", contentHash: entry.contentHash)
         }
         let limit = min(

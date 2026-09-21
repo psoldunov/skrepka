@@ -1,7 +1,8 @@
 import CGtk4
 
-/// The line at the top of the pane: the daemon's failure, sync being off, or
-/// what the last action had to say.
+/// The line at the top of a pane: the daemon's failure, sync being off, or
+/// what the last action had to say. The Sync pane's, and History's and
+/// Privacy's too.
 final class SyncBanner {
     var onDismiss: (() -> Void)?
 
@@ -14,7 +15,7 @@ final class SyncBanner {
         guard let box = GtkBuild.box(vertical: false, spacing: 12, classes: [SettingsStyle.banner]),
             let text = GtkBuild.box(vertical: true, spacing: 4),
             let message = GtkBuild.label("", classes: [SettingsStyle.bannerMessage], wraps: true),
-            let detail = GtkBuild.label("", wraps: true),
+            let detail = GtkBuild.label("", classes: [SettingsStyle.secondary], wraps: true),
             let dismiss = GtkBuild.button("Dismiss")
         else { throw SettingsError.widgetCreationFailed }
         // Copyable: the detail is usually a command to paste into a terminal —
@@ -43,16 +44,9 @@ final class SyncBanner {
             return
         }
         GtkBuild.setText(message, banner.message)
-        // GTK's own `error` and `success` classes, which a theme colours when
-        // it defines them and ignores when it does not — so this adds colour
-        // where there is one to add and never depends on it.
-        gtk_widget_remove_css_class(message, "error")
-        gtk_widget_remove_css_class(message, "success")
-        switch banner.tone {
-        case .problem: gtk_widget_add_css_class(message, "error")
-        case .success: gtk_widget_add_css_class(message, "success")
-        case .info: break
-        }
+        // The tone colours the whole banner — red for a problem, green for a
+        // success — in the palette's colours rather than the theme's.
+        SettingsWidgets.setTone(widget, banner.tone == .info ? nil : SettingsStyle.tone(banner.tone))
         GtkBuild.setText(detail, banner.detail ?? "")
         GtkBuild.setVisible(detail, banner.detail != nil)
         GtkBuild.setVisible(dismiss, banner.isDismissible)

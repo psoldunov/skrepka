@@ -13,6 +13,7 @@ struct AppCommandTests {
             (["--settings"], .openSettings),
             (["--background"], .background),
             (["--quit"], .quit),
+            (["--status"], .status),
             (["--help"], .help),
             (["-h"], .help),
         ] as [([String], AppCommand)]
@@ -37,7 +38,7 @@ struct AppCommandTests {
 
     @Test("the usage names every option")
     func usageNamesEveryOption() {
-        for option in ["--picker", "--settings", "--background", "--quit"] {
+        for option in ["--picker", "--settings", "--background", "--status", "--quit"] {
             #expect(AppCommand.usage.contains(option))
         }
     }

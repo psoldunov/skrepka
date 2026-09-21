@@ -26,12 +26,16 @@ extension Daemon {
             )
             return HistoryDocument(clips: [], total: 0)
         }
-        let clips = listing.map(Self.clipDocument)
+        let local = await localDeviceHex(ifAnyOf: listing)
+        let clips = listing.map { Self.clipDocument($0, localDeviceHex: local) }
         let limited = limit == 0 ? clips : Array(clips.prefix(Int(limit)))
         return HistoryDocument(clips: limited, total: clips.count)
     }
 
-    static func clipDocument(_ listing: SQLiteHistoryStore.ClipListing) -> ClipDocument {
+    static func clipDocument(
+        _ listing: SQLiteHistoryStore.ClipListing,
+        localDeviceHex: String? = nil
+    ) -> ClipDocument {
         let summary = listing.summary
         return ClipDocument(
             contentHash: listing.contentHash,
@@ -59,9 +63,36 @@ extension Daemon {
             imageHeight: summary.imageSize?.height,
             fileCount: summary.fileCount > 0 ? summary.fileCount : nil,
             isConcealed: summary.isConcealed,
-            hasPreview: !summary.isConcealed
-                && Self.pictureMediaType(in: listing.localRepresentationTypes) != nil
+            hasPreview: !summary.isConcealed && Self.hasPicture(listing),
+            filesStatus: Self.filesStatus(listing, localDeviceHex: localDeviceHex)
         )
+    }
+
+    /// Whether ``Daemon/preview(_:maxBytes:)`` has a picture for the row: one
+    /// held as itself, or the one file of an image-file row's bundle — the
+    /// store marks a row `imageFile` when the bundle that arrived holds one
+    /// picture and nothing else.
+    static func hasPicture(_ listing: SQLiteHistoryStore.ClipListing) -> Bool {
+        if pictureMediaType(in: listing.localRepresentationTypes) != nil { return true }
+        return listing.summary.kind == .imageFile
+            && listing.localRepresentationTypes.contains(FileBundle.storageType)
+    }
+
+    /// Whether a file row from another device brought its files, as the
+    /// document spells it. Nil for anything else.
+    static func filesStatus(_ listing: SQLiteHistoryStore.ClipListing, localDeviceHex: String?) -> String? {
+        let status = SyncedFilesStatus.of(
+            kind: listing.summary.kind,
+            isForeign: isForeign(origin: listing.originDeviceID, local: localDeviceHex),
+            offeredTypes: Set(listing.representationTypes),
+            heldTypes: Set(listing.localRepresentationTypes)
+        )
+        return switch status {
+        case .synced: ClipDocument.FilesStatusName.synced
+        case .pending: ClipDocument.FilesStatusName.pending
+        case .notSynced: ClipDocument.FilesStatusName.notSynced
+        case nil: nil
+        }
     }
 
     /// The image kinds a GTK client can display directly, in the preference
@@ -162,132 +193,6 @@ extension Daemon {
             livePush: false,
             lastSyncedAt: nil
         )
-    }
-
-    // MARK: - Acting
-
-    /// The clipboard targets an entry's stored representations can be written
-    /// as, dropping any whose type identifier this build does not map.
-    ///
-    /// Split out of ``copy(_:)`` to keep that function inside the 40-line body
-    /// the lint rule allows; it is pure, so it costs nothing to lift.
-    static func writableTargets(
-        from representations: [String: Data]
-    ) -> [String: Data] {
-        var payloads: [RepresentationKey: Data] = [:]
-        for (type, data) in representations {
-            guard let key = RepresentationKeyMap.key(forUTI: type) else { continue }
-            payloads[key] = data
-        }
-        return LinuxClipboardWriter.targets(for: payloads)
-    }
-
-    /// The text target alone, for a paste that must not carry markup or images.
-    static func plainWritableTargets(from representations: [String: Data]) -> [String: Data] {
-        let text = representations.filter {
-            RepresentationKeyMap.canonical(forUTI: $0.key) == "text/plain;charset=utf-8"
-        }
-        return writableTargets(from: text)
-    }
-
-    /// Puts one entry on the clipboard.
-    public func copy(_ selector: ClipSelector) async -> ActionDocument {
-        await copy(
-            selector,
-            targetBuilder: Self.writableTargets,
-            emptyTargetDetail: "nothing in that entry can be written to a Linux clipboard"
-        )
-    }
-
-    func copy(
-        _ selector: ClipSelector,
-        targetBuilder: ([String: Data]) -> [String: Data],
-        emptyTargetDetail: String
-    ) async -> ActionDocument {
-        guard clipboard != nil else {
-            return .refused(
-                """
-                There is no clipboard to write to in this session. \
-                Run `skrepka doctor` to see what this session offers.
-                """
-            )
-        }
-        let listing: [SQLiteHistoryStore.ClipListing]
-        do {
-            listing = try await store.listing()
-        } catch {
-            // Surfaced rather than discarded: an empty listing here reads as
-            // "there is nothing in the history yet", which is the one thing
-            // this failure is not.
-            return .refused("could not read the history: \(error)")
-        }
-        guard let entry = Self.resolve(selector, in: listing) else {
-            return .refused(Self.notFound(selector, count: listing.count))
-        }
-        guard let contents = await store.contents(for: entry.summary.id) else {
-            return .refused("that entry holds no bytes on this device yet", subject: entry.contentHash)
-        }
-        let targets = targetBuilder(contents.payload.representations)
-        guard !targets.isEmpty else {
-            return .refused(
-                emptyTargetDetail,
-                subject: entry.contentHash
-            )
-        }
-        // Re-bound here rather than relied on from the guard at the top: the
-        // listing read and the contents read are both suspension points, and
-        // `performStop()` clears `clipboard` between them. The optional chain
-        // this replaces wrote nothing in that case and still answered
-        // `.succeeded`, so `skrepka copy` printed "Copied." over an unchanged
-        // clipboard.
-        guard let clipboard else {
-            return .refused(
-                """
-                The clipboard for this session went away while that entry was \
-                being read, so nothing was copied. Try again.
-                """,
-                subject: entry.contentHash
-            )
-        }
-        // `.copy`, unlike a live push's `.handoff`: a copy the user asked for is
-        // a copy, and hoisting it back to the top of the history is what every
-        // clipboard manager does.
-        await clipboard.setSelection(targets, as: .copy)
-        return .succeeded(
-            Self.copiedDetail(entry), subject: entry.contentHash)
-    }
-
-    static func resolve(
-        _ selector: ClipSelector,
-        in listing: [SQLiteHistoryStore.ClipListing]
-    ) -> SQLiteHistoryStore.ClipListing? {
-        switch selector {
-        case .position(let index):
-            guard index >= 1, index <= listing.count else { return nil }
-            return listing[index - 1]
-        case .hash(let prefix):
-            let matches = listing.filter { $0.contentHash.hasPrefix(prefix) }
-            // Exactly one, or nothing. A prefix that collides names unrelated
-            // content and picking either pastes something nobody asked for.
-            return matches.count == 1 ? matches.first : nil
-        }
-    }
-
-    static func notFound(_ selector: ClipSelector, count: Int) -> String {
-        switch selector {
-        case .position(let index):
-            count == 0
-                ? "there is nothing in the history yet"
-                : "there is no entry \(index) — the history holds \(count)"
-        case .hash(let prefix):
-            "no single entry starts with \"\(prefix)\""
-        }
-    }
-
-    /// Reads through the same masking and stripping the listing does: this
-    /// string is printed straight into the terminal that asked for the copy.
-    private static func copiedDetail(_ entry: SQLiteHistoryStore.ClipListing) -> String {
-        "copied \(SafeText.oneLine(entry.summary.previewText, limit: 60))"
     }
 
     /// Exchanges indexes with every live peer now rather than on the timer.

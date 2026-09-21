@@ -261,6 +261,9 @@ let package = Package(
     // ships it in the tools tarball so Phase 7 step 1 can be walked through on KWin
     // without depending on the daemon.
     package.products.append(.executable(name: "skrepka-palette-demo", targets: ["skrepka-palette-demo"]))
+    // The Settings window against a fake daemon, for screenshots under a
+    // headless compositor — `scripts/screenshot-settings.sh`. Never installed.
+    package.products.append(.executable(name: "skrepka-settings-demo", targets: ["skrepka-settings-demo"]))
     // The desktop app: the tray icon, the picker its hotkey opens, and the
     // Settings window both of them lead to — one process, so the picker is
     // already built when the hotkey fires. A product so
@@ -471,6 +474,13 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "$ORIGIN/../lib"])
             ]
+        ),
+        // The Settings window, drawn against an in-process fake daemon so every
+        // pane can be screenshotted without `skrepkad`. See the Sources file.
+        .executableTarget(
+            name: "skrepka-settings-demo",
+            dependencies: ["SkrepkaLinuxUI", "SkrepkaIPC"],
+            swiftSettings: sharedSwiftSettings
         ),
         // The desktop app's entry point — everything else is in
         // `SkrepkaLinuxUI/`, where the tests can reach it.

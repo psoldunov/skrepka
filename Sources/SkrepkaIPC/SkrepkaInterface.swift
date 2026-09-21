@@ -71,7 +71,9 @@ public enum SkrepkaInterface {
     ///   ``Member/setPinned``, ``Member/delete``, ``Member/clear`` and
     ///   ``Member/preview`` — and the row fields on ``ClipDocument`` a picker
     ///   draws its subtitle from.
-    public static let version: UInt32 = 3
+    /// - 4: ``Member/settings`` and ``Member/setSettings`` — retention and the
+    ///   sync switch, settable from the Settings window and `skrepka config`.
+    public static let version: UInt32 = 4
 
     /// Every member this build exports, spelled once.
     public enum Member {
@@ -173,6 +175,19 @@ public enum SkrepkaInterface {
         /// picture answers a document with no data and a sentence saying why.
         /// Since version 3.
         public static let preview = "Preview"
+
+        /// `() -> s`. ``SettingsDocument`` as JSON: retention, the sync switch,
+        /// the history's figures and the markers that are always protected.
+        /// Since version 4.
+        public static let settings = "Settings"
+
+        /// `(s patch) -> s`. Takes ``SettingsPatch`` as JSON and changes only
+        /// what it names. A lower retention limit applies at once, not at the
+        /// next copy; turning sync off withdraws this device from the network.
+        /// Answers ``ActionDocument``; a limit out of range is `ok: false`,
+        /// JSON that is not a patch is an invalid-argument error. Since
+        /// version 4.
+        public static let setSettings = "SetSettings"
     }
 
     /// Signals a client may subscribe to.

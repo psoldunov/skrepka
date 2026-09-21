@@ -137,7 +137,8 @@ struct PickerView: View {
                             index: index,
                             isSelected: selectedID == item.id,
                             thumbnail: model.thumbnail(for: item),
-                            stackImages: model.stackImages(for: item)
+                            stackImages: model.stackImages(for: item),
+                            filesNote: model.filesNote(for: item)
                         )
                         .id(item.id)
                         .onTapGesture { model.onChoose?(item, .rich) }

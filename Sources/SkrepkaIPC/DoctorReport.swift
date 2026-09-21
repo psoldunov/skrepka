@@ -1,12 +1,11 @@
 import Foundation
-import SkrepkaIPC
 
 /// `skrepka doctor`, rendered for a person.
 ///
 /// Problems first. Everything below them is the evidence somebody pastes into
 /// an issue, and a report that buries "capture is not working" under twelve
 /// lines of Wayland globals has told the user nothing they came for.
-public enum DiagnosticsReport {
+public enum DoctorReport {
     public static func text(
         _ document: DiagnosticsDocument,
         timeZone: TimeZone = .current
@@ -74,7 +73,7 @@ public enum DiagnosticsReport {
         timeZone: TimeZone
     ) -> [String] {
         let captured =
-            storage.lastCapturedAt.map { HistoryReport.stamp($0, in: timeZone) } ?? "nothing yet"
+            storage.lastCapturedAt.map { ReportStamp.text($0, in: timeZone) } ?? "nothing yet"
         return [
             "STORAGE",
             "  path         \(storage.path)",

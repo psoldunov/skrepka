@@ -64,6 +64,22 @@ public struct ClipDocument: Codable, Sendable, Hashable {
     /// row never costs a round trip.
     public let hasPreview: Bool
 
+    /// For a file entry another device recorded: whether its files came with
+    /// it — one of ``FilesStatusName``. Nil for every other entry, and from a
+    /// daemon that predates file sync. A string for the reason ``kind`` is one.
+    public let filesStatus: String?
+
+    /// The values ``filesStatus`` carries.
+    public enum FilesStatusName {
+        /// The files arrived and paste as files.
+        public static let synced = "synced"
+        /// The sender attached the files and their bytes have not arrived yet.
+        public static let pending = "pending"
+        /// No files came — a folder, a copy over the size limit, or a sender
+        /// too old to attach them. The entry pastes as the files' names.
+        public static let notSynced = "notSynced"
+    }
+
     public init(
         contentHash: String,
         preview: String,
@@ -77,7 +93,8 @@ public struct ClipDocument: Codable, Sendable, Hashable {
         imageHeight: Int? = nil,
         fileCount: Int? = nil,
         isConcealed: Bool = false,
-        hasPreview: Bool = false
+        hasPreview: Bool = false,
+        filesStatus: String? = nil
     ) {
         self.contentHash = contentHash
         self.preview = preview
@@ -92,11 +109,12 @@ public struct ClipDocument: Codable, Sendable, Hashable {
         self.fileCount = fileCount
         self.isConcealed = isConcealed
         self.hasPreview = hasPreview
+        self.filesStatus = filesStatus
     }
 
     private enum CodingKeys: String, CodingKey {
         case contentHash, preview, kind, isPinned, createdAt, byteCount, representations
-        case lineCount, imageWidth, imageHeight, fileCount, isConcealed, hasPreview
+        case lineCount, imageWidth, imageHeight, fileCount, isConcealed, hasPreview, filesStatus
     }
 
     /// Written out rather than synthesised for the two flags alone: a
@@ -118,6 +136,7 @@ public struct ClipDocument: Codable, Sendable, Hashable {
         fileCount = try container.decodeIfPresent(Int.self, forKey: .fileCount)
         isConcealed = try container.decodeIfPresent(Bool.self, forKey: .isConcealed) ?? false
         hasPreview = try container.decodeIfPresent(Bool.self, forKey: .hasPreview) ?? false
+        filesStatus = try container.decodeIfPresent(String.self, forKey: .filesStatus)
     }
 }
 

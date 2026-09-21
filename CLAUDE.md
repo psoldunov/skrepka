@@ -23,7 +23,18 @@ reachable from a Mac without the container:
 scripts/linux.sh <command>   # run anything inside the Linux build image
 scripts/doctor-linux.sh      # the Linux quality gate
 scripts/build-deck.sh        # the x86_64 release tarball + .sha256 for a GitHub release
+scripts/screenshot-settings.sh  # the Settings window and the picker under headless sway
+scripts/kde-image.sh         # a headless Plasma 6.4.3 image built from SteamOS 3.8's packages
+scripts/kde.sh <command>     # run, screenshot, type or click inside that Plasma session
+scripts/kde-smoke.sh         # tray, shortcut, picker and click-away checks against a tarball
 ```
+
+The KDE image is the Steam Deck's Desktop Mode without a Deck: the same KWin,
+plasmashell, kglobalacceld and portals, down to the package release. Run
+`SKREPKA_TARBALL=build/deck/skrepka-linux-x86_64.tar.gz scripts/kde-smoke.sh`
+after `scripts/build-deck.sh` before asking anyone to try a build on real
+hardware. It renders without a GPU, so blur and other OpenGL-only effects are
+missing from its screenshots.
 
 `install.sh`, at the repository root, is the release installer — what a user
 runs, with `curl … | bash`, to download the x86_64 tarball from a GitHub

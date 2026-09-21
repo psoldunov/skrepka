@@ -16,56 +16,33 @@ import SkrepkaCore
 /// blur where it has one, and a flat wash where it does not. Colours are
 /// resolved here into literal `rgba()` for the mode rather than left to
 /// `currentColor`, which GTK does not carry through alpha the way a browser
-/// does.
+/// does. The colours themselves are ``SkrepkaPalette``'s, shared with the
+/// Settings window.
 enum PickerStyle {
-    /// The colours one mode draws in.
-    private struct Palette {
-        let panel: String
-        let border: String
-        let hairline: String
-        let primary: String
-        let secondary: String
-        let tertiary: String
-        let tile: String
-        let badge: String
-        let shadow: String
-    }
-
-    private static let dark = Palette(
-        panel: "rgba(28,28,30,0.92)",
-        border: "rgba(255,255,255,0.12)",
-        hairline: "rgba(255,255,255,0.11)",
-        primary: "rgba(255,255,255,0.92)",
-        secondary: "rgba(255,255,255,0.55)",
-        tertiary: "rgba(255,255,255,0.35)",
-        tile: "rgba(255,255,255,0.09)",
-        badge: "rgba(255,255,255,0.09)",
-        shadow: "rgba(0,0,0,0.55)"
-    )
-
-    private static let light = Palette(
-        panel: "rgba(246,246,248,0.94)",
-        border: "rgba(0,0,0,0.12)",
-        hairline: "rgba(0,0,0,0.10)",
-        primary: "rgba(0,0,0,0.88)",
-        secondary: "rgba(0,0,0,0.55)",
-        tertiary: "rgba(0,0,0,0.38)",
-        tile: "rgba(0,0,0,0.06)",
-        badge: "rgba(0,0,0,0.06)",
-        shadow: "rgba(0,0,0,0.30)"
-    )
+    /// The panel's hairline is an inset shadow rather than a border: GTK
+    /// rounds the Mac's 0.5pt border to a 1px band on the top and left edges
+    /// only, with the background showing through it as a light seam, where an
+    /// inset shadow draws one even pixel inside all four edges.
+    ///
+    /// The transparent margin a plain window keeps around the panel, in
+    /// pixels. The plain shadow — 6px down, 16px of blur — fades out within
+    /// it: a CSS blur is a Gaussian whose visible tail runs about one and a
+    /// half blur radii past the edge, so 6 + 24 = 30 is the most it needs.
+    /// The overlay needs no margin at all, having the whole output to fade in.
+    static let plainInset: Int32 = 32
 
     /// The macOS-blue default, for a desktop that names no accent.
-    static let defaultAccent = "rgb(10,122,255)"
+    static let defaultAccent = SkrepkaPalette.defaultAccent
 
     /// Installs the stylesheet for `appearance` on the default display.
     static func apply(_ appearance: AppearancePreference, isDark: Bool) {
-        skrepka_install_css(css(isDark: isDark, accent: appearance.accent?.cssValue ?? defaultAccent))
+        CssInstaller.install(
+            css(isDark: isDark, accent: appearance.accent?.cssValue ?? defaultAccent), slot: .picker)
     }
 
     /// The whole stylesheet, as one string.
     static func css(isDark: Bool, accent: String) -> String {
-        let palette = isDark ? dark : light
+        let palette = SkrepkaPalette.forMode(isDark: isDark)
         return [
             window(palette),
             search(palette),
@@ -75,21 +52,25 @@ enum PickerStyle {
         ].joined(separator: "\n")
     }
 
-    private static func window(_ palette: Palette) -> String {
+    private static func window(_ palette: SkrepkaPalette) -> String {
         """
         window.skrepka-picker { background: transparent; }
         .skrepka-panel {
           background: \(palette.panel);
-          border: 0.5px solid \(palette.border);
           border-radius: 20px;
-          margin: 22px;
-          box-shadow: 0 14px 40px \(palette.shadow);
+          margin: \(plainInset)px;
+          box-shadow: inset 0 0 0 1px \(palette.border), 0 6px 16px \(palette.shadowNear);
+        }
+        window.skrepka-overlay .skrepka-panel {
+          margin: 0;
+          box-shadow: inset 0 0 0 1px \(palette.border),
+            0 24px 64px \(palette.shadowFar), 0 4px 14px \(palette.shadowNear);
         }
         .skrepka-hairline { background: \(palette.hairline); min-height: 1px; }
         """
     }
 
-    private static func search(_ palette: Palette) -> String {
+    private static func search(_ palette: SkrepkaPalette) -> String {
         """
         .skrepka-search { padding: 0 16px; }
         .skrepka-search image { color: \(palette.secondary); -gtk-icon-size: 16px; }
@@ -110,7 +91,7 @@ enum PickerStyle {
     /// not fight the accent selection fill for attention.
     private static let accentCaret = "currentColor"
 
-    private static func list(_ palette: Palette, accent: String) -> String {
+    private static func list(_ palette: SkrepkaPalette, accent: String) -> String {
         """
         .skrepka-list { background: none; padding: 6px 8px; }
         .skrepka-list > row { padding: 0; background: none; }
@@ -140,7 +121,7 @@ enum PickerStyle {
         """
     }
 
-    private static func footer(_ palette: Palette) -> String {
+    private static func footer(_ palette: SkrepkaPalette) -> String {
         """
         .skrepka-footer { padding: 0 14px; }
         .skrepka-hint { font-size: 11px; color: \(palette.secondary); }
@@ -158,7 +139,7 @@ enum PickerStyle {
         """
     }
 
-    private static func empty(_ palette: Palette) -> String {
+    private static func empty(_ palette: SkrepkaPalette) -> String {
         """
         .skrepka-empty { color: \(palette.tertiary); }
         .skrepka-empty-title { font-size: 14px; font-weight: 500; color: \(palette.secondary); }

@@ -189,14 +189,18 @@ extension Daemon {
     /// of something that failed to store would be a peer holding a clip this
     /// device does not. Neither kind of copy that goes unrecorded is offered,
     /// but the gate still hears of both, so a hand-over ends on them.
+    ///
+    /// A file copy's contents are read here, once, and the same item goes to
+    /// the store and to the push — see `FileBundleReader.attachingBundle(to:)`.
     func record(_ decision: CaptureDecision) async {
-        guard let item = decision.item else {
+        guard let accepted = decision.item else {
             if decision.isRefusedCopy { livePushGate.noteUnrecordedCopy() }
             if decision.isNoteworthyRejection {
                 logger.notice("\(decision.rejectionLogMessage ?? "nothing was captured")")
             }
             return
         }
+        let item = await FileBundleReader.attachingBundle(to: accepted)
         guard await store.capture(item) else {
             livePushGate.noteUnrecordedCopy(item.contentHash)
             return

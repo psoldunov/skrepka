@@ -91,6 +91,88 @@ struct PaletteMetricsTests {
         #expect(pictures > text)
     }
 
+    // MARK: - Placement
+
+    @Test("On the Deck the panel hangs 18% down, centred across")
+    func deckPlacementMatchesTheMac() {
+        let frame = PaletteMetrics.frame(wantedHeight: 300, outputWidth: 1280, outputHeight: Self.deckHeight)
+        #expect(frame == PaletteFrame(x: 310, y: 144, width: PaletteMetrics.width, height: 300))
+    }
+
+    @Test("The top edge stays put while a query shrinks the list")
+    func theTopDoesNotMoveWithTheContent() {
+        // The search field sits at the top of the panel, so a top that moved
+        // with the height would slide the field out from under the caret on
+        // every keystroke that narrows the list.
+        let full = PaletteMetrics.frame(wantedHeight: 520, outputWidth: 1280, outputHeight: Self.deckHeight)
+        let narrowed = PaletteMetrics.frame(
+            wantedHeight: 180, outputWidth: 1280, outputHeight: Self.deckHeight)
+        #expect(full.y == narrowed.y)
+    }
+
+    @Test("A long history never runs off the bottom of the screen")
+    func theTallestPanelFits() {
+        for height: Int32 in [300, 600, 800, 1080, 2160] {
+            let frame = PaletteMetrics.frame(wantedHeight: 10_000, outputWidth: 1920, outputHeight: height)
+            #expect(frame.y >= 0)
+            #expect(frame.y + frame.height <= height)
+        }
+    }
+
+    @Test("A Deck docked to a 4K screen places against the big screen")
+    func aDockedDeckUsesTheScreenItOpensOn() {
+        let frame = PaletteMetrics.frame(wantedHeight: 400, outputWidth: 3840, outputHeight: 2160)
+        #expect(frame == PaletteFrame(x: 1590, y: 388, width: PaletteMetrics.width, height: 400))
+    }
+
+    @Test("A screen narrower than the panel gets a panel as wide as the screen")
+    func narrowScreensClampTheWidth() {
+        let frame = PaletteMetrics.frame(wantedHeight: 300, outputWidth: 480, outputHeight: Self.deckHeight)
+        #expect(frame.x == 0)
+        #expect(frame.width == 480)
+    }
+
+    @Test("An output not yet known places at the origin with the Mac's limits")
+    func unknownOutputPlacesAtTheOrigin() {
+        let frame = PaletteMetrics.frame(wantedHeight: 10_000, outputWidth: 0, outputHeight: 0)
+        #expect(
+            frame
+                == PaletteFrame(x: 0, y: 0, width: PaletteMetrics.width, height: PaletteMetrics.maximumHeight)
+        )
+    }
+
+    @Test("A near-empty list still gets the minimum height")
+    func placementRespectsTheMinimum() {
+        let frame = PaletteMetrics.frame(wantedHeight: 20, outputWidth: 1280, outputHeight: Self.deckHeight)
+        #expect(frame.height == PaletteMetrics.minimumHeight)
+    }
+
+    @Test("A panel that measures smaller than its frame keeps the frame")
+    func fitLeavesARoomyFrameAlone() {
+        let frame = PaletteMetrics.frame(wantedHeight: 300, outputWidth: 1280, outputHeight: Self.deckHeight)
+        let fitted = PaletteMetrics.fit(
+            frame, minimumWidth: 400, minimumHeight: 120, outputWidth: 1280, outputHeight: Self.deckHeight)
+        #expect(fitted == frame)
+    }
+
+    @Test("A panel wider than a narrow output grows to its minimum and starts at the left")
+    func fitGrowsPastANarrowOutput() {
+        let frame = PaletteMetrics.frame(wantedHeight: 300, outputWidth: 480, outputHeight: Self.deckHeight)
+        let fitted = PaletteMetrics.fit(
+            frame, minimumWidth: 560, minimumHeight: 120, outputWidth: 480, outputHeight: Self.deckHeight)
+        #expect(fitted.width == 560)
+        #expect(fitted.x == 0)
+    }
+
+    @Test("A panel taller than the cap moves up rather than off the bottom")
+    func fitKeepsATallPanelOnScreen() {
+        let frame = PaletteMetrics.frame(wantedHeight: 10_000, outputWidth: 1280, outputHeight: 300)
+        let fitted = PaletteMetrics.fit(
+            frame, minimumWidth: 400, minimumHeight: 280, outputWidth: 1280, outputHeight: 300)
+        #expect(fitted.height == 280)
+        #expect(fitted.y + fitted.height <= 300)
+    }
+
     @Test("A concealed picture row stays short")
     func concealedRowsStayShort() {
         // Concealed entries draw no preview, so a tall row would be empty space

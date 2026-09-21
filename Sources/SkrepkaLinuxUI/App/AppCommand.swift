@@ -23,12 +23,16 @@ public enum AppCommand: Equatable, Sendable {
     /// `--quit`: stop the app. The daemon is a separate service and keeps
     /// recording history.
     case quit
+    /// `--status`: print what the running app knows about its tray icon, its
+    /// shortcut and its picker — the things that fail without anything on
+    /// screen saying so. Starts nothing when no app is running.
+    case status
     /// `--help`.
     case help
 
     /// The usage text, printed for `--help` and after a mistake.
     public static let usage = """
-        usage: skrepka-gui [--picker | --settings | --background | --quit]
+        usage: skrepka-gui [--picker | --settings | --background | --status | --quit]
 
           (no option)    open the clipboard picker
           --picker       open the picker, or close it when it is open —
@@ -36,6 +40,7 @@ public enum AppCommand: Equatable, Sendable {
                          global-shortcuts portal
           --settings     open Settings
           --background   start in the tray without opening anything
+          --status       show whether the tray icon and the shortcut work
           --quit         quit the app (skrepkad keeps running)
         """
 
@@ -62,13 +67,18 @@ public enum AppCommand: Equatable, Sendable {
     public static func parse(_ arguments: [String]) -> Result<AppCommand, ParseError> {
         guard arguments.count <= 1 else { return .failure(.tooManyOptions(arguments)) }
         guard let option = arguments.first else { return .success(.showPicker) }
-        switch option {
-        case "--picker": return .success(.togglePicker)
-        case "--settings": return .success(.openSettings)
-        case "--background": return .success(.background)
-        case "--quit": return .success(.quit)
-        case "--help", "-h": return .success(.help)
-        default: return .failure(.unknownOption(option))
-        }
+        guard let command = options[option] else { return .failure(.unknownOption(option)) }
+        return .success(command)
     }
+
+    /// Every spelling, and the command it asks for.
+    private static let options: [String: AppCommand] = [
+        "--picker": .togglePicker,
+        "--settings": .openSettings,
+        "--background": .background,
+        "--status": .status,
+        "--quit": .quit,
+        "--help": .help,
+        "-h": .help,
+    ]
 }

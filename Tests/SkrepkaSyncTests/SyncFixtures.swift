@@ -92,7 +92,7 @@ enum SyncFixtures {
 
     static func payloadChunk(key: RepresentationKey) -> PayloadChunk {
         PayloadChunk(
-            contentHash: "ee",
+            contentHash: wireHash("ee"),
             key: key,
             offset: 262_144,
             bytes: Data(repeating: 0xab, count: 1024),
@@ -102,6 +102,12 @@ enum SyncFixtures {
 
     /// One well-formed message of every type, so a test can assert it covered
     /// all of them rather than the handful someone remembered.
+    /// A well-formed content hash made from a two-character label: every
+    /// hash a frame carries must be one — see `ContentHash`.
+    static func wireHash(_ label: String) -> String {
+        String(repeating: label, count: 32)
+    }
+
     static func allMessages() -> [SyncMessageType: SyncMessage] {
         let key = RepresentationKey(canonical: "image/png", origin: "public.png")
         let messages: [SyncMessage] = [
@@ -109,16 +115,18 @@ enum SyncFixtures {
             .pairRequest(pairRequest),
             .pairConfirm(deviceID: deviceA, accepted: true, shortAuthenticationString: "A3F291BC"),
             .indexOffer(
-                items: [meta("aa"), meta("bb", createdAt: 30)],
-                tombstones: [tombstone("cc", deletedAt: 5)],
+                items: [meta(wireHash("aa")), meta(wireHash("bb"), createdAt: 30)],
+                tombstones: [tombstone(wireHash("cc"), deletedAt: 5)],
                 isFinal: false
             ),
             .indexRequest(since: time(-90)),
-            .itemMeta(meta("dd", createdAt: 7, pinned: pin(true, at: 8, by: deviceB))),
+            .itemMeta(meta(wireHash("dd"), createdAt: 7, pinned: pin(true, at: 8, by: deviceB))),
             .payloadRequest(contentHash: "ee", key: key, offset: 262_144),
             .payloadChunk(payloadChunk(key: key)),
-            .tombstone([tombstone("ff", deletedAt: 1), tombstone("00", deletedAt: 2, by: deviceB)]),
-            .livePush(meta: meta("11"), inline: [key: Data([0x89, 0x50, 0x4e, 0x47])]),
+            .tombstone([
+                tombstone(wireHash("ff"), deletedAt: 1), tombstone(wireHash("00"), deletedAt: 2, by: deviceB),
+            ]),
+            .livePush(meta: meta(wireHash("11")), inline: [key: Data([0x89, 0x50, 0x4e, 0x47])]),
             .ping(nonce: -4_611_686_018_427_387_904),
         ]
         return Dictionary(uniqueKeysWithValues: messages.map { ($0.type, $0) })

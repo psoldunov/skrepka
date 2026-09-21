@@ -1,13 +1,13 @@
 import CGtk4
 
-/// The Sync pane's widgets: a banner, this device, and its devices — the
-/// macOS Sync pane's two cards, in GTK.
+/// The Sync pane's widgets: a banner, the sharing switch, this device, and
+/// its devices — the macOS Sync pane's cards, in GTK.
 ///
 /// It decides nothing. ``render(_:)`` copies a ``SyncPaneState`` onto the
-/// widgets, and every control reports what the user did through one of the
-/// `on…` closures. `nonisolated` and reached from C callbacks, like
-/// ``PaletteWindow``: every method runs on GTK's main-loop thread and nothing
-/// else may touch an instance.
+/// widgets, ``renderSharing(_:)`` a ``SharingSwitchState``, and every control
+/// reports what the user did through one of the `on…` closures. `nonisolated`
+/// and reached from C callbacks, like ``PaletteWindow``: every method runs on
+/// GTK's main-loop thread and nothing else may touch an instance.
 final class SyncPane {
     var onPairingSwitch: ((Bool) -> Void)?
     var onPair: ((String) -> Void)?
@@ -15,45 +15,39 @@ final class SyncPane {
     var onLivePush: ((String, Bool) -> Void)?
     var onSyncNow: (() -> Void)?
     var onDismissBanner: (() -> Void)?
+    /// The master switch, flipped to the value given.
+    var onSharing: ((Bool) -> Void)?
 
-    /// The pane's outermost widget, for the window to put in a scroller.
-    let root: GtkWidgetPointer
+    let page: SettingsPage
 
     private let banner: SyncBanner
+    private let sharing: SettingsSwitchRow
     private let thisDevice: ThisDeviceCard
     private let devices: DeviceList
 
     init() throws {
-        guard let root = GtkBuild.box(vertical: true, spacing: 12),
-            let deviceHeading = GtkBuild.label("This device", classes: [SettingsStyle.heading]),
-            let devicesHeading = GtkBuild.label("Devices", classes: [SettingsStyle.heading]),
-            let privacy = GtkBuild.label(
-                """
-                Skrepka shares history with devices you pair with, over the local \
-                network only. Nothing is sent to a server.
-                """,
-                classes: [SettingsStyle.secondary],
-                wraps: true
-            )
-        else { throw SettingsError.widgetCreationFailed }
-        GtkBuild.margins(root, vertical: 20, horizontal: 20)
+        let page = try SettingsPage(title: SettingsSection.sync.title)
+        let sharingCard = try SettingsCard(title: "Sharing")
+        let sharing = try SettingsSwitchRow(
+            title: "Share history with paired devices",
+            icon: ["emblem-shared-symbolic", "emblem-synchronizing-symbolic", "view-refresh-symbolic"])
+        sharingCard.add(sharing.row.widget)
 
-        self.root = root
+        self.page = page
         self.banner = try SyncBanner()
+        self.sharing = sharing
         self.thisDevice = try ThisDeviceCard()
         self.devices = try DeviceList()
 
-        let children = [
-            banner.widget, deviceHeading, thisDevice.widget, privacy, devicesHeading, devices.widget,
-        ]
-        for child in children {
-            GtkBuild.append(child, to: root)
+        for child in [banner.widget, sharingCard.widget, thisDevice.widget, devices.widget] {
+            page.append(child)
         }
         connect()
     }
 
     private func connect() {
         thisDevice.onPairingSwitch = { [weak self] isOn in self?.onPairingSwitch?(isOn) }
+        sharing.onToggle = { [weak self] isOn in self?.onSharing?(isOn) }
         banner.onDismiss = { [weak self] in self?.onDismissBanner?() }
         devices.onPair = { [weak self] id in self?.onPair?(id) }
         devices.onUnpair = { [weak self] id in self?.onUnpair?(id) }
@@ -65,5 +59,9 @@ final class SyncPane {
         banner.render(state.banner)
         thisDevice.render(name: state.deviceName, code: state.deviceCode, pairing: state.pairingSwitch)
         devices.render(state)
+    }
+
+    func renderSharing(_ state: SharingSwitchState) {
+        sharing.render(isOn: state.isOn, isEnabled: state.isEnabled, subtitle: state.subtitle)
     }
 }

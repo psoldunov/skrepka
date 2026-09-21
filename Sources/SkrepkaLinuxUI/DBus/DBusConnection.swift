@@ -27,12 +27,40 @@ public struct DBusError: Error, CustomStringConvertible, Sendable {
 public final class DBusConnection {
     let raw: OpaquePointer
 
+    /// The process-wide shared session connection — the one GTK and
+    /// GApplication use too.
     public init() throws {
         var error: UnsafeMutablePointer<GError>?
         guard let connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nil, &error) else {
             throw DBusError.take(error)
         }
         raw = connection
+    }
+
+    private init(raw: OpaquePointer) {
+        self.raw = raw
+    }
+
+    /// A session connection of this client's own, separate from the shared
+    /// one.
+    ///
+    /// For a client whose first message to a service has to be the first that
+    /// service ever receives from this bus name — see ``GlobalShortcuts``.
+    /// Dispatched by the default main context like the shared one, because it
+    /// is made on GTK's loop thread.
+    public static func privateSession() throws -> DBusConnection {
+        var error: UnsafeMutablePointer<GError>?
+        guard let address = g_dbus_address_get_for_bus_sync(G_BUS_TYPE_SESSION, nil, &error) else {
+            throw DBusError.take(error)
+        }
+        defer { g_free(address) }
+        let flags = GDBusConnectionFlags(
+            rawValue: G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT.rawValue
+                | G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION.rawValue)
+        guard let connection = g_dbus_connection_new_for_address_sync(address, flags, nil, nil, &error) else {
+            throw DBusError.take(error)
+        }
+        return DBusConnection(raw: connection)
     }
 
     deinit {

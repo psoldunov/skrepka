@@ -72,7 +72,12 @@ extension AvahiDiscovery {
     /// which is a suspended task holding a connection for a record nobody is
     /// left to withdraw.
     func dropAdvertisement() async {
-        guard let path = forgetAdvertisement() else { return }
+        let announcer = takeAnnouncer()
+        let path = forgetAdvertisement()
+        // Awaited for the same reason the `Free` is: the replacement publish
+        // must not start while the goodbye for this one is still going out.
+        await announcer?.stop()
+        guard let path else { return }
         await free(
             path: path,
             interface: AvahiNames.Interface.entryGroup,
@@ -87,6 +92,10 @@ extension AvahiDiscovery {
     /// the record when the client disconnects either way, so the worst case is
     /// that the record outlives this call by the life of the connection.
     private func dropAdvertisementBestEffort() {
+        if let announcer = takeAnnouncer() {
+            // The goodbye packets are best-effort too; see above.
+            Task { await announcer.stop() }
+        }
         guard let path = forgetAdvertisement() else { return }
         Task { [weak self] in
             await self?.free(

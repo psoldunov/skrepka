@@ -136,20 +136,26 @@ struct LoopbackHarness {
     /// - Parameter onLivePush: told about content a peer pushed live. Defaults
     ///   to doing nothing, which is what every test that is not about live push
     ///   wants.
+    ///   - onPushWithoutBytes: told about a push that arrived without its bytes.
+    ///   - capabilities: what the server says it can take in its `hello`.
     func responder(
         for connection: SyncConnection,
-        onLivePush: @escaping LivePushSink = { _, _ in }
+        onLivePush: @escaping LivePushSink = { _, _ in },
+        onPushWithoutBytes: @escaping PushFetchRequest = { _, _ in },
+        capabilities: [String] = []
     ) -> SyncResponder {
         SyncResponder(
             connection: connection,
             session: PairingSession(
-                localIdentity: identity(serverIdentity, name: "server", platform: .macos),
+                localIdentity: identity(
+                    serverIdentity, name: "server", platform: .macos, capabilities: capabilities),
                 localCertificate: serverIdentity
             ),
             trust: serverTrust,
             store: serverStore,
             confirmPairing: { _ in true },
             onLivePush: onLivePush,
+            onPushWithoutBytes: onPushWithoutBytes,
             now: { now }
         )
     }
@@ -159,14 +165,19 @@ struct LoopbackHarness {
     /// `expecting` is passed through rather than defaulted so a test has to say
     /// which peer it meant to dial — nil for first contact, where nothing is
     /// pinned and there is nothing to expect yet.
+    ///
+    /// `capabilities` is what the client says it can take in its `hello`;
+    /// nothing, by default, which is how a 0.2 peer introduces itself.
     func initiator(
         for connection: SyncConnection,
-        expecting expectedPeerDeviceID: SyncDeviceID? = nil
+        expecting expectedPeerDeviceID: SyncDeviceID? = nil,
+        capabilities: [String] = []
     ) throws -> SyncInitiator {
         try SyncInitiator(
             connection: connection,
             session: PairingSession(
-                localIdentity: identity(clientIdentity, name: "client", platform: .linux),
+                localIdentity: identity(
+                    clientIdentity, name: "client", platform: .linux, capabilities: capabilities),
                 localCertificate: clientIdentity
             ),
             trust: clientTrust,
@@ -177,13 +188,15 @@ struct LoopbackHarness {
     private func identity(
         _ certificate: DeviceCertificate,
         name: String,
-        platform: PeerPlatform
+        platform: PeerPlatform,
+        capabilities: [String]
     ) -> PeerIdentity {
         PeerIdentity(
             deviceID: certificate.deviceID,
             deviceName: name,
             platform: platform,
-            protocolVersion: .current
+            protocolVersion: .current,
+            capabilities: capabilities
         )
     }
 }

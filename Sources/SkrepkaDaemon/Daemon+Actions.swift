@@ -43,9 +43,12 @@ extension Daemon {
             isConcealed: request.isConcealed
         )
         let decision = CaptureRules().decide(snapshot)
-        guard let item = decision.item else {
+        guard let accepted = decision.item else {
             return .refused(decision.rejectionLogMessage ?? "nothing in that clip could be recorded")
         }
+        // The Shell extension's copy names files on this machine, so they are
+        // read here exactly as a copy the daemon watched would be.
+        let item = await FileBundleReader.attachingBundle(to: accepted)
         guard await store.capture(item) else {
             return .succeeded("already held", subject: item.contentHash)
         }
@@ -84,6 +87,7 @@ extension Daemon {
         }
         guard let discovery else { throw PairError.notOnTheNetwork(fingerprint) }
 
+        let generation = syncGeneration
         let proposal = try await boundedDial(
             to: sighting,
             port: pairingPort,
@@ -91,23 +95,7 @@ extension Daemon {
             discovery: discovery,
             fingerprint: fingerprint
         )
-
-        let (answers, sink) = AsyncStream<Bool>.makeStream()
-        let waiting = PendingPairing(
-            proposal: proposal,
-            direction: PairingDirection.outgoing,
-            expiresAt: Date().addingTimeInterval(pairingAnswerTimeout.seconds),
-            sink: sink
-        )
-        // One live proposal per peer, and both writers obey it — see
-        // `confirmPairing(_:direction:)`, which expires the same way.
-        // Overwriting without expiring parked whichever proposal it displaced
-        // for the whole timeout with nothing able to answer it, because
-        // `answerPairing(deviceID:accept:)` finds only the survivor.
-        pending[proposal.peer.deviceID]?.expire()
-        pending[proposal.peer.deviceID] = waiting
-        watchOutgoingAnswer(answers, proposal: proposal, proposalID: waiting.id)
-        return waiting.document
+        return try fileOutgoing(proposal, generation: generation)
     }
 
     /// Resolves the peer and dials it, under ``Daemon/pairDialTimeout``.
@@ -202,7 +190,7 @@ extension Daemon {
     /// that throws has to reach the client that asked; what is left for this is
     /// the outcome no caller is waiting on, which is an outgoing proposal that
     /// expired with nobody answering it.
-    private func watchOutgoingAnswer(
+    func watchOutgoingAnswer(
         _ answers: AsyncStream<Bool>,
         proposal: PairingProposal,
         proposalID: UUID

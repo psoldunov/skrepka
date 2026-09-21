@@ -96,34 +96,50 @@ extension SyncCoordinator {
     /// `SyncResponder` stores before it calls the sink — so everything here is
     /// about the clipboard and nothing here can cost the row.
     ///
-    /// The gate hears about the push **before** the write — see
-    /// ``LivePushGate/noteReceived(_:at:)``.
+    /// Noted as awaited, then claimed once the write is ready — see
+    /// ``claimForWrite(_:)``. The claim records the push as received before
+    /// the write, which is what keeps its echo from being pushed back.
     ///
-    /// **The clipboard write happens only for an item whose bytes came inline,
-    /// and that is a known limitation of this phase rather than the intent.**
-    /// `LivePushPayload.inline` sends nothing when a push's representations
-    /// total more than `SyncLimits.livePushInlineLimit` (256 KB), which is most
-    /// images. The `inline.isEmpty` guard below then declines, so the handoff
-    /// the user is watching for does not happen. The item is still in history —
-    /// `SyncResponder` stored it before calling this — and its bytes arrive on
-    /// the next exchange, within `PeerLink.resyncInterval`, after which it
-    /// pastes normally from the picker.
-    ///
-    /// Fetching the bytes here instead is **not** a small change, and the reason
-    /// is `SyncInitiator`. `LivePushSink` carries no peer identity, so this has
-    /// nothing to name the link to fetch over; and were that fixed, the fetch
-    /// would be a second concurrent requester on an initiator whose
-    /// `fetchPayload` awaits between its `send` and its `expect`. Two interleaved
-    /// requests on one initiator take each other's `payloadChunk` replies.
-    /// Turn-taking survives live push today precisely because a push expects no
-    /// answer; a fetch does. So this needs a request lock on `SyncInitiator`
-    /// first, and that is the change that would stop
-    /// ``SkrepkaSync/SyncInitiator``'s no-correlation-identifier argument being
-    /// true. Recorded under step 4 in `docs/linux-sync/phase-3-runbook.md`.
+    /// A push over `SyncLimits.livePushInlineLimit` (256 KB, so most pictures
+    /// and file copies) arrives with no bytes and is declined here; the
+    /// responder then asks for them — see ``fetchPushedBytes(of:from:)``.
     func receiveLivePush(_ meta: SyncClipMeta, inline: [RepresentationKey: Data]) async {
         guard isEnabled, !meta.isConcealed, !inline.isEmpty else { return }
-        livePushGate.noteReceived(meta.contentHash, at: Date())
-        await livePushReceiver.write(meta, payloads: inline)
+        livePushGate.noteAwaitingBytes(meta.contentHash)
+        await livePushReceiver.write(meta, payloads: inline) { [weak self] in
+            self?.claimForWrite(meta.contentHash) ?? false
+        }
+    }
+
+    /// A peer pushed an item without its bytes: fetch them now, over the link
+    /// to that peer, rather than on its next exchange.
+    ///
+    /// Over the link rather than the connection the push came in on: the link's
+    /// initiator is the one side that may request bytes, and it takes one
+    /// request at a time. The gate is told first, so a copy made while the
+    /// fetch runs wins — see ``LivePushGate/claimFetched(_:at:)``.
+    func fetchPushedBytes(of meta: SyncClipMeta, from sender: SyncDeviceID) async {
+        guard isEnabled, let link = links[sender] else { return }
+        livePushGate.noteAwaitingBytes(meta.contentHash)
+        await link.fetchPushed(meta)
+    }
+
+    /// The bytes of a push that came without them have been fetched and
+    /// stored. Written to the pasteboard only if nothing has happened since
+    /// that the user would expect to find there instead.
+    func receiveFetchedPush(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async {
+        guard isEnabled, !meta.isConcealed, !payloads.isEmpty else { return }
+        await livePushReceiver.write(meta, payloads: payloads) { [weak self] in
+            self?.claimForWrite(meta.contentHash) ?? false
+        }
+    }
+
+    /// Whether a push may go on the pasteboard now: sync still on, and nothing
+    /// copied or pushed here since. Asked by the receiver after its files are
+    /// written and immediately before the write, as the Linux daemon does in
+    /// `Daemon+Handoff.swift`.
+    private func claimForWrite(_ contentHash: String) -> Bool {
+        isEnabled && livePushGate.claimFetched(contentHash, at: Date())
     }
 
     // MARK: - The per-peer switch

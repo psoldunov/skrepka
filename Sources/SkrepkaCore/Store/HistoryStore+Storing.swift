@@ -111,7 +111,11 @@
             // Rendered before the context is written to, so no store mutation
             // spans the suspension. The lookup this makes on the way is advisory
             // only — see the note above on what must not be hoisted out of it.
-            let preview = try await preview(for: meta, from: representations)
+            // A bundle holding one picture is rendered from that picture.
+            let preview = try await preview(
+                for: meta,
+                from: ForeignFileGuard.withBundledPicture(representations)
+            )
 
             if let existing = try recordMatching(contentHash: meta.contentHash) {
                 try fillPayload(of: existing, with: representations, preview: preview)
@@ -125,6 +129,7 @@
                 )
             }
             backfillPreview(preview, into: record)
+            Self.promoteToImageFile(record, provenBy: preview)
             context.insert(record)
             try context.save()
             project(upserts: [record])
@@ -226,6 +231,7 @@
             let payload = ClipPayload(representations: merged)
             record.payloadData = try ClipRecordMapping.encode(payload)
             backfillPreview(preview, into: record)
+            Self.promoteToImageFile(record, provenBy: preview)
             // Merged into the stored index rather than replacing it: a fetch that
             // brought one of two representations must not retract the peer's claim
             // about the other, and what did arrive is measured here rather than
@@ -246,6 +252,18 @@
         /// representation and is exact when the sender was a Mac. It is a MIME
         /// target when the sender was not, which no macOS payload is keyed by, so
         /// the canonical mapping is the fallback that answers either way.
+        /// A file row whose bytes rendered as a picture is an image file — the
+        /// rule ``ThumbnailRenderer`` applies to a local copy, applied to one a
+        /// peer sent, whose kind was decided on a machine that may not tell the
+        /// two apart.
+        private static func promoteToImageFile(
+            _ record: ClipRecord,
+            provenBy preview: ThumbnailMaker.Preview?
+        ) {
+            guard preview != nil, record.kindRaw == ClipKind.file.rawValue else { return }
+            record.kindRaw = ClipKind.imageFile.rawValue
+        }
+
         private static func localTypes(for key: RepresentationKey) -> [String] {
             [key.origin, RepresentationKeyMap.uti(forCanonical: key.canonical)].compactMap { $0 }
         }

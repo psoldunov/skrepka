@@ -25,7 +25,10 @@
 
         /// Deletes one row and its sync tombstone, or reports the SQLite failure.
         public func deleteChecked(_ id: UUID) throws {
-            defer { pruneExpiredTombstones() }
+            defer {
+                pruneExpiredTombstones()
+                sweepFileCache()
+            }
             try database.transaction {
                 guard let row = try clipRow(id: id) else { return }
                 try database.run("DELETE FROM clip WHERE id = ?", [.value(id)])
@@ -35,7 +38,10 @@
 
         /// Deletes the requested rows and their tombstones, returning their count.
         public func clearChecked(keepingPinned: Bool = true) throws -> Int {
-            defer { pruneExpiredTombstones() }
+            defer {
+                pruneExpiredTombstones()
+                sweepFileCache()
+            }
             let condition = keepingPinned ? " WHERE is_pinned = 0" : ""
             return try database.transaction {
                 let doomed = try clipRows(keepingPinned ? .unpinned : .everything)

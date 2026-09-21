@@ -23,7 +23,9 @@
     /// in `+Merge.swift`, and paired peers in `+Pairing.swift`.
     public actor SQLiteHistoryStore {
         let database: SQLiteDatabase
-        let retention: RetentionPolicy
+        /// Settable at runtime through ``setRetention(_:)``, which also applies
+        /// it — see `SQLiteHistoryStore+Retention.swift`.
+        var retention: RetentionPolicy
 
         /// This device's sync identity, once it has one.
         ///
@@ -33,6 +35,8 @@
         /// ``syncIndex(since:)`` throws
         /// ``HistoryStoreSyncError/deviceIdentityUnavailable``.
         public private(set) var localDeviceID: SyncDeviceID?
+        /// See ``setFileCache(_:)``.
+        var fileCache: FileCache?
 
         /// - Parameter location: where the database lives, or nil for a private
         ///   in-memory one that dies with this instance (used by tests).
@@ -215,14 +219,19 @@
         ///
         /// Anything that starts writing tombstones from this method is a bug, not
         /// a fix.
-        func applyRetention() throws {
-            let doomed = retention.idsToEvict(from: try summaries())
-            guard !doomed.isEmpty else { return }
+        ///
+        /// - Returns: how many entries it evicted.
+        @discardableResult
+        func applyRetention(now: Date = Date()) throws -> Int {
+            let doomed = retention.idsToEvict(from: try summaries(), now: now)
+            guard !doomed.isEmpty else { return 0 }
             try database.transaction {
                 for id in doomed {
                     try database.run("DELETE FROM clip WHERE id = ?", [.value(id)])
                 }
             }
+            sweepFileCache()
+            return doomed.count
         }
     }
 

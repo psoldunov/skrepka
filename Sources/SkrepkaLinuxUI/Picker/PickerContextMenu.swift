@@ -17,6 +17,11 @@ final class PickerContextMenu {
     private let actions: UnsafeMutablePointer<GSimpleActionGroup>
     /// The row the open menu acts on, read by the actions when an item fires.
     private var targetHash: String?
+    /// Whether a menu is on screen. The picker reads it so the focus change a
+    /// popup causes, and the click that closes one, do not close the picker.
+    private(set) var isOpen = false
+    /// Called once a menu has closed, however it closed.
+    var onClosed: (() -> Void)?
 
     init?() {
         guard let actions = g_simple_action_group_new() else { return nil }
@@ -68,9 +73,12 @@ final class PickerContextMenu {
         gtk_popover_set_pointing_to(popover, &rect)
         // Unparent on close so the popover — and its one reference — is released
         // rather than left dangling on the row for the next open to stack on.
-        GtkSignal.connect(UnsafeMutableRawPointer(popoverWidget), "closed") {
+        GtkSignal.connect(UnsafeMutableRawPointer(popoverWidget), "closed") { [weak self] in
+            self?.isOpen = false
             gtk_widget_unparent(popoverWidget)
+            self?.onClosed?()
         }
+        isOpen = true
         gtk_popover_popup(popover)
     }
 

@@ -18,7 +18,6 @@ final class DeviceList {
     /// GTK's list box is only forward-declared in its public headers, so it
     /// imports as an opaque pointer — see ``PaletteWindow``.
     private let list: OpaquePointer
-    private let frame: GtkWidgetPointer
     private let empty: GtkWidgetPointer
     private let syncRow: GtkWidgetPointer
     private let syncNow: GtkWidgetPointer
@@ -26,10 +25,11 @@ final class DeviceList {
     private var rows: [DeviceRow] = []
 
     init() throws {
-        guard let column = GtkBuild.box(vertical: true, spacing: 12),
+        guard let column = GtkBuild.box(vertical: true, spacing: 7),
+            let heading = SettingsWidgets.heading("Devices"),
             let listWidget = gtk_list_box_new(),
             let list = skrepka_as_list_box(listWidget),
-            let frame = GtkBuild.frame(around: listWidget),
+            let frame = GtkBuild.box(vertical: true, spacing: 0, classes: [SettingsStyle.card]),
             let empty = GtkBuild.label("", classes: [SettingsStyle.secondary], wraps: true, centred: true),
             let syncRow = GtkBuild.box(vertical: false, spacing: 12),
             let syncNow = GtkBuild.button("Sync Now"),
@@ -38,24 +38,32 @@ final class DeviceList {
                 Devices exchange history every half minute, and what you copy crosses \
                 immediately where live clipboard is on.
                 """,
-                classes: [SettingsStyle.secondary],
+                classes: [SettingsStyle.footer],
                 wraps: true
             )
         else { throw SettingsError.widgetCreationFailed }
+        gtk_widget_add_css_class(listWidget, SettingsStyle.deviceList)
+        // The empty message sits in the card itself, where the rows would
+        // be; a list box with no rows takes no room.
+        GtkBuild.append(listWidget, to: frame)
+        GtkBuild.append(empty, to: frame)
+        gtk_widget_set_margin_top(syncRow, 5)
         gtk_list_box_set_selection_mode(list, GTK_SELECTION_NONE)
-        gtk_list_box_set_show_separators(list, 1)
+        // Hairlines between rows come from the stylesheet (`row + row`): the
+        // theme's own separators draw one under the last row too, a light
+        // line across the bottom of the card.
+        gtk_list_box_set_show_separators(list, 0)
         GtkBuild.margins(empty, vertical: 16, horizontal: 12)
         gtk_widget_set_valign(syncNow, GTK_ALIGN_CENTER)
         gtk_widget_set_hexpand(footer, 1)
         GtkBuild.append(syncNow, to: syncRow)
         GtkBuild.append(footer, to: syncRow)
-        for child in [frame, empty, syncRow] {
+        for child in [heading, frame, syncRow] {
             GtkBuild.append(child, to: column)
         }
 
         self.widget = column
         self.list = list
-        self.frame = frame
         self.empty = empty
         self.syncRow = syncRow
         self.syncNow = syncNow
@@ -66,7 +74,6 @@ final class DeviceList {
 
     func render(_ state: SyncPaneState) {
         reconcile(state.rows)
-        GtkBuild.setVisible(frame, !rows.isEmpty)
         GtkBuild.setText(empty, state.emptyMessage ?? "")
         GtkBuild.setVisible(empty, state.emptyMessage != nil)
         GtkBuild.setVisible(syncRow, state.showsSyncNow)

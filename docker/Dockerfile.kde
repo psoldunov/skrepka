@@ -1,0 +1,150 @@
+# A Steam Deck desktop in a box: SteamOS 3.8's own KDE Plasma 6.4.3 packages,
+# run as a headless Wayland session, so the Linux desktop app can be tested
+# against the compositor, tray host and portal the Deck actually runs rather
+# than only against sway.
+#
+# Build it with scripts/kde-image.sh (tag skrepka-kde:3.8); run it with
+# scripts/kde.sh. amd64 only: SteamOS ships no other architecture, and on an
+# Apple Silicon host OrbStack runs it under Rosetta.
+#
+# Package source: Valve's own SteamOS mirror, the `-3.8` snapshot of each
+# repository, in the order a Deck lists them — jupiter and holo first, because
+# Valve rebuilds a few packages there with patches (kwin 6.4.3-1.16,
+# plasma-workspace 6.4.3-1.4, xdg-desktop-portal 1.20.4-1.1 and
+# xdg-desktop-portal-kde 6.4.3-2) that must win over the stock Arch builds of
+# the same versions sitting in extra-3.8.
+#
+# Two stages, because the obvious one-stage build does not work: downgrading
+# today's archlinux image to the 3.8 snapshot with `pacman -Syuu` fails on file
+# conflicts — Arch has split gcc-libs and pacman into more packages since
+# July 2025, and pacman cannot move files back between owners. So the archlinux
+# image is only the installer: it installs a fresh root from the 3.8 repos into
+# /rootfs with `pacman -r`, and the final image is that root and nothing else.
+#
+# What is deliberately NOT here: the SteamOS session itself (gamescope, Steam,
+# steamos-customizations-jupiter). Desktop Mode on a Deck is a stock Plasma
+# Wayland session, and that is the only mode Skrepka runs in.
+#
+# Rendering is Mesa's llvmpipe. KWin's virtual backend has no GPU and needs
+# none.
+
+FROM archlinux:latest AS installer
+
+ARG STEAMOS_MIRROR=https://steamdeck-packages.steamos.cloud/archlinux-mirror
+ARG STEAMOS_BRANCH=3.8
+
+# Repository sections are named after the database file, `jupiter-3.8.db`, so
+# the section is `[jupiter-3.8]` — exactly what a Deck's pacman.conf says.
+#
+# DisableSandbox: pacman 7 drops to an unprivileged download user inside a
+# Landlock sandbox, which fails under Rosetta. It turns only that off.
+RUN { \
+		echo '[options]'; \
+		echo 'HoldPkg = pacman glibc'; \
+		echo 'Architecture = x86_64'; \
+		echo 'CheckSpace'; \
+		echo 'ParallelDownloads = 8'; \
+		echo 'DisableSandbox'; \
+		echo 'SigLevel = Required DatabaseOptional'; \
+		echo 'NoExtract = usr/share/man/* usr/share/doc/* usr/share/gtk-doc/*'; \
+		for repo in jupiter holo core extra multilib; do \
+			echo "[${repo}-${STEAMOS_BRANCH}]"; \
+			echo "Server = ${STEAMOS_MIRROR}/${repo}-${STEAMOS_BRANCH}/os/\$arch"; \
+		done; \
+	} > /etc/pacman.conf
+
+# Valve signs its own packages with the holo keys, which archlinux-keyring does
+# not carry. holo-keyring is itself signed by the key it delivers, so pacman
+# cannot install it until it is installed: its keyring files are unpacked by
+# hand (trust rests on the HTTPS fetch from Valve's mirror), populated, and the
+# package is then installed properly — which verifies its signature against the
+# keys just imported.
+RUN pacman-key --init \
+	&& pacman-key --populate archlinux \
+	&& pacman -Sy --noconfirm \
+	&& keyring="$(pacman -Sp holo-keyring)" \
+	&& curl -fsSL "${keyring}" | bsdtar -xf - -C / usr/share/pacman/keyrings \
+	&& pacman-key --populate holo \
+	&& pacman -S --noconfirm --overwrite '/usr/share/pacman/keyrings/holo*' holo-keyring
+
+# The root. plasma-desktop brings the desktop containment and the default
+# panel layout plasmashell lays out on first start; kded6 (kded, a
+# plasma-workspace dependency) hosts the StatusNotifierWatcher; kglobalaccel
+# lives inside kwin_wayland on Plasma 6, as kglobalacceld's plugin. gtk4 is
+# the one library the release tarball needs from the system that none of the
+# above pulls in.
+#
+# The harness around the session, see docker/kde/session.sh: Xvfb is the outer
+# display KWin's X11-windowed backend draws into, ffmpeg (x11grab) takes
+# screenshots of it, xdotool types and clicks into it. spectacle is here
+# because it is on a Deck, not because it works here: without OpenGL
+# compositing KWin serves no ScreenShot2 for it to use. qt6-tools for qdbus.
+RUN mkdir -p /rootfs/var/lib/pacman /rootfs/var/cache/pacman/pkg \
+	&& pacman -r /rootfs -Sy --noconfirm --needed \
+		base \
+		holo-keyring \
+		kwin \
+		plasma-workspace \
+		plasma-desktop \
+		kglobalacceld \
+		xdg-desktop-portal \
+		xdg-desktop-portal-kde \
+		spectacle \
+		breeze \
+		breeze-gtk \
+		gtk4 \
+		kde-gtk-config \
+		mesa \
+		noto-fonts \
+		xorg-xwayland \
+		xorg-server-xvfb \
+		xdotool \
+		wl-clipboard \
+		ffmpeg \
+		qt6-tools \
+		python \
+		python-dbus \
+		python-gobject \
+		sudo \
+		which \
+		file \
+	&& rm -rf /rootfs/var/cache/pacman/pkg/* \
+	&& cp /etc/pacman.conf /rootfs/etc/pacman.conf \
+	&& rm -rf /rootfs/etc/pacman.d/gnupg \
+	&& cp -a /etc/pacman.d/gnupg /rootfs/etc/pacman.d/gnupg
+
+FROM scratch
+COPY --from=installer /rootfs/ /
+
+# The Deck's user. uid 1000 like on a Deck, passwordless sudo like `deck` after
+# `passwd` — install.sh never needs root, but poking at the session sometimes
+# does.
+# /tmp/.X11-unix exists root-owned and sticky, as on any real system: Xvfb and
+# Xwayland run as deck and cannot create it, and without it KWin never gets
+# an Xwayland socket. /etc/localtime so the panel clock shows a time rather
+# than "Time zone is not set" across every screenshot.
+RUN useradd -m -u 1000 -s /bin/bash deck \
+	&& echo 'deck ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/deck \
+	&& install -d -m 1777 /tmp/.X11-unix \
+	&& ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+
+COPY docker/kde/session.sh /usr/local/bin/skrepka-kde-session
+COPY docker/kde/screenshot.sh /usr/local/bin/skrepka-kde-screenshot
+COPY docker/kde/windows.sh /usr/local/bin/skrepka-kde-windows
+RUN chmod 0755 /usr/local/bin/skrepka-kde-session /usr/local/bin/skrepka-kde-screenshot \
+	/usr/local/bin/skrepka-kde-windows
+
+USER deck
+WORKDIR /home/deck
+ENV XDG_RUNTIME_DIR=/tmp/xdg-runtime-deck \
+	XDG_CONFIG_HOME=/home/deck/.config \
+	XDG_DATA_HOME=/home/deck/.local/share \
+	XDG_STATE_HOME=/home/deck/.local/state \
+	XDG_CACHE_HOME=/home/deck/.cache \
+	XDG_CURRENT_DESKTOP=KDE \
+	XDG_SESSION_DESKTOP=KDE \
+	XDG_SESSION_TYPE=wayland \
+	DESKTOP_SESSION=plasma \
+	KDE_FULL_SESSION=true \
+	KDE_SESSION_VERSION=6 \
+	LANG=C.UTF-8

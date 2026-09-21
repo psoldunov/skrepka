@@ -252,7 +252,8 @@ extension SyncCoordinator {
             },
             onLivePush: { [weak self] meta, inline in
                 await self?.receiveLivePush(meta, inline: inline)
-            }
+            },
+            onPushWithoutBytes: { [weak self] in await self?.fetchPushedBytes(of: $1, from: $0) }
         )
         Task { [weak self] in
             do {

@@ -39,9 +39,13 @@ extension Daemon {
         // finished. Bringing a stopped daemon up behind its own shutdown is
         // the other half of the bug the queue closes.
         guard !isStopping else { return }
+        await startFileCache()
+        startRetentionSweep()
         try await startClipboard()
-        guard options.syncEnabled else {
-            logger.notice("sync is off; watching the clipboard only")
+        guard isSyncWanted else {
+            logger.notice(
+                "sync is off; watching the clipboard only",
+                metadata: ["reason": .string(isSyncLockedOff ? "--no-sync" : "settings")])
             return
         }
         try await startSync()
@@ -61,47 +65,9 @@ extension Daemon {
         await clipboard?.stop()
         clipboard = nil
 
-        // Everything, because this is the one teardown that owns all three:
-        // both accept loops and every connection still being answered.
-        syncAcceptTask?.cancel()
-        syncAcceptTask = nil
-        pairingAcceptTask?.cancel()
-        pairingAcceptTask = nil
-        for task in connectionTasks.values { task.cancel() }
-        connectionTasks = [:]
-        pairingExpiry?.cancel()
-        pairingExpiry = nil
-        pairingWindowEnds = nil
-        for pairing in pending.values { pairing.expire() }
-        pending = [:]
-
-        browseTask?.cancel()
-        browseTask = nil
-        advertisementFailureTask?.cancel()
-        advertisementFailureTask = nil
-        for link in links.values { await link.stop() }
-        links = [:]
-        progress = [:]
-        sighted = [:]
-
-        await syncServer?.stop()
-        await pairingServer?.stop()
-        syncServer = nil
-        pairingServer = nil
-        // Stops browsing and withdraws the record, but leaves the connection
-        // open — `systemBus` is the daemon's, shared with `ClockCheck`, and
-        // closing it from here would take a second user's connection away.
-        await discovery?.stopEverything()
-        discovery = nil
-        await systemBus.stop()
-        isPublished = false
-
-        // Callback form rather than the blocking one: `shutdownGracefully()`
-        // parks a cooperative-pool thread until the loops drain, and draining
-        // them resumes continuations that need a cooperative thread to run on.
-        group?.shutdownGracefully { _ in }
-        group = nil
-        runtime = nil
+        retentionSweepTask?.cancel()
+        retentionSweepTask = nil
+        await stopSyncStack(closingSystemBus: true)
 
         for observer in historyObservers.values { observer.finish() }
         historyObservers = [:]
@@ -112,6 +78,7 @@ extension Daemon {
     // MARK: - Sync
 
     func startSync() async throws {
+        advanceSyncGeneration()
         let certificate = try await trust.localIdentity()
         await store.setLocalDeviceID(certificate.deviceID)
 
@@ -124,7 +91,10 @@ extension Daemon {
                     deviceID: certificate.deviceID,
                     deviceName: displayName,
                     platform: .linux,
-                    protocolVersion: .current
+                    protocolVersion: .current,
+                    // Without it a peer withholds file bundles from this one,
+                    // and a file copied there pastes here as its names.
+                    capabilities: SyncCapability.local
                 ),
                 localCertificate: certificate
             ),
@@ -140,8 +110,9 @@ extension Daemon {
 
     /// Everything the diagnostics document needs about the network half.
     func networkSummary() async -> (responder: String, problem: String?) {
-        guard options.syncEnabled else { return ("off", "sync is turned off with --no-sync") }
+        guard !isSyncLockedOff else { return ("off", "sync is turned off with --no-sync") }
+        guard settings.sync.enabled else { return ("off", "sync is turned off in the settings") }
         guard discovery != nil else { return ("none", responderProblem ?? "no responder is running") }
-        return ("avahi", responderProblem)
+        return (await responderLabel(), responderProblem)
     }
 }

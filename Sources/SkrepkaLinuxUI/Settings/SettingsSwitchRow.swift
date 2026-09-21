@@ -13,9 +13,9 @@ final class SettingsSwitchRow {
     private let control: GtkWidgetPointer
     private var isRendering = false
 
-    init(title: String, subtitle: String? = nil, isOn: Bool = false) throws {
+    init(title: String, subtitle: String? = nil, isOn: Bool = false, icon: [String] = []) throws {
         guard let control = gtk_switch_new() else { throw SettingsError.widgetCreationFailed }
-        let row = try SettingsRow(title: title, subtitle: subtitle)
+        let row = try SettingsRow(title: title, subtitle: subtitle, icon: icon)
         // Set before the handler is connected, so the first position is not a
         // flip either.
         gtk_switch_set_active(skrepka_as_switch(control), isOn ? 1 : 0)

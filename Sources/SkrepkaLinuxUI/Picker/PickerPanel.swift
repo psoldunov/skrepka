@@ -6,8 +6,9 @@ import CGtk4
 ///
 /// Holds its four pieces and exposes them so the controller can wire their
 /// callbacks; it owns only the switch between the list and the empty state,
-/// which share the panel's middle. The panel carries a margin so the window
-/// behind it can be transparent and cast the shadow — see ``PickerStyle``.
+/// which share the panel's middle. In a plain window the panel carries a margin
+/// so the window behind it can be transparent and hold the shadow; the overlay
+/// needs none — see ``PickerStyle`` and `PaletteWindow+Overlay.swift`.
 final class PickerPanel {
     let root: UnsafeMutablePointer<GtkWidget>
     let searchBar: PickerSearchBar

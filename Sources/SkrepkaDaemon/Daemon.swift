@@ -80,6 +80,10 @@ public actor Daemon {
     let trust: FileTrustStore
     let displayName: String
 
+    /// Changed only by ``performApplySettings(_:)``, on the lifecycle queue.
+    let settingsFile: DaemonSettingsFile
+    var settings: DaemonSettings
+
     /// How long this daemon waits for an answer to a pairing proposal.
     ///
     /// A stored property rather than the static alone so a test can prove the
@@ -90,6 +94,8 @@ public actor Daemon {
     // MARK: - Sync state
 
     var runtime: SyncRuntime?
+    /// Bumped whenever the sync stack starts or stops. See `Daemon+SyncGeneration.swift`.
+    var syncGeneration = 0
     var group: MultiThreadedEventLoopGroup?
     var syncServer: SyncServer?
     var pairingServer: SyncServer?
@@ -185,6 +191,7 @@ public actor Daemon {
     // MARK: - Bookkeeping
 
     var lifecycleTail: Task<Void, Never>?
+    var retentionSweepTask: Task<Void, Never>?
     var historyObservers: [UUID: AsyncStream<Void>.Continuation] = [:]
     var pairingObservers: [UUID: AsyncStream<PendingPairing>.Continuation] = [:]
     var isStopping = false
@@ -209,7 +216,12 @@ public actor Daemon {
         displayName =
             options.displayName.isEmpty
             ? DeviceName.current(environment: environment) : options.displayName
-        store = try SQLiteHistoryStore(location: options.storeURL(environment: environment))
+        settingsFile = DaemonSettingsFile(url: options.settingsURL(environment: environment))
+        settings = settingsFile.load(logger: logger)
+        store = try SQLiteHistoryStore(
+            location: options.storeURL(environment: environment),
+            retention: settings.retentionPolicy
+        )
         trust = FileTrustStore(
             url: options.deviceKeyURL(environment: environment),
             peers: peers ?? store

@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -30 1260 1260" width="22" height="22">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-187.5 -187.5 1575 1575" width="22" height="22">
   <!--
     The tray icon: the Skrepka mark alone, traced from scripts/paperclip.svg.
+    The viewBox is 1.25 times the mark's 1260-unit square, about the same
+    centre, so the mark fills 80% of the tray's slot — at full size it read
+    heavier than the icons beside it. TrayPixmap's inset matches.
     Monochrome on purpose, like the macOS menu bar icon. The stylesheet below
     is KDE's convention for icons that follow the panel's colour scheme: Plasma
     replaces ColorScheme-Text's colour with the panel's text colour, so the mark

@@ -20,6 +20,9 @@ final class AppCoordinator {
     /// Where history actually landed, for the diagnostics pane. In-memory when
     /// the on-disk store could not be opened.
     let storage: DiagnosticsSnapshot.Storage
+    /// Where files received from peers are written. Nil when the system names
+    /// no caches folder; a synced file row then pastes its files' names.
+    let fileCache: FileCache?
     /// What the capture loop has been doing. Drives the menu bar badge and the
     /// diagnostics pane.
     let captureHealth = CaptureHealth()
@@ -60,6 +63,11 @@ final class AppCoordinator {
         store = opened.store
         startupError = opened.startupError
         storage = opened.storage
+        // Set before anything is captured or received, so every removal of a
+        // row from here on removes the files received for it.
+        let fileCache = FileCache.application()
+        store.fileCache = fileCache
+        self.fileCache = fileCache
 
         watcher = ClipboardWatcher(
             source: PasteboardReader(),
@@ -78,48 +86,13 @@ final class AppCoordinator {
             store: store,
             livePushReceiver: LivePushReceiver(
                 watcher: watcher,
+                fileCache: fileCache,
                 // Read through a closure rather than handed the controller: the
                 // receiver's one rule about the picker is "not while it is
                 // open", and that needs a boolean rather than a panel.
                 isPickerVisible: { panelController.isVisible }
             )
         )
-    }
-
-    /// Opens the on-disk history, or says why it could not.
-    ///
-    /// Lifted out of `init` because it is the one part of construction with a
-    /// decision in it, and because a failure here is a thing the user is told
-    /// about rather than a crash.
-    ///
-    /// An in-memory store keeps the app usable rather than dead on launch. If
-    /// even that fails, SwiftData itself is unusable and failing loudly beats
-    /// limping on with a broken object graph.
-    private static func openStore(
-        retention: RetentionPolicy
-    ) -> (store: HistoryStore, storage: DiagnosticsSnapshot.Storage, startupError: String?) {
-        let bundleID = Bundle.main.bundleIdentifier ?? "dev.soldunov.skrepka"
-        do {
-            let url = try HistoryStore.defaultStoreURL(bundleID: bundleID)
-            return (
-                try HistoryStore(location: url, retention: retention),
-                .onDisk(path: url.path(percentEncoded: false)),
-                nil
-            )
-        } catch {
-            SkrepkaLog.store.error("Falling back to in-memory history: \(error.localizedDescription)")
-            guard let fallback = try? HistoryStore(location: nil) else {
-                fatalError("SwiftData could not create an in-memory store; Skrepka cannot run.")
-            }
-            return (
-                fallback,
-                .inMemory(reason: error.localizedDescription),
-                """
-                Skrepka could not open its history database, so this session will not be saved. \
-                \(error.localizedDescription)
-                """
-            )
-        }
     }
 
     // MARK: - Lifecycle
@@ -147,6 +120,8 @@ final class AppCoordinator {
             self?.togglePicker()
         }
 
+        // Files left behind by rows removed while the app was not running.
+        store.sweepFileCache()
         startCaptureLoop()
         refreshHealth()
         showWelcomeIfNeeded()
@@ -178,11 +153,14 @@ final class AppCoordinator {
             for await decision in stream {
                 self?.captureHealth.record(decision)
                 self?.refreshHealth()
-                guard let item = decision.item else {
+                guard let copied = decision.item else {
                     Self.logRejection(decision)
                     if decision.isRefusedCopy { self?.sync.noteUnrecordedCopy() }
                     continue
                 }
+                // Once per copy, read off the main actor, and the same result
+                // to the store and to peers: a file copy reaches them as files.
+                let item = await FileBundleReader.attachingBundle(to: copied)
                 // The same stream, not a second watcher. Offered once stored, so
                 // a peer never learns of a clipping this machine failed to keep.
                 guard await store.capture(item) else {
@@ -241,12 +219,16 @@ final class AppCoordinator {
         // The system prompt already offers to open Settings, so Skrepka's own
         // notice would just stack a second dialog on top of it.
         let didPrompt = shouldPaste && requestAccessibilityIfNeeded()
-        Task { [pasteService, watcher] in
+        let foreignRow = foreignFileRow(for: item, contents: contents, style: style)
+        Task { [pasteService, watcher, fileCache] in
+            // Before the pause: a synced file row writes its files first.
+            let fileItems = await Self.fileItems(for: foreignRow, cache: fileCache)
             // Skrepka is about to own the pasteboard; do not re-record our own write.
             await watcher.pause()
             let outcome = await pasteService.deliver(
                 PasteService.Request(
                     contents: contents,
+                    fileItems: fileItems,
                     plainText: item.text,
                     style: style,
                     sourceBundleID: item.sourceBundleID,

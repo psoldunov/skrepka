@@ -128,6 +128,16 @@ is the no-root install path for any distribution, and after
 [Phase 6](phase-6-linux-daemon.md) a headless daemon plus a CLI installed into
 `~/.local` is a legitimate way to ship.
 
+**SteamOS's avahi publishes nothing — found 2026-09-21.** Valve rebuilds avahi
+in its `holo-3.8` repository with `/etc/avahi/avahi-daemon.conf` setting
+`disable-publishing=yes`, `disable-user-service-publishing=yes` and
+`publish-addresses=no`. Browsing works; publishing a service, or even the
+machine's own `.local` name, does not. Editing `/etc` needs a sudo password and
+may not survive an update, so the daemon does not ask for it: when avahi answers
+`NotPermitted`, skrepkad answers mDNS for its own service itself, on port 5353
+beside avahi (avahi sets `SO_REUSEADDR` on its socket for exactly this), under a
+host name derived from the device ID. See `Sources/SkrepkaLinuxPlatform/MDNS/`.
+
 **GNOME work is unaffected.** [D-5](#d-5) stands: the Shell extension gets
 built, kept thin, and submitted. What the missing GNOME machine defers is its
 *verification* — [OQ-3](#oq-3) and the GNOME rows of Phase 8's test matrix — not

@@ -16,6 +16,8 @@ struct ClipRowView: View {
     /// Resolved by the list for the same reason, and empty for every row that
     /// does not hold several files. See ``ClipThumbnailView/stackImages``.
     let stackImages: [NSImage]
+    /// Whether a synced file row's files came — see `PickerModel.filesNote(for:)`.
+    let filesNote: String?
 
     var body: some View {
         HStack(spacing: 11) {
@@ -64,6 +66,9 @@ struct ClipRowView: View {
 
     private var subtitle: Text {
         var parts: [String] = [item.typeLabel]
+        if let filesNote {
+            parts.append(filesNote)
+        }
         if let imageSizeText = item.imageSizeText {
             parts.append(imageSizeText)
         }

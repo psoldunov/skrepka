@@ -94,12 +94,22 @@ enum SyncModelCoding {
         ])
     }
 
+    /// A peer's content hash, refused unless it has the one shape a hash has.
+    /// See ``ContentHash``.
+    static func contentHash(_ fields: CBORFields, context: String) throws -> String {
+        let hash = try fields.string("contentHash")
+        guard ContentHash.isValid(hash) else {
+            throw CBORError.unexpectedShape("\(context).contentHash is not a content hash")
+        }
+        return hash
+    }
+
     static func clipMeta(_ value: CBORValue, context: String) throws -> SyncClipMeta {
         let fields = try CBORFields(value, context: context)
         let representations = try fields.array("representations").enumerated()
             .map { try descriptor($1, context: "\(context).representations[\($0)]") }
         return SyncClipMeta(
-            contentHash: try fields.string("contentHash"),
+            contentHash: try contentHash(fields, context: context),
             kind: try fields.string("kind"),
             preview: try fields.string("preview"),
             createdAt: WireTimestamp(milliseconds: try fields.integer("createdAt")).date,
@@ -132,7 +142,7 @@ enum SyncModelCoding {
     static func tombstone(_ value: CBORValue, context: String) throws -> Tombstone {
         let fields = try CBORFields(value, context: context)
         return Tombstone(
-            contentHash: try fields.string("contentHash"),
+            contentHash: try contentHash(fields, context: context),
             deletedAt: WireTimestamp(milliseconds: try fields.integer("deletedAt")).date,
             deviceID: try deviceID(try fields.string("deviceID"), context: "\(context).deviceID")
         )
@@ -205,7 +215,7 @@ enum SyncModelCoding {
 
     static func payloadChunk(_ fields: CBORFields, context: String) throws -> PayloadChunk {
         PayloadChunk(
-            contentHash: try fields.string("contentHash"),
+            contentHash: try contentHash(fields, context: context),
             key: try representationKey(try fields.required("key"), context: "\(context).key"),
             offset: try fields.integer("offset"),
             bytes: try fields.bytes("bytes"),

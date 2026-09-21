@@ -75,6 +75,24 @@ public actor AvahiDiscovery: PeerDiscovery {
     /// than waiting for a `ready` that has been and gone.
     var isBrowseReady = false
 
+    /// One TXT record browser per sighted instance, keyed by instance name —
+    /// the change feed a one-shot resolve cannot be. See
+    /// `AvahiDiscovery+RecordWatch.swift`.
+    var recordWatches: [String: PeerRecordWatch] = [:]
+    /// Which `(interface, protocol)` pairs the service browser has reported an
+    /// instance on, so its record browser outlives an `ItemRemove` for one of
+    /// several.
+    var recordWatchSightings: [String: Set<String>] = [:]
+    /// Record-browser object path to instance name.
+    var recordWatchPaths: [String: String] = [:]
+    /// Signals for a record browser whose `RecordBrowserNew` reply has not been
+    /// read yet. See ``claim(_:for:)``.
+    var unclaimedRecordSignals: [DBusMessage] = []
+
+    /// skrepkad's own mDNS responder, while it is publishing because avahi
+    /// refuses to. See `AvahiDiscovery+SelfPublishing.swift`.
+    var announcer: MDNSAnnouncer?
+
     /// Watches `Server.StateChanged`, so an `avahi-daemon` restart is noticed.
     /// Started by the first publish or browse; see
     /// `AvahiDiscovery+Recovery.swift`.
@@ -161,15 +179,23 @@ public actor AvahiDiscovery: PeerDiscovery {
     /// ``ClockCheck``, because two connections to a bus get two unique names
     /// and avahi directs every browser and entry-group signal at exactly one of
     /// them. Whoever constructed the ``SkrepkaIPC/BusSession`` closes it.
-    public func stopEverything() {
+    ///
+    /// **Waits for skrepkad's own responder's goodbye**, when it is the one
+    /// publishing. avahi withdraws its records itself when this client goes
+    /// away; nothing withdraws the responder's but the goodbye packets it sends
+    /// (RFC 6762 §10.1), and a daemon that exits straight after this call would
+    /// otherwise leave its TXT record in every peer's cache for 75 minutes.
+    public func stopEverything() async {
         serverWatchTask?.cancel()
         serverWatchTask = nil
         // A rebuild in flight would otherwise publish a record and start a
         // browse on the way out of a shutdown.
         busRebuild?.cancel()
         busRebuild = nil
+        let announcer = takeAnnouncer()
         stopAdvertising()
         stopBrowsing()
+        await announcer?.stop()
     }
 
     func describe(_ error: any Error) -> String {
@@ -203,17 +229,30 @@ enum AvahiError: Error, Sendable, CustomStringConvertible {
         }
     }
 
+    /// Which `[publish]` setting a `NotPermitted` answer comes from:
+    /// `EntryGroupNew` is refused by `disable-user-service-publishing`
+    /// (`avahi-daemon/dbus-protocol.c`), `AddService` by `disable-publishing`
+    /// (`avahi-core/entry.c`). SteamOS ships both set to `yes`.
+    static func publishingSetting(refusing method: String) -> String? {
+        switch method {
+        case AvahiNames.Server.entryGroupNew: "disable-user-service-publishing"
+        case AvahiNames.EntryGroup.addService: "disable-publishing"
+        default: nil
+        }
+    }
+
     private static func refusal(method: String, name: String, detail: String) -> String {
-        let publishingDisabled =
-            method == AvahiNames.Server.entryGroupNew
-            && name == "org.freedesktop.Avahi.NotPermittedError"
-        if publishingDisabled {
+        if name == AvahiNames.notPermittedError, let setting = publishingSetting(refusing: method) {
+            // Read by a user only when skrepkad's own responder could not
+            // publish either — see `AvahiDiscovery+SelfPublishing.swift` —
+            // so the remedy is the configuration change that makes avahi do it.
             return """
-                avahi-daemon is set to refuse services from user programs \
-                (`disable-user-service-publishing=yes` in `/etc/avahi/avahi-daemon.conf`), \
-                so other devices cannot see this one. Set it to `no` under `[publish]`, then run \
-                `sudo systemctl restart avahi-daemon`. This device can still discover and dial \
-                published peers; sync and live push work only over connections this device opens.
+                avahi-daemon is set not to publish services (`\(setting)=yes` under `[publish]` in \
+                `/etc/avahi/avahi-daemon.conf`; SteamOS ships it that way). To let avahi publish \
+                this device, set `disable-publishing` and `disable-user-service-publishing` to `no`, \
+                then run `sudo systemctl restart avahi-daemon`. Until then this device can still \
+                discover and dial published peers; sync and live push work only over connections \
+                it opens.
                 """
         }
         switch name {

@@ -941,9 +941,50 @@ install_desktop_entries() {
 	fi
 	install_entry "${PAYLOAD}/packaging/desktop/${DESKTOP_NAME}" "${DESKTOP_DIR}" "${exec_value}" \
 		"" "--settings"
+	install_autostart_entry "${exec_value}"
+	refresh_desktop_database
+}
+
+# The autostart entry, keeping launch at login off when the user turned it off.
+# Settings turns it off by writing Hidden=true into this file rather than
+# deleting it — the freedesktop Autostart spec's way for a user to disable an
+# entry — so an upgrade that installs the entry afresh must carry the key over,
+# or every upgrade would quietly turn launch at login back on.
+install_autostart_entry() {
+	local exec_value="$1" target="${AUTOSTART_DIR}/${DESKTOP_NAME}" hidden=0
+	if [[ -f "${target}" ]] && autostart_is_off "${target}"; then
+		hidden=1
+	fi
 	install_entry "${PAYLOAD}/packaging/autostart/${DESKTOP_NAME}" "${AUTOSTART_DIR}" \
 		"${exec_value}" "--background"
-	refresh_desktop_database
+	if [[ "${hidden}" -eq 1 && -f "${target}" ]]; then
+		turn_autostart_off "${target}"
+		echo "kept launch at login off, as it was set in Settings"
+	fi
+}
+
+# Whether the entry $1 is switched off: `Hidden=true` (the Autostart spec's
+# way, and what Settings writes) or GNOME's own `X-GNOME-Autostart-enabled=false`,
+# either one inside the [Desktop Entry] group — the only group the spec reads
+# them from.
+autostart_is_off() {
+	awk '
+		/^\[/ { group = $0; next }
+		group == "[Desktop Entry]" && /^[[:space:]]*Hidden[[:space:]]*=[[:space:]]*true[[:space:]]*$/ { off = 1 }
+		group == "[Desktop Entry]" && /^[[:space:]]*X-GNOME-Autostart-enabled[[:space:]]*=[[:space:]]*false[[:space:]]*$/ { off = 1 }
+		END { exit !off }
+	' "$1"
+}
+
+# Writes Hidden=true straight after the [Desktop Entry] header of $1. Appending
+# it would put it in whichever group comes last, where nothing reads it.
+turn_autostart_off() {
+	local staged="$1.tmp"
+	awk '
+		{ print }
+		!done && /^\[Desktop Entry\][[:space:]]*$/ { print "Hidden=true"; done = 1 }
+	' "$1" > "${staged}"
+	mv "${staged}" "$1"
 }
 
 # Installs the desktop entry $1 into the directory $2, rewriting each
@@ -1071,19 +1112,52 @@ stop_gui() {
 }
 
 # Starts the app in the tray, so the icon and the shortcut are there the moment
-# the install finishes rather than at the next login. Detached from this shell
-# — `setsid` where it exists — so closing the terminal does not take it down.
+# the install finishes rather than at the next login.
 start_gui() {
 	if [[ "${INSTALL_GUI}" -ne 1 ]] || ! has_graphical_session; then
 		return 0
 	fi
+	start_gui_as_unit || start_gui_detached
+	green "✓ Skrepka is starting in your tray"
+}
+
+# As a transient user service named the way a desktop names the apps it
+# launches — app-<desktop file ID>@<instance>.service — for two reasons:
+#   - its standard error goes to the journal, where `journalctl --user
+#     -t skrepka-gui` finds it, rather than to /dev/null;
+#   - xdg-desktop-portal reads an unregistered app's ID from that unit name. A
+#     child of this shell would be filed under the terminal running the script
+#     instead — Konsole's ID — and its global shortcut along with it.
+# A user service does not inherit this shell's environment, so the session's
+# display and bus variables are copied across, each only when it is set.
+start_gui_as_unit() {
+	has_systemd_user_instance && command -v systemd-run > /dev/null 2>&1 || return 1
+	local variable
+	local environment=()
+	for variable in WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE \
+		XDG_SESSION_DESKTOP DBUS_SESSION_BUS_ADDRESS; do
+		if [[ -n "${!variable:-}" ]]; then
+			# NAME=value spelled out: a bare NAME, copied from systemd-run's
+			# own environment, is newer than some systemd this may meet.
+			environment+=("--setenv=${variable}=${!variable}")
+		fi
+	done
+	systemd-run --user --quiet --collect \
+		--unit="app-${APP_ID}@install$(date +%s).service" \
+		--description="Skrepka" \
+		${environment[@]+"${environment[@]}"} \
+		"${BIN_DIR}/${GUI_NAME}" --background > /dev/null 2>&1
+}
+
+# Without a user service manager: detached from this shell — `setsid` where it
+# exists — so closing the terminal does not take the app down.
+start_gui_detached() {
 	if command -v setsid > /dev/null 2>&1; then
 		setsid -f "${BIN_DIR}/${GUI_NAME}" --background > /dev/null 2>&1 < /dev/null || true
 	else
 		nohup "${BIN_DIR}/${GUI_NAME}" --background > /dev/null 2>&1 < /dev/null &
 		disown || true
 	fi
-	green "✓ Skrepka is starting in your tray"
 }
 
 # ---------------------------------------------------------------------------
@@ -1151,6 +1225,9 @@ print_next_steps() {
 		echo "  ${GUI_NAME} --picker                  open the picker; bind this to a key in"
 		echo "                                     your desktop's settings if no shortcut"
 		echo "                                     was offered"
+		echo "  ${GUI_NAME} --status                  whether the tray icon and the shortcut"
+		echo "                                     are working"
+		echo "  journalctl --user -t ${GUI_NAME}       what the app is saying"
 	fi
 	echo "  ${CLI_NAME} --help                       what the CLI can do"
 	echo "  systemctl --user status ${UNIT_NAME}   is it running"

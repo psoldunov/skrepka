@@ -54,6 +54,8 @@ static inline GtkNative *skrepka_window_as_native(GtkWindow *window) {
 	return GTK_NATIVE(window);
 }
 
+static inline GtkOverlay *skrepka_as_overlay(GtkWidget *widget) { return GTK_OVERLAY(widget); }
+
 static inline GdkPaintable *skrepka_texture_as_paintable(GdkTexture *texture) {
 	return GDK_PAINTABLE(texture);
 }

@@ -62,6 +62,7 @@ final class PickerModel {
     let captureHealth: CaptureHealth
     private let matcher = Matcher()
     private let thumbnails: ThumbnailCache
+    private let filesNotes: SyncedFilesNoteCache
 
     /// Sends a chosen entry back to the coordinator.
     var onChoose: ((ClipSummary, PasteStyle) -> Void)?
@@ -76,6 +77,7 @@ final class PickerModel {
         self.captureHealth = captureHealth
         self.store = store
         thumbnails = ThumbnailCache(store: store)
+        filesNotes = SyncedFilesNoteCache(store: store)
         refreshResults()
         observeStore()
     }
@@ -97,6 +99,12 @@ final class PickerModel {
     /// fewer than two files.
     func stackImages(for item: ClipSummary) -> [NSImage] {
         thumbnails.stackImages(for: item)
+    }
+
+    /// "contents not synced" for a file row from another device whose files
+    /// did not come, so pasting its names is never a surprise. Nil otherwise.
+    func filesNote(for item: ClipSummary) -> String? {
+        filesNotes.note(for: item)
     }
 
     var selection: ClipSummary? {

@@ -35,6 +35,10 @@ public actor DaemonLink {
     enum Command: Sendable {
         case perform(SyncAction)
         case refresh
+        /// Another pane's call — History's, Diagnostics' — queued behind the
+        /// Sync pane's so it cannot time out behind a dial either. It reports
+        /// for itself.
+        case job(@Sendable () async -> Void)
         case shutdown
     }
 
@@ -102,6 +106,12 @@ public actor DaemonLink {
         enqueue(.perform(action))
     }
 
+    /// Queues `job` behind everything already asked, for a pane other than
+    /// Sync. Nothing is reported for it; the job reports its own outcome.
+    public nonisolated func run(_ job: @escaping @Sendable () async -> Void) {
+        enqueue(.job(job))
+    }
+
     /// Queues a read of the peer list, unless something is already queued.
     public nonisolated func refreshIfIdle() {
         guard backlog.withLock({ $0 }) == 0 else { return }
@@ -148,6 +158,10 @@ public actor DaemonLink {
             } catch {
                 event = .unreachable(SyncFailure(describing: error))
             }
+        case .job(let job):
+            await job()
+            backlog.withLock { $0 -= 1 }
+            return false
         case .shutdown:
             await windUp()
             backlog.withLock { $0 -= 1 }

@@ -80,16 +80,21 @@ extension Daemon {
     /// unbounded fan of these is not what it looks like.
     func serve(_ connection: SyncConnection) {
         guard let runtime else { return }
+        let generation = syncGeneration
         let responder = SyncResponder(
             connection: connection,
             session: runtime.pairing,
             trust: runtime.trust,
             store: runtime.store,
             confirmPairing: { [weak self] proposal in
-                await self?.confirmPairing(proposal, direction: PairingDirection.incoming) ?? false
+                await self?.confirmPairing(
+                    proposal, direction: PairingDirection.incoming, generation: generation) ?? false
             },
             onLivePush: { [weak self] meta, inline in
-                await self?.receiveLivePush(meta, inline: inline)
+                await self?.receiveLivePush(meta, inline: inline, generation: generation)
+            },
+            onPushWithoutBytes: { [weak self] sender, meta in
+                await self?.fetchPushed(meta, from: sender, generation: generation)
             }
         )
         // Keyed, and the task removes its own entry when it finishes. An
@@ -170,58 +175,6 @@ extension Daemon {
         }
         await performRestartSyncListener()
         await reconcileLinks()
-    }
-
-    // MARK: - Inbound live push
-
-    /// Puts content a peer pushed onto this machine's clipboard.
-    ///
-    /// The item is already in history by the time this runs — `SyncResponder`
-    /// stores before it calls the sink — so everything here is about the
-    /// clipboard and nothing here can cost the row.
-    ///
-    /// The gate hears about the push **before** the write — see
-    /// ``SkrepkaSync/LivePushGate/noteReceived(_:at:)`` — and only when there
-    /// is a write, which ``writeToClipboard(_:handingOver:)`` decides.
-    ///
-    /// **A push whose bytes did not come inline writes nothing**, which is the
-    /// same limitation the macOS side has: `LivePushPayload.inline` sends
-    /// nothing when a push's representations total more than
-    /// `SyncLimits.livePushInlineLimit`, which is most images. The item is
-    /// still in history and its bytes arrive on the next index exchange; what
-    /// the user loses is the handoff, not the clipping.
-    func receiveLivePush(_ meta: SyncClipMeta, inline: [RepresentationKey: Data]) async {
-        guard !isStopping, !meta.isConcealed, !inline.isEmpty else { return }
-        notifyHistoryChanged()
-        await writeToClipboard(inline, handingOver: meta.contentHash)
-    }
-
-    /// Writes wire-keyed bytes to the session's clipboard, as a handoff.
-    ///
-    /// **No pause around the write, because a pause cannot cover it.**
-    /// `setSelection` only queues a command for the session's loop; the
-    /// compositor or the X server echoes the write back some time later, and a
-    /// watcher paused and resumed around the queueing was running again by
-    /// then — so every push this machine received used to be captured as a
-    /// local copy. For a link, a multi-file copy or RTFD-only rich text the
-    /// round trip also changes the checksum, so the hash backstop missed it
-    /// too, and the item went back to every peer as a new row.
-    ///
-    /// ``SkrepkaLinuxPlatform/SelectionWrite/handoff`` is what stops it now:
-    /// the session remembers why it owns the selection and publishes nothing
-    /// for its own echo, so the watcher never sees a change to capture.
-    ///
-    /// **The gate hears of the handoff only once the write is certain to be
-    /// made.** No session to write to — GNOME Wayland, where the Shell
-    /// extension submits clips instead — or no target the payload converts to
-    /// leaves the clipboard as it was, and a hand-over recorded anyway would
-    /// refuse the next local copy of the same content for nothing.
-    func writeToClipboard(_ payloads: [RepresentationKey: Data], handingOver contentHash: String) async {
-        guard let clipboard else { return }
-        let targets = LinuxClipboardWriter.targets(for: payloads)
-        guard !targets.isEmpty else { return }
-        livePushGate.noteReceived(contentHash, at: Date())
-        await clipboard.setSelection(targets, as: .handoff)
     }
 }
 

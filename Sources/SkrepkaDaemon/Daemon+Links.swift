@@ -37,7 +37,7 @@ extension Daemon {
             await link?.stop()
         }
         for peer in peers where links[peer.deviceID] == nil {
-            links[peer.deviceID] = makeLink(to: peer.deviceID, runtime: runtime)
+            links[peer.deviceID] = makeLink(to: peer.deviceID, runtime: runtime, generation: syncGeneration)
             beginTracking(peer)
         }
         // Starting a link that is already running does nothing, so a browse
@@ -45,7 +45,9 @@ extension Daemon {
         for link in links.values { await link.start() }
     }
 
-    private func makeLink(to deviceID: SyncDeviceID, runtime: SyncRuntime) -> PeerLink {
+    /// A link reports into the stack it was made for: an exchange that
+    /// completes after that stack stopped writes no progress for the next.
+    private func makeLink(to deviceID: SyncDeviceID, runtime: SyncRuntime, generation: Int) -> PeerLink {
         PeerLink(
             peerDeviceID: deviceID,
             runtime: runtime,
@@ -57,7 +59,10 @@ extension Daemon {
                 return try await self.resolve(deviceID)
             },
             report: { [weak self] deviceID, event in
-                await self?.apply(event, to: deviceID)
+                await self?.apply(event, to: deviceID, generation: generation)
+            },
+            onPushFetched: { [weak self] meta, payloads in
+                await self?.receiveFetchedPush(meta, payloads: payloads, generation: generation)
             }
         )
     }
@@ -75,7 +80,8 @@ extension Daemon {
         return try await discovery.resolve(sighting.peer)
     }
 
-    func apply(_ event: PeerLinkEvent, to deviceID: SyncDeviceID) {
+    func apply(_ event: PeerLinkEvent, to deviceID: SyncDeviceID, generation: Int) {
+        guard isSyncCurrent(generation) else { return }
         var entry = progress[deviceID] ?? PeerProgress()
         switch event {
         case .connecting:
