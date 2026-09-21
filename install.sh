@@ -5,7 +5,7 @@
 # root, no package manager, nothing to compile.
 #
 #   curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
-#   curl -fsSL <same url> | bash -s -- --version v0.2.0
+#   curl -fsSL <same url> | bash -s -- --version v0.2.1
 #   curl -fsSL <same url> | bash -s -- --uninstall
 #
 #   ./install.sh                    from inside an untarred release: install it
@@ -163,7 +163,7 @@ Usage:
   install.sh                    download the latest release and install it
                                 (or, from inside an untarred release, install
                                 that one)
-  install.sh --version TAG      download that release instead, e.g. v0.2.0
+  install.sh --version TAG      download that release instead, e.g. v0.2.1
   install.sh --tarball FILE     install a release tarball already on disk;
                                 FILE.sha256 beside it is checked when present
   install.sh --from-dir DIR     install a staged build: DIR/bin, DIR/packaging
@@ -175,7 +175,7 @@ Usage:
 Piped from curl, pass arguments after `bash -s --`:
 
   curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh \
-    | bash -s -- --version v0.2.0
+    | bash -s -- --version v0.2.1
 
 Release builds are x86_64 only. On any other machine, clone the repository and
 run scripts/setup-linux.sh, which builds from source.
