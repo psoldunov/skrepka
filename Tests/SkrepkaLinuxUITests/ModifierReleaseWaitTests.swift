@@ -58,6 +58,24 @@ struct ModifierReleaseWaitTests {
         #expect(!wait.isWaiting)
     }
 
+    @Test("a second action replaces the pending paste")
+    func latestActionWins() {
+        var deadline: (() -> Void)?
+        var events: [String] = []
+        let wait = ModifierReleaseWait(
+            modifiers: { [.alt] },
+            scheduleDeadline: {
+                deadline = $0
+                return {}
+            })
+
+        wait.perform { events.append("first") }
+        wait.perform { events.append("second") }
+        deadline?()
+
+        #expect(events == ["second"])
+    }
+
     @Test("user dismissal cancels a pending hide and paste")
     func dismissalCancelsPaste() {
         var modifiers: PickerModifiers = [.alt]

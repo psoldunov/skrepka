@@ -73,6 +73,7 @@ final class PasteCoordinator: PasteHandling {
         }
     }
 
+    // Internal so tests can inject portal results.
     func finished(_ result: Result<Void, any Error>) {
         switch result {
         case .success:

@@ -63,7 +63,6 @@ case ${1:-} in
     type) [[ $# -eq 2 ]] || exit 64; up; in_session skrepka-gnome-input type "$2" ;;
     click) [[ $# -eq 3 ]] || exit 64; up; in_session skrepka-gnome-input click "$2" "$3" ;;
     right-click) [[ $# -eq 3 ]] || exit 64; up; in_session skrepka-gnome-input click "$2" "$3" secondary ;;
-    double-click) [[ $# -eq 3 ]] || exit 64; up; in_session skrepka-gnome-input double-click "$2" "$3" ;;
     eval) [[ $# -eq 2 ]] || exit 64; up; in_session skrepka-gnome-eval "$2" ;;
     windows) up; in_session skrepka-gnome-windows ;;
     "") up; in_session bash ;;

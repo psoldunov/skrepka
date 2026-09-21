@@ -32,6 +32,9 @@ public final class PickerController {
     /// once it has, so a pointer that the surface merely mapped under does not
     /// pull the selection off the top row.
     private var hoverArmed = false
+    /// Counts openings, so a reply to an entry chosen in an earlier one is told apart.
+    private var opening = 0
+    private var chosenOpening: Int?
     /// Retains the demo's one-shot menu timer for its lifetime.
     private var menuTimer: LoopTimer?
 
@@ -73,6 +76,7 @@ public final class PickerController {
     }
 
     public func show() {
+        opening += 1
         link.refreshSettings()
         hoverArmed = false
         model = PickerModel(rows: historyRows).reset()
@@ -82,11 +86,8 @@ public final class PickerController {
         window.present()
     }
 
-    /// Opens the context menu on the selected row — the app shell can bind it
-    /// to a Menu key.
-    public func openMenuForSelection() {
-        window.panel.list.openMenuForSelection()
-    }
+    /// Opens the context menu on the selected row — the app shell can bind it to a Menu key.
+    public func openMenuForSelection() { window.panel.list.openMenuForSelection() }
 
     /// Opens the context menu after a short delay, once the surface has mapped —
     /// the demo uses it to screenshot the menu, which a right-click cannot be
@@ -98,9 +99,7 @@ public final class PickerController {
         }
     }
 
-    public func hide() {
-        window.close()
-    }
+    public func hide() { window.close() }
 
     public func toggle() {
         if window.isVisible {
@@ -163,6 +162,7 @@ public final class PickerController {
     }
 
     private func choose(_ hash: String, style: CopyStyle) {
+        chosenOpening = opening
         window.panel.footer.showError(nil)
         link.refreshSettings()
         link.copy(hash: hash, style: style)
@@ -223,6 +223,11 @@ extension PickerController {
             window.panel.footer.showPasteAutomatically(automatically)
             paster?.setAutomaticPasteEnabled(automatically)
         case .copied(let automatically):
+            // A reply to a dismissed or replaced opening leaves the entry copied, and nothing else.
+            guard
+                PickerPasteAction.shouldComplete(
+                    isVisible: isVisible, chosenOpening: chosenOpening, currentOpening: opening)
+            else { return }
             PickerPasteAction.complete(
                 isAutomatic: automatically,
                 paster: paster,
@@ -249,7 +254,7 @@ extension PickerController {
 
     private func store(preview document: PreviewDocument, for hash: String) {
         guard let bytes = document.bytes else { return }
-        let source = documents[hash].flatMap(Self.pixelSize)
+        let source = documents[hash].flatMap(\.pixelSize)
         guard thumbnails.store(hash: hash, data: bytes, source: source) != nil else { return }
         render(rebuild: true)
     }
@@ -291,10 +296,5 @@ extension PickerController {
             requestedPreviews.insert(hash)
             link.preview(hash: hash)
         }
-    }
-
-    private static func pixelSize(_ document: ClipDocument) -> PixelSize? {
-        guard let width = document.imageWidth, let height = document.imageHeight else { return nil }
-        return PixelSize(width: width, height: height)
     }
 }

@@ -11,7 +11,7 @@ import gi
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib  # noqa: E402
 
-USAGE = "usage: skrepka-gnome-input key MOD+KEY | type TEXT | click X Y [primary|secondary] | double-click X Y"
+USAGE = "usage: skrepka-gnome-input key MOD+KEY | type TEXT | click X Y [primary|secondary]"
 
 
 def evaluate(script: str) -> None:
@@ -57,8 +57,9 @@ def send_key(names: list[str]) -> None:
     # Linux input-event codes, verified in the image's linux/input-event-codes.h.
     # notify_key takes hardware codes; notify_keyval is kept for text below.
     codes = {
-        "esc": 1, "escape": 1, "tab": 15, "return": 28, "enter": 28,
-        "ctrl": 29, "control": 29, "shift": 42, "v": 47, "alt": 56,
+        "esc": 1, "escape": 1, "1": 2, "tab": 15, "a": 30, "s": 31,
+        "return": 28, "enter": 28, "ctrl": 29, "control": 29,
+        "shift": 42, "v": 47, "alt": 56,
         "space": 57, "super": 125, "meta": 125,
     }
     try:
@@ -95,7 +96,7 @@ return "sent";
 }})()""")
 
 
-def click(x: int, y: int, button: str = "primary", count: int = 1) -> None:
+def click(x: int, y: int, button: str = "primary") -> None:
     clutter_button = {
         "primary": "BUTTON_PRIMARY",
         "secondary": "BUTTON_SECONDARY",
@@ -109,12 +110,9 @@ const wait = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT
 const device = global.stage.context.get_backend().get_default_seat().create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
 device.notify_absolute_motion(GLib.get_monotonic_time(), {x}, {y});
 await wait(60);
-for (let i = 0; i < {count}; i++) {{
-    device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.PRESSED);
-    await wait(60);
-    device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.RELEASED);
-    await wait(80);
-}}
+device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.PRESSED);
+await wait(60);
+device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.RELEASED);
 return "sent";
 }})()""")
 
@@ -132,11 +130,5 @@ elif command == "click" and len(sys.argv) in (4, 5):
     except ValueError as error:
         raise SystemExit(USAGE) from error
     click(*coordinates, button=sys.argv[4] if len(sys.argv) == 5 else "primary")
-elif command == "double-click" and len(sys.argv) == 4:
-    try:
-        coordinates = (int(sys.argv[2]), int(sys.argv[3]))
-    except ValueError as error:
-        raise SystemExit(USAGE) from error
-    click(*coordinates, count=2)
 else:
     raise SystemExit(USAGE)

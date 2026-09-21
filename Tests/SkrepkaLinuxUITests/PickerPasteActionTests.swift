@@ -37,6 +37,33 @@ struct PickerPasteActionTests {
         #expect(events == ["hide", "paste"])
     }
 
+    @Test("dismissed picker ignores an automatic copy reply")
+    func dismissedPickerDoesNotPaste() {
+        #expect(
+            !PickerPasteAction.shouldComplete(
+                isVisible: false,
+                chosenOpening: 1,
+                currentOpening: 1))
+    }
+
+    @Test("reopened picker ignores an earlier automatic copy reply")
+    func reopenedPickerDoesNotPaste() {
+        #expect(
+            !PickerPasteAction.shouldComplete(
+                isVisible: true,
+                chosenOpening: 1,
+                currentOpening: 2))
+    }
+
+    @Test("visible picker completes its own automatic copy reply")
+    func visiblePickerPastesForSameOpening() {
+        #expect(
+            PickerPasteAction.shouldComplete(
+                isVisible: true,
+                chosenOpening: 2,
+                currentOpening: 2))
+    }
+
     @Test("manual mode hides without injecting")
     func manualMode() {
         var events: [String] = []

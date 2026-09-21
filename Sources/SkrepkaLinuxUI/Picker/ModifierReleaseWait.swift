@@ -1,19 +1,19 @@
 /// Runs automatic paste only after the keyboard's live modifier state is clear.
 final class ModifierReleaseWait {
-    typealias ScheduleDeadline = (@escaping () -> Void) -> () -> Void
+    typealias Schedule = (@escaping () -> Void) -> () -> Void
 
     private let modifiers: () -> PickerModifiers
-    private let schedulePoll: ScheduleDeadline
-    private let scheduleDeadline: ScheduleDeadline
+    private let schedulePoll: Schedule
+    private let scheduleDeadline: Schedule
     private var cancelPoll: (() -> Void)?
     private var cancelDeadline: (() -> Void)?
-    private var actions: [() -> Void] = []
+    private var action: (() -> Void)?
     private(set) var isWaiting = false
 
     init(
         modifiers: @escaping () -> PickerModifiers,
-        schedulePoll: @escaping ScheduleDeadline = { _ in {} },
-        scheduleDeadline: @escaping ScheduleDeadline
+        schedulePoll: @escaping Schedule = { _ in {} },
+        scheduleDeadline: @escaping Schedule
     ) {
         self.modifiers = modifiers
         self.schedulePoll = schedulePoll
@@ -21,8 +21,8 @@ final class ModifierReleaseWait {
     }
 
     func perform(_ action: @escaping () -> Void) {
-        actions.append(action)
-        guard actions.count == 1 else { return }
+        self.action = action
+        guard !isWaiting else { return }
         guard !modifiers().isDisjoint(with: .pasteBlocking) else {
             finish()
             return
@@ -42,14 +42,14 @@ final class ModifierReleaseWait {
         cancelPoll = nil
         cancelDeadline?()
         cancelDeadline = nil
-        actions.removeAll()
+        action = nil
         isWaiting = false
     }
 
     private func finish() {
-        let ready = actions
+        let action = action
         cancel()
-        for action in ready { action() }
+        action?()
     }
 }
 
