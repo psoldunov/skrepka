@@ -11,7 +11,7 @@ import gi
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib  # noqa: E402
 
-USAGE = "usage: skrepka-gnome-input key MOD+KEY | type TEXT | click X Y [primary|secondary]"
+USAGE = "usage: skrepka-gnome-input key MOD+KEY | type TEXT | click X Y [primary|secondary] | double-click X Y"
 
 
 def evaluate(script: str) -> None:
@@ -95,7 +95,7 @@ return "sent";
 }})()""")
 
 
-def click(x: int, y: int, button: str = "primary") -> None:
+def click(x: int, y: int, button: str = "primary", count: int = 1) -> None:
     clutter_button = {
         "primary": "BUTTON_PRIMARY",
         "secondary": "BUTTON_SECONDARY",
@@ -109,9 +109,12 @@ const wait = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT
 const device = global.stage.context.get_backend().get_default_seat().create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
 device.notify_absolute_motion(GLib.get_monotonic_time(), {x}, {y});
 await wait(60);
-device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.PRESSED);
-await wait(60);
-device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.RELEASED);
+for (let i = 0; i < {count}; i++) {{
+    device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.PRESSED);
+    await wait(60);
+    device.notify_button(GLib.get_monotonic_time(), Clutter.{clutter_button}, Clutter.ButtonState.RELEASED);
+    await wait(80);
+}}
 return "sent";
 }})()""")
 
@@ -128,6 +131,12 @@ elif command == "click" and len(sys.argv) in (4, 5):
         coordinates = (int(sys.argv[2]), int(sys.argv[3]))
     except ValueError as error:
         raise SystemExit(USAGE) from error
-    click(*coordinates, *(sys.argv[4:] or ["primary"]))
+    click(*coordinates, button=sys.argv[4] if len(sys.argv) == 5 else "primary")
+elif command == "double-click" and len(sys.argv) == 4:
+    try:
+        coordinates = (int(sys.argv[2]), int(sys.argv[3]))
+    except ValueError as error:
+        raise SystemExit(USAGE) from error
+    click(*coordinates, count=2)
 else:
     raise SystemExit(USAGE)

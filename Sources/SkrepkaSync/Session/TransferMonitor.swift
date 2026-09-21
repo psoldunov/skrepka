@@ -44,8 +44,10 @@ public actor TransferMonitor {
     /// A fetch of `totalBytes` for one item has started. A second fetch of the
     /// same item takes over its bar until one of them ends.
     public func begin(_ contentHash: String, totalBytes: Int) {
-        guard totalBytes > Self.reportingThreshold else { return }
+        // Counted whatever its size, so a small fetch ending cannot take a
+        // large one's bar with it; only a large one is drawn.
         fetches[contentHash, default: 0] += 1
+        guard totalBytes > Self.reportingThreshold else { return }
         transfers[contentHash] = PayloadTransfer(
             contentHash: contentHash, receivedBytes: 0, totalBytes: totalBytes)
         publish(at: .now)
@@ -82,7 +84,7 @@ public actor TransferMonitor {
             return
         }
         fetches[contentHash] = nil
-        transfers[contentHash] = nil
+        guard transfers.removeValue(forKey: contentHash) != nil else { return }
         publish(at: .now)
     }
 

@@ -59,6 +59,17 @@ struct TransferMonitorTests {
         #expect(await monitor.current.isEmpty)
     }
 
+    @Test("A small fetch of an item ending does not take a large fetch's bar with it")
+    func smallFetchDoesNotEndALargeOne() async {
+        let monitor = TransferMonitor(progressInterval: .zero)
+        await monitor.begin("a", totalBytes: Self.total)
+        await monitor.begin("a", totalBytes: 10)
+        await monitor.end("a")
+        #expect(await monitor.current.map(\.contentHash) == ["a"])
+        await monitor.end("a")
+        #expect(await monitor.current.isEmpty)
+    }
+
     @Test("Progress is spaced out; nothing reported yet is always due")
     func spacing() {
         let start = ContinuousClock.now

@@ -4,16 +4,19 @@ final class RemoteDesktopPaster {
     typealias Completion = (Result<Void, any Error>) -> Void
     typealias Requester = (String, [DBusValue], @escaping PortalRequest.Completion) -> Void
     typealias Injector = (String, @escaping Completion) -> Void
+    typealias Closer = (String) -> Void
 
     static let interface = "org.freedesktop.portal.RemoteDesktop"
     let connection: () -> DBusConnection?
     let tokenStore: RestoreTokenStore
     let requester: Requester?
     let injector: Injector?
+    let closer: Closer?
     var requests: [String: PortalRequest] = [:]
     var session: String?
     var sessionClosed: DBusSignalSubscription?
     var closeTimer: LoopTimer?
+    var pendingCloseSession: String?
 
     private var pending: Completion?
     private var isStarting = false
@@ -24,12 +27,14 @@ final class RemoteDesktopPaster {
         connection: @escaping () -> DBusConnection?,
         tokenStore: RestoreTokenStore = RestoreTokenStore(),
         requester: Requester? = nil,
-        injector: Injector? = nil
+        injector: Injector? = nil,
+        closer: Closer? = nil
     ) {
         self.connection = connection
         self.tokenStore = tokenStore
         self.requester = requester
         self.injector = injector
+        self.closer = closer
     }
 
     func paste(completion: @escaping Completion) {
@@ -135,7 +140,7 @@ final class RemoteDesktopPaster {
     private func fail(_ step: String, _ result: Result<PortalResponse, DBusError>) {
         isStarting = false
         let error: PasteFailure
-        if case .success(let response) = result, response.code == 1 || response.code == 2 {
+        if case .success(let response) = result, response.code == 1 {
             refusedThisRun = true
             error = .consentRefused
         } else {

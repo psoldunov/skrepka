@@ -29,6 +29,23 @@ struct RemoteDesktopPasterTests {
         #expect(portal.methods.last == "CreateSession")
     }
 
+    @Test("a non-refusal response remains retryable")
+    func endedResponseIsTransient() throws {
+        let portal = FakeRemoteDesktopPortal()
+        let paster = RemoteDesktopPaster(
+            connection: { nil }, requester: portal.request, injector: portal.inject)
+        var results: [Result<Void, any Error>] = []
+
+        paster.paste { results.append($0) }
+        portal.succeedCreation()
+        portal.respond(code: 2)
+
+        let failure = try #require(results.first?.failure as? PasteFailure)
+        #expect(failure.description != PasteFailure.consentRefused.description)
+        paster.paste { results.append($0) }
+        #expect(portal.methods.last == "CreateSession")
+    }
+
     @Test("a portal Closed signal invalidates the cached session")
     func closedSessionIsDropped() {
         let portal = FakeRemoteDesktopPortal()
@@ -43,6 +60,32 @@ struct RemoteDesktopPasterTests {
         paster.paste { _ in }
 
         #expect(portal.methods.last == "CreateSession")
+    }
+
+    @Test("closing a temporary session leaves the cached session active")
+    func temporaryCloseKeepsCachedSession() {
+        var closed: [String] = []
+        let paster = RemoteDesktopPaster(connection: { nil }, closer: { closed.append($0) })
+        paster.session = "/session/cached"
+
+        paster.close("/session/temporary")
+
+        #expect(paster.session == "/session/cached")
+        #expect(closed == ["/session/temporary"])
+    }
+
+    @Test("replacing a delayed close closes the previous temporary session")
+    func delayedCloseReplacement() {
+        var closed: [String] = []
+        let portal = FakeRemoteDesktopPortal()
+        let paster = RemoteDesktopPaster(
+            connection: { nil }, injector: portal.inject, closer: { closed.append($0) })
+
+        paster.inject(session: "/session/first", closeAfter: true) { _ in }
+        paster.inject(session: "/session/second", closeAfter: true) { _ in }
+
+        #expect(closed == ["/session/first"])
+        #expect(paster.pendingCloseSession == "/session/second")
     }
 
     @Test("a newer paste supersedes the pending paste and injects only once")

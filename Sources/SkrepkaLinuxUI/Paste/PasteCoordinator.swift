@@ -14,16 +14,20 @@ final class PasteCoordinator: PasteHandling {
     private(set) var mechanism: PasteMechanism
     private let probe: () -> PasteMechanism
     private let remoteDesktop: RemoteDesktopPaster
+    private let showAlert: (String, String) -> Void
     private var timer: LoopTimer?
     private var didShowFailure = false
+    private var isAutomaticPasteEnabled = true
 
     init(
         mechanism: PasteMechanism = .probe(),
         probe: @escaping () -> PasteMechanism = { .probe() },
-        portalConnection: @escaping () -> DBusConnection?
+        portalConnection: @escaping () -> DBusConnection?,
+        showAlert: @escaping (String, String) -> Void = AppAlert.show
     ) {
         self.mechanism = mechanism
         self.probe = probe
+        self.showAlert = showAlert
         remoteDesktop = RemoteDesktopPaster(connection: portalConnection)
         AppLog.note("paste: selected \(mechanism.summary)")
     }
@@ -37,6 +41,8 @@ final class PasteCoordinator: PasteHandling {
     }
 
     func setAutomaticPasteEnabled(_ enabled: Bool) {
+        if enabled, !isAutomaticPasteEnabled { didShowFailure = false }
+        isAutomaticPasteEnabled = enabled
         remoteDesktop.setAutomaticPasteEnabled(enabled)
     }
 
@@ -67,7 +73,7 @@ final class PasteCoordinator: PasteHandling {
         }
     }
 
-    private func finished(_ result: Result<Void, any Error>) {
+    func finished(_ result: Result<Void, any Error>) {
         switch result {
         case .success:
             AppLog.note("paste: Ctrl+V sent through \(mechanism.summary)")
@@ -82,9 +88,9 @@ final class PasteCoordinator: PasteHandling {
         AppLog.note("paste: \(mechanism.summary) failed: \(error)")
         guard !didShowFailure else { return }
         didShowFailure = true
-        AppAlert.show(
-            message: "Skrepka copied the entry but could not paste it",
-            detail: (error as? PasteFailure)?.userDetail
+        showAlert(
+            "Skrepka copied the entry but could not paste it",
+            (error as? PasteFailure)?.userDetail
                 ?? "Press Ctrl+V manually. Allow Skrepka if your desktop asks for keyboard-control permission."
         )
     }

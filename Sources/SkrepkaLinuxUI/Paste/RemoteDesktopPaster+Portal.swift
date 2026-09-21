@@ -1,22 +1,20 @@
 extension RemoteDesktopPaster {
     func inject(session: String, closeAfter: Bool, completion: @escaping Completion) {
-        if let injector {
-            injector(session, completion)
-            return
-        }
-        let events: [(Int32, UInt32)] = [(29, 1), (47, 1), (47, 0), (29, 0)]
-        send(events: events[...], session: session) { [weak self] result in
+        let finished: Completion = { [weak self] result in
             guard let self else { return }
             if closeAfter, case .success = result {
-                closeTimer = LoopTimer(milliseconds: 50) { [weak self] in
-                    self?.close(session)
-                    self?.closeTimer = nil
-                }
+                scheduleClose(session)
             } else if case .failure = result {
                 close(session)
             }
             completion(result)
         }
+        if let injector {
+            injector(session, finished)
+            return
+        }
+        let events: [(Int32, UInt32)] = [(29, 1), (47, 1), (47, 0), (29, 0)]
+        send(events: events[...], session: session, completion: finished)
     }
 
     private func send(
@@ -95,14 +93,35 @@ extension RemoteDesktopPaster {
         AppLog.note("paste: RemoteDesktop session closed by the desktop")
     }
 
+    private func scheduleClose(_ session: String) {
+        if let pendingCloseSession { close(pendingCloseSession) }
+        pendingCloseSession = session
+        closeTimer = LoopTimer(milliseconds: 50) { [weak self] in
+            guard let self else { return }
+            closeTimer = nil
+            pendingCloseSession = nil
+            close(session)
+        }
+    }
+
     func close(_ session: String) {
-        connection()?.call(
-            destination: GlobalShortcuts.portalName,
-            path: session,
-            interface: "org.freedesktop.portal.Session",
-            method: "Close"
-        ) { _ in }
-        if self.session == session { self.session = nil }
+        if let closer {
+            closer(session)
+        } else {
+            connection()?.call(
+                destination: GlobalShortcuts.portalName,
+                path: session,
+                interface: "org.freedesktop.portal.Session",
+                method: "Close"
+            ) { _ in }
+        }
+        if pendingCloseSession == session {
+            closeTimer?.cancel()
+            closeTimer = nil
+            pendingCloseSession = nil
+        }
+        guard self.session == session else { return }
+        self.session = nil
         sessionClosed?.cancel()
         sessionClosed = nil
     }

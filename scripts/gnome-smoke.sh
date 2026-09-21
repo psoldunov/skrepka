@@ -53,6 +53,11 @@ pkill -x skrepkad 2>/dev/null || true
 sleep 1
 nohup ~/.local/bin/skrepkad >"${RUN}/logs/skrepkad.log" 2>&1 &
 for _ in $(seq 40); do busctl --user status dev.soldunov.Skrepka >/dev/null 2>&1 && break; sleep 0.25; done
+nohup dbus-monitor "type=error" \
+    "interface=org.freedesktop.portal.RemoteDesktop" \
+    "interface=org.freedesktop.portal.Request" \
+    "interface=org.freedesktop.portal.Session" \
+    >"${RUN}/logs/dbus-portal.log" 2>&1 &
 nohup ~/.local/bin/skrepka-gui --background >"${RUN}/logs/skrepka-gui.log" 2>&1 &
 echo $! >/tmp/gnome/gui.pid
 sleep 3
@@ -134,14 +139,15 @@ if [[ ${dialog} == yes ]]; then
     skrepka-gnome-screenshot "${RUN}/shots/4-shortcut-dialog.png" >/dev/null
     # GNOME starts headless sessions in Overview. The first click activates
     # the portal window and leaves Overview; it is deliberately on the title,
-    # not a button. Wait for that transition, then follow GTK's focus order
-    # (remove, edit, Cancel, Add) and activate Add.
+    # not a button. Once GNOME finishes that transition, click Add directly.
     geometry=$(skrepka-gnome-windows | grep '^Add Keyboard Shortcuts|' | head -1 | cut -d'|' -f3)
     x=${geometry%%,*}; rest=${geometry#*,}; y=${rest%%,*}; size=${rest#*,}; w=${size%x*}
     skrepka-gnome-input click $((x + w / 2)) $((y + 20))
-    for _ in 1 2 3 4; do skrepka-gnome-input key Tab; done
+    sleep 1
+    geometry=$(skrepka-gnome-windows | grep '^Add Keyboard Shortcuts|' | head -1 | cut -d'|' -f3)
+    x=${geometry%%,*}; rest=${geometry#*,}; y=${rest%%,*}; size=${rest#*,}; w=${size%x*}
     skrepka-gnome-screenshot "${RUN}/shots/4-shortcut-add-focused.png" >/dev/null
-    skrepka-gnome-input key space
+    skrepka-gnome-input click $((x + w - 38)) $((y + 21))
     sleep 3
 fi
 status=$(~/.local/bin/skrepka-gui --status 2>&1)
@@ -151,7 +157,7 @@ sleep 2
 skrepka-gnome-screenshot "${RUN}/shots/4-shortcut-pressed.png" >/dev/null
 if picker_open; then
     echo "RESULT 4 shortcut PASS: GNOME accepted show-picker and a real Super+Shift+V opened it"
-    skrepka-gnome-input key Escape
+    ~/.local/bin/skrepka-gui --picker >>"${RUN}/logs/skrepka-gui.log" 2>&1
 else
     echo "RESULT 4 shortcut FAIL: dialog=${dialog}; shortcut did not open the picker"
     # Do not let the still-modal consent window contaminate picker focus tests.
@@ -201,6 +207,7 @@ skrepka-gnome-input click 100 100
 sleep 2
 clicked=yes; picker_open && clicked=no
 skrepka-gnome-screenshot "${RUN}/shots/5-after-click-away.png" >/dev/null
+picker_open && ~/.local/bin/skrepka-gui --picker >>"${RUN}/logs/skrepka-gui.log" 2>&1
 kill "${backdrop}" 2>/dev/null || true
 if [[ ${mapped}/${escaped}/${clicked} == yes/yes/yes ]]; then
     echo "RESULT 5 picker PASS: plain window mapped; Escape and outside click each closed it"
@@ -234,6 +241,9 @@ nohup python3 /tmp/paste-target.py >"${RUN}/logs/paste-target.log" 2>&1 &
 sleep 2
 printf 'gnome automatic paste' | xclip -selection clipboard
 sleep 2
+picker_open() { skrepka-gnome-windows | grep -Eq '^dev\.soldunov\.Skrepka\.App\|'; }
+picker_open && ~/.local/bin/skrepka-gui --picker >>"${RUN}/logs/skrepka-gui.log" 2>&1
+sleep 1
 shortcut_ready=no
 if ~/.local/bin/skrepka-gui --status 2>&1 | grep -q '^shortcut: bound'; then
     shortcut_ready=yes
@@ -244,21 +254,40 @@ else
     ~/.local/bin/skrepka-gui --picker >>"${RUN}/logs/skrepka-gui.log" 2>&1
 fi
 sleep 2
-skrepka-gnome-input key Return
-sleep 2
+picker_open || ~/.local/bin/skrepka-gui --picker >>"${RUN}/logs/skrepka-gui.log" 2>&1
+sleep 1
+geometry=$(skrepka-gnome-windows | grep '^dev\.soldunov\.Skrepka\.App|' | head -1 | cut -d'|' -f3)
+x=${geometry%%,*}; rest=${geometry#*,}; y=${rest%%,*}; size=${rest#*,}; w=${size%x*}; h=${size#*x}
+skrepka-gnome-input double-click $((x + w / 2)) $((y + 105))
 consent=no
-if skrepka-gnome-windows | grep -Eqi 'Remote Desktop|Share'; then
-    consent=yes
+portal_window=
+for _ in $(seq 30); do
+    portal_window=$(skrepka-gnome-windows | grep -Ev '^(Skrepka Paste Target|dev\.soldunov\.Skrepka\.App)\|' | head -1 || true)
+    [[ -n ${portal_window} ]] && { consent=yes; break; }
+    sleep 0.25
+done
+if [[ ${consent} == yes ]]; then
+    echo "portal window: ${portal_window}"
     skrepka-gnome-screenshot "${RUN}/shots/6-remote-desktop-consent.png" >/dev/null
-    for _ in 1 2 3 4; do skrepka-gnome-input key Tab; done
-    skrepka-gnome-input key space
-    sleep 3
+    geometry=$(cut -d'|' -f3 <<<"${portal_window}")
+    x=${geometry%%,*}; rest=${geometry#*,}; y=${rest%%,*}; size=${rest#*,}; w=${size%x*}; h=${size#*x}
+    skrepka-gnome-input click $((x + w - 70)) $((y + h - 35))
 fi
+for _ in $(seq 30); do
+    text=$(cat /tmp/paste-target.txt 2>/dev/null || true)
+    [[ ${text} == *'gnome automatic paste'* ]] && break
+    sleep 0.25
+done
 skrepka-gnome-screenshot "${RUN}/shots/6-paste-result.png" >/dev/null
 text=$(cat /tmp/paste-target.txt 2>/dev/null || true)
 echo "shortcut ready: ${shortcut_ready}"
 echo "consent dialog: ${consent}"
 echo "target text: ${text}"
+echo "app paste log:"
+grep -a 'paste:' "${RUN}/logs/skrepka-gui.log" || true
+echo "portal traffic:"
+grep -a -E 'member=(CreateSession|SelectDevices|Start|NotifyKeyboardKeycode|Response)|uint32 [012]|error_name=' \
+    "${RUN}/logs/dbus-portal.log" || true
 if [[ ${text} == *'gnome automatic paste'* ]]; then
     echo "RESULT 6 paste PASS: picker Return pasted the selected clip into the focused GTK4 target"
 else

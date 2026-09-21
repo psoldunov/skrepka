@@ -1,31 +1,55 @@
-/// Decides when automatic paste may leave the picker without carrying its
-/// shortcut modifiers into the target application.
-struct ModifierReleaseWait {
-    enum Step: Equatable {
-        case wait
-        case proceed
-    }
+/// Runs automatic paste only after the keyboard's live modifier state is clear.
+final class ModifierReleaseWait {
+    typealias ScheduleDeadline = (@escaping () -> Void) -> () -> Void
 
+    private let modifiers: () -> PickerModifiers
+    private let schedulePoll: ScheduleDeadline
+    private let scheduleDeadline: ScheduleDeadline
+    private var cancelPoll: (() -> Void)?
+    private var cancelDeadline: (() -> Void)?
+    private var actions: [() -> Void] = []
     private(set) var isWaiting = false
 
-    mutating func begin(with modifiers: PickerModifiers) -> Step {
-        guard modifiers.isDisjoint(with: .pasteBlocking) else {
-            isWaiting = true
-            return .wait
+    init(
+        modifiers: @escaping () -> PickerModifiers,
+        schedulePoll: @escaping ScheduleDeadline = { _ in {} },
+        scheduleDeadline: @escaping ScheduleDeadline
+    ) {
+        self.modifiers = modifiers
+        self.schedulePoll = schedulePoll
+        self.scheduleDeadline = scheduleDeadline
+    }
+
+    func perform(_ action: @escaping () -> Void) {
+        actions.append(action)
+        guard actions.count == 1 else { return }
+        guard !modifiers().isDisjoint(with: .pasteBlocking) else {
+            finish()
+            return
         }
-        return .proceed
+        isWaiting = true
+        cancelDeadline = scheduleDeadline { [weak self] in self?.finish() }
+        cancelPoll = schedulePoll { [weak self] in self?.modifierStateChanged() }
     }
 
-    mutating func modifiersChanged(to modifiers: PickerModifiers) -> Step {
-        guard isWaiting else { return .proceed }
-        guard modifiers.isDisjoint(with: .pasteBlocking) else { return .wait }
-        isWaiting = false
-        return .proceed
+    func modifierStateChanged() {
+        guard isWaiting, modifiers().isDisjoint(with: .pasteBlocking) else { return }
+        finish()
     }
 
-    mutating func timedOut() -> Step {
+    func cancel() {
+        cancelPoll?()
+        cancelPoll = nil
+        cancelDeadline?()
+        cancelDeadline = nil
+        actions.removeAll()
         isWaiting = false
-        return .proceed
+    }
+
+    private func finish() {
+        let ready = actions
+        cancel()
+        for action in ready { action() }
     }
 }
 
