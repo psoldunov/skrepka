@@ -36,7 +36,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   src = fetchurl {
     url = "https://github.com/psoldunov/skrepka/releases/download/v${finalAttrs.version}/skrepka-linux-x86_64.tar.gz";
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    hash = "sha256-lqTZB/JQfI9KG4WWkDmQcgEQjoG5hdhXqIRyPQH2K/U=";
   };
 
   nativeBuildInputs = [
