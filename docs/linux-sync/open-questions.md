@@ -1406,9 +1406,14 @@ both target machines.
 **Shipped answer:** option 2, plus XTest for a true X11 session. Capability
 probing chooses the path from live Wayland globals and a live X connection, not
 from the session-type environment variable. RemoteDesktop stores its rotating
-restore token under the XDG state directory. GNOME/KWin portal behaviour still
-needs live verification; wlroots virtual keyboard is exercised under headless
-Sway.
+restore token under the XDG state directory. The wlroots virtual keyboard is
+exercised under headless Sway, and GNOME Shell 50.1's RemoteDesktop portal —
+consent dialog, restore token, Ctrl+V landing in a GTK4 window on the first
+attempt — under the headless GNOME image (`scripts/gnome-smoke.sh`,
+2026-09-22). KWin's RemoteDesktop portal still needs a live check: no KDE smoke
+check pastes yet. Neither image says how a desktop behaves on real hardware, or
+which response code each portal sends when its consent dialog is dismissed
+rather than refused.
 
 **What it blocked.** Nothing now. Phase 7's "done when" #2 is met by the revised
 [D-11](#d-11); copy-only remains the failure mode on unsupported sessions.

@@ -334,4 +334,12 @@ echo "evidence: build/gnome/smoke/${RUN_ID}/"
 missing=
 for check in 1 2 3 4 5 6; do grep -q "^RESULT ${check} " "${RUN_DIR}/summary.txt" || missing="${missing} ${check}"; done
 [[ -z ${missing} ]] || { echo "no result from check(s):${missing}" >&2; exit 1; }
+# The screenshots are half of every result, and a capture that failed inside
+# the session still leaves its check's PASS line behind. These six are taken on
+# every run, whatever the checks found; the consent and menu shots are not.
+absent=
+for shot in 0-desktop-ready 3-tray 4-shortcut-pressed 5-picker-over-window 5-after-click-away 6-paste-result; do
+    [[ -s "${RUN_DIR}/shots/${shot}.png" ]] || absent="${absent} ${shot}.png"
+done
+[[ -z ${absent} ]] || { echo "missing or empty screenshot(s):${absent}" >&2; exit 1; }
 ! grep -q '^RESULT .* FAIL' "${RUN_DIR}/summary.txt"

@@ -54,16 +54,21 @@ static inline int skrepka_xtest_paste(const char *display_name) {
 	}
 	KeyCode control = XKeysymToKeycode(display, XK_Control_L);
 	KeyCode v = XKeysymToKeycode(display, XK_v);
-	if (control == 0 || v == 0 || !fake(display, control, True, 0)
-		|| !fake(display, v, True, 0) || !fake(display, v, False, 0)
-		|| !fake(display, control, False, 0)) {
+	if (control == 0 || v == 0) {
 		XCloseDisplay(display);
 		dlclose(library);
 		return 5;
 	}
+	// Every event is sent whatever happened to the one before it: a press that
+	// went through followed by a release that was never sent would leave Ctrl
+	// held down in the X server for everything the user types next.
+	int sent = fake(display, control, True, 0);
+	sent = fake(display, v, True, 0) && sent;
+	sent = fake(display, v, False, 0) && sent;
+	sent = fake(display, control, False, 0) && sent;
 	XFlush(display);
 	XCloseDisplay(display);
 	dlclose(library);
-	return 0;
+	return sent ? 0 : 5;
 }
 #endif

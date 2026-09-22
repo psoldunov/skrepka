@@ -188,8 +188,9 @@ Sources/SkrepkaLinuxUI/Tray/                           StatusNotifierItem and db
 Sources/SkrepkaLinuxUI/Appearance/                     dark/light and accent, from the appearance portal
 Sources/SkrepkaLinuxUI/DBus/                           the GDBus wrappers the three above share
 Sources/SkrepkaLinuxUI/Branding/MarkRenderer.swift     the paperclip mark, drawn with Cairo
-Sources/SkrepkaIPC/                                    interface version 3; DaemonProxy+Picker,
-                                                       PreviewDocument, CopyStyle, DaemonStarter
+Sources/SkrepkaIPC/                                    interface version 3 (5 today); DaemonProxy+Picker,
+                                                       PreviewDocument, CopyStyle, DaemonStarter;
+                                                       later DaemonProxy+Transfers, TransfersDocument
 Sources/SkrepkaDaemon/                                 DaemonService+Picker, Daemon+History,
                                                        BusReplyConnection
 Sources/SkrepkaCLI/                                    pin, unpin, delete, clear, copy --plain
@@ -234,7 +235,10 @@ top when the daemon cannot be started.
 `StartUnit` `skrepkad.service` if the probe finds nothing, with the installed
 D-Bus activation file doing the same for every other client. The interface is
 version 3: `Search`, `CopyAs`, `SetPinned`, `Delete`, `Clear` and `Preview`, and
-the row fields on `ClipDocument`.
+the row fields on `ClipDocument`. It has since moved on: version 4 added
+`Settings` and `SetSettings`, and version 5 the file-size limit and automatic
+paste among those settings, `Transfers`, and the `TransfersChanged` signal the
+picker draws its progress bars from.
 
 One daemon bug came out of it and is fixed: `skrepkad` answered its first
 D-Bus call and then none. `DBusObjectServer` replies through
@@ -269,6 +273,14 @@ affected 0.2.0: the Settings window and a second `skrepka` command timed out.
 - **X11 under a window manager.** The fallback has been seen to map under Xvfb
   and nothing more; the keep-above hint and the keyboard grab are untested where
   a window manager can refuse them.
+
+**Amended 2026-09-22:** the headless desktop images have since closed part of
+that list. `scripts/kde-smoke.sh` runs the real KWin, plasmashell tray and KDE
+GlobalShortcuts portal from SteamOS 3.8's Plasma 6.4.3, overlay and click-away
+included. `scripts/gnome-smoke.sh` drove GNOME Shell 50.1's real RemoteDesktop
+portal — consent dialog, restore token, and Ctrl+V landing in a GTK4 window on
+the first attempt. Still unverified: KWin's RemoteDesktop portal, which no KDE
+smoke check exercises yet, and all of it on real hardware.
 
 [`steam-deck-session.md`](steam-deck-session.md) sections 4 and 5 are those
 checks.
