@@ -67,6 +67,31 @@ missing from them. The history in both was copied for the picture; the photo
 in it is by [Evgenii Zolotarev](https://unsplash.com/@qester) on
 [Unsplash](https://unsplash.com/photos/a-bridge-over-a-frozen-river-with-a-building-in-the-background-yESKxiijQ3w).
 
+## Why not Maccy, CopyQ or KDE Connect?
+
+Because none of them carries one clipboard history across a Mac and a Linux
+machine. Each is good at what it does, and if one computer is all you use, one
+of them is probably the better answer.
+
+- **[Maccy](https://github.com/p0deje/Maccy)** is a fast, native clipboard
+  manager for macOS Sonoma 14 or later, and only that: no Linux build, and no
+  syncing of history between devices.
+- **[CopyQ](https://github.com/hluk/CopyQ)** runs on Linux, Windows and
+  macOS 13 or later, and does a great deal more than Skrepka — tabs, commands
+  and a full scripting API. What it has no built-in answer for is two machines.
+  Its synchronization plugin mirrors a tab into a directory on disk, so sharing
+  between computers means bringing your own file-sync service and trusting it
+  with everything you copy.
+- **[KDE Connect](https://kdeconnect.kde.org/)** does pair devices — Linux,
+  Windows, macOS, Android and iOS — and its clipboard plugin hands the current
+  clipboard from one to the other. That is the clipboard, not the history:
+  nothing to search, nothing to pin, and text only. Images do not travel.
+
+Skrepka is the narrow case where those stop: one searchable history, live on a
+Mac and a Linux box at the same time, over the local network, with no account,
+no server and no relay. If you do not need that, the three above are older,
+broader and well worth using instead.
+
 ## Install
 
 ### macOS
@@ -81,7 +106,8 @@ it, and drag Skrepka onto Applications. `skrepka-macos-universal.zip` holds the
 same app, to unzip instead.
 
 Either way the build is universal and notarized, so it opens on first launch
-with no Gatekeeper detour. It needs macOS 26.0 or later.
+with no Gatekeeper detour. It needs macOS 26.0 or later: the picker is drawn in
+Liquid Glass, and there are no plans to support older versions.
 
 The cask lives in
 [`psoldunov/homebrew-tap`](https://github.com/psoldunov/homebrew-tap). Skrepka
