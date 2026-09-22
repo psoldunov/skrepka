@@ -152,8 +152,10 @@ will be closed with a pointer to this section:
 - **The Linux release is checked against a checksum from the same release.**
   `install.sh` refuses a truncated or corrupted download, but someone who could
   replace the release's files could replace both. The tarball is not signed.
-  Build from source with `scripts/setup-linux.sh` if that is your threat
-  model.
+  The one-line install also runs `install.sh` straight from `master`; the
+  README's install-from-the-release route runs the copy inside the tarball
+  instead. Build from source with `scripts/setup-linux.sh` if that is your
+  threat model.
 - **A password manager that sets no `org.nspasteboard.*` marker gets recorded.**
   Skrepka honours the markers that exist and offers a per-app exclusion list as
   the backstop. Tell the password manager's authors too.
@@ -163,11 +165,15 @@ will be closed with a pointer to this section:
   longer trust is a machine you need to deal with directly.
 - **Anyone on your local network can see that a machine is running Skrepka.**
   While sharing is on, the Bonjour advertisement carries the device name you
-  see in the Sync pane, its device identifier and the protocol version, and —
-  only while you have opened the pairing window — that it is accepting
-  pairings. No clipboard content is in it. Discovery without an advertisement
-  is not a thing Bonjour offers, and Linux advertises the same record through
-  Avahi, or through `skrepkad`'s own responder where Avahi will not.
+  see in the Sync pane — as the service's instance name and, when there is one,
+  a `name` key — its device identifier (`id`, the SHA-256 of its certificate),
+  the record and protocol versions (`txtvers`, `proto`), its platform (`plat`),
+  and the host and port its sync listener answers on. Only while you have
+  opened the pairing window does it add `pair`, the port that accepts a new
+  pairing, and the key goes again when the window closes. No clipboard content
+  is in it. Discovery without an advertisement is not a thing Bonjour offers,
+  and Linux advertises the same record through Avahi, or through `skrepkad`'s
+  own responder where Avahi will not.
 - **A live-pushed item over 256 KB reaches history but not the clipboard.** A
   known limitation, recorded in [CHANGELOG.md](CHANGELOG.md); it fails towards
   less content moving, not more.

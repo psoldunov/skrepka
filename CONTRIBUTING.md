@@ -87,9 +87,15 @@ scripts/doctor.sh --fast   # format, lint, build only — the mid-edit loop
 **A green `scripts/doctor.sh` is the definition of done.** Run the full one
 before you open a pull request. Do not open one on a red doctor and describe
 the failure in the body. A change that touches code compiled on Linux also
-needs a green `scripts/doctor-linux.sh` — same flags, same rule — and one that
-touches the tray, the shortcut, the picker or pasting on Linux should pass
-`scripts/kde-smoke.sh` and `scripts/gnome-smoke.sh` too.
+needs a green `scripts/doctor-linux.sh` — same flags, same rule.
+
+One that touches the tray, the shortcut, the picker or pasting on Linux also
+runs `scripts/kde-smoke.sh` and `scripts/gnome-smoke.sh`, and reports what they
+printed. The KDE run must be green. The GNOME run is not green today — its
+shortcut check is intermittent and its automatic-paste check fails, as the
+README's [Where it runs](README.md#where-it-runs) says — so those two checks
+may fail and no others may. Once they are fixed, a green GNOME run is required
+as well.
 
 When the formatter disagrees with you, it wins:
 

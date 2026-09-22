@@ -42,17 +42,17 @@ On both:
 | **sway** and other wlroots compositors | In a container only: a headless sway 1.9 in the Linux build image |
 | **X11** sessions | In a container only: Xvfb in the Linux build image, with no window manager |
 
-**GNOME support is complete but has never run on a real machine.** Capture
-through a small GNOME Shell extension, the tray icon, the shortcut, the picker
-and automatic paste are all built. Their only end-to-end test is
-`scripts/gnome-smoke.sh`, which runs a headless Ubuntu 26.04 / GNOME 50 session
-inside a Docker container, rendered in software and under x86 emulation on a
-Mac — not a GNOME desktop anyone actually uses. In three runs of it on
-2026-09-22, installing, capture, the tray icon and the picker passed every
-time; the global shortcut passed once in three, and automatic paste did not
-pass at all — Skrepka fell back to leaving the entry copied and asking for
-Ctrl+V. Whether that is the container or GNOME is not yet known. If you run
-Skrepka on GNOME, a [bug
+**GNOME is implemented, not validated.** The implementation is complete —
+capture through a small GNOME Shell extension, the tray icon, the shortcut, the
+picker and automatic paste — but it has never run on a real machine. Its only
+end-to-end test is `scripts/gnome-smoke.sh`, which runs a headless Ubuntu 26.04
+/ GNOME 50 session inside a Docker container, rendered in software and under
+x86 emulation on a Mac — not a GNOME desktop anyone actually uses. In three
+runs of it on 2026-09-22, installing, capture, the tray icon and the picker
+passed every time; the global shortcut passed once in three, and automatic
+paste did not pass at all — Skrepka fell back to leaving the entry copied and
+asking for Ctrl+V. Whether that is the container or GNOME is not yet known. If
+you run Skrepka on GNOME, a [bug
 report](https://github.com/psoldunov/skrepka/issues/new/choose) saying whether
 it works is worth having either way.
 
@@ -109,6 +109,22 @@ Run inside a graphical session, it starts the app in the tray.
 - `bash -s -- --uninstall` removes everything except your history and this
   device's sync identity.
 - Re-running the line is the whole update path.
+
+That line runs `install.sh` from `master`. To run only what you have checked,
+install from the release itself — its tarball carries its own `install.sh`,
+which installs the build beside it and downloads nothing:
+
+```sh
+base=https://github.com/psoldunov/skrepka/releases/latest/download
+curl -fLO "$base/skrepka-linux-x86_64.tar.gz"
+curl -fLO "$base/skrepka-linux-x86_64.tar.gz.sha256"
+sha256sum -c skrepka-linux-x86_64.tar.gz.sha256
+tar xzf skrepka-linux-x86_64.tar.gz && cd skrepka-linux-x86_64 && ./install.sh
+```
+
+The checksum is published beside the tarball, so it catches a damaged download
+rather than a replaced release; [SECURITY.md](SECURITY.md) says what that does
+and does not cover.
 
 **On GNOME** the installer also adds a small Shell extension, because GNOME
 does not let an ordinary program watch the clipboard. A first install needs one

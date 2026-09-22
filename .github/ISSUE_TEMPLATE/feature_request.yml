@@ -11,8 +11,17 @@ body:
         makes an issue the cheapest place to find out an idea is out of scope — cheaper than a
         finished branch, which is why this form exists before the pull request.
 
-        Say which platform the idea is for. Something only one of them can do is fine; it just
-        needs saying.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Which platform is it for?
+      description: Something only one of them can do is fine; it just needs saying.
+      options:
+        - macOS
+        - Linux
+        - Both
+    validations:
+      required: true
 
   - type: checkboxes
     id: prerequisites

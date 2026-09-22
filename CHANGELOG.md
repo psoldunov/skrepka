@@ -13,7 +13,7 @@ is.
 ## Unreleased
 
 **Linux is a supported platform, no longer a preview.** KDE Plasma has run on a
-real Steam Deck. GNOME is complete but has so far run only in a headless
+real Steam Deck. GNOME is implemented but has so far run only in a headless
 container, never on a real machine — as have sway and X11; the README's
 [Where it runs](README.md#where-it-runs) table says exactly what was tested
 where.
