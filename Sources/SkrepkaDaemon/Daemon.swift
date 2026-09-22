@@ -64,6 +64,11 @@ public actor Daemon {
     /// `Copy`, `Diagnostics` and `SyncNow` with it.
     public static let pairDialTimeout: Duration = .seconds(30)
 
+    /// How long diagnostics trust the GNOME Shell extension after a heartbeat.
+    /// The extension reports every fifteen seconds, so two missed reports still
+    /// leave room for a busy Shell main loop before coverage is declared stale.
+    static let shellExtensionTimeout: Duration = .seconds(45)
+
     /// Where the listeners bind.
     ///
     /// Every interface, because the whole point is a peer on the LAN. The
@@ -195,9 +200,11 @@ public actor Daemon {
     /// where the two get different retry policies.
     var hasEverCaptured = false
     var lastCapturedAt: Date?
-    /// A well-formed clipboard handoff proves the GNOME Shell extension can
-    /// cover native Wayland copies that the XFIXES fallback cannot see.
-    var hasReceivedClipboardSubmission = false
+    /// The monotonic deadline through which the GNOME Shell extension's
+    /// registration remains live. A deadline, rather than process-lifetime
+    /// evidence of one submission, lets diagnostics recover when the extension
+    /// is disabled, removed, or stops sending heartbeats.
+    var shellExtensionDeadline: ContinuousClock.Instant?
     var sessionReport: SessionProbe.Report?
 
     // MARK: - Bookkeeping

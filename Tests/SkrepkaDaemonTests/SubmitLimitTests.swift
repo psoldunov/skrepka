@@ -33,6 +33,7 @@ struct SubmitLimitTests {
         let answer = await daemon.submit(request)
 
         #expect(answer.ok)
+        #expect(await daemon.isShellExtensionLive())
     }
 
     /// The payload here is over the encoded ceiling **and** not valid base64,

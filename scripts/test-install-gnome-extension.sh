@@ -89,7 +89,10 @@ mkdir -p "${HOME}"
 test -f "${XDG_DATA_HOME}/gnome-shell/extensions/${UUID}/extension.js"
 grep -Fq "'${UUID}'" "${ENABLED_STATE}" \
     || { cat "${ENABLED_STATE}" "${ROOT}/first.log" >&2; exit 1; }
-! grep -Fq "'${UUID}'" "${DISABLED_STATE}"
+if grep -Fq "'${UUID}'" "${DISABLED_STATE}"; then
+    echo 'Skrepka remained in disabled-extensions after installation' >&2
+    exit 1
+fi
 grep -Fq 'next GNOME login' "${ROOT}/first.log"
 
 # A disabled extension stays disabled across an upgrade.
@@ -123,5 +126,11 @@ grep -Fxq "enable ${UUID}" "${LOG}"
 
 ./install.sh --uninstall >"${ROOT}/uninstall.log" 2>&1
 test ! -e "${XDG_DATA_HOME}/gnome-shell/extensions/${UUID}"
-! grep -Fq "'${UUID}'" "${ENABLED_STATE}"
-! grep -Fq "'${UUID}'" "${DISABLED_STATE}"
+if grep -Fq "'${UUID}'" "${ENABLED_STATE}"; then
+    echo 'Skrepka remained in enabled-extensions after uninstall' >&2
+    exit 1
+fi
+if grep -Fq "'${UUID}'" "${DISABLED_STATE}"; then
+    echo 'Skrepka remained in disabled-extensions after uninstall' >&2
+    exit 1
+fi

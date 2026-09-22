@@ -32,6 +32,7 @@ extension Daemon {
     /// what the three sections below carry.
     public func diagnosticsDocument() async -> DiagnosticsDocument {
         let network = await networkSummary()
+        let now = ContinuousClock.now
         // Re-read on every report rather than cached at start-up: a machine
         // that has just come up often has not synchronised yet and does a
         // minute later, and a `doctor` that kept saying so would be wrong for
@@ -40,15 +41,18 @@ extension Daemon {
         return DiagnosticsDocument(
             daemonVersion: DaemonVersion.current,
             deviceFingerprint: runtime?.deviceID.fingerprint ?? "",
-            session: sessionSection(),
+            session: sessionSection(at: now),
             network: networkSection(responder: network.responder, problem: network.problem),
             storage: await storageSection(),
-            problems: await problems(network: network)
+            problems: await problems(network: network, at: now)
         )
     }
 
-    private func sessionSection() -> DiagnosticsDocument.Session {
-        guard let report = sessionReport else {
+    func sessionSection(
+        report reportOverride: SessionProbe.Report? = nil,
+        at now: ContinuousClock.Instant = .now
+    ) -> DiagnosticsDocument.Session {
+        guard let report = reportOverride ?? sessionReport else {
             return DiagnosticsDocument.Session(
                 backend: nil,
                 backendName: "none",
@@ -77,7 +81,7 @@ extension Daemon {
             // `LinuxCaptureProblem.isBlocking` exists to draw.
             isBlocking: report.problem?.isBlocking ?? false,
             restarts: sessionRestarts,
-            nativeWaylandCapture: hasReceivedClipboardSubmission ? .shellExtension : nil
+            nativeWaylandCapture: isShellExtensionLive(at: now) ? .shellExtension : nil
         )
     }
 
@@ -138,7 +142,10 @@ extension Daemon {
     /// Empty is an answer, and it is the answer that makes `doctor` worth
     /// running. Nothing here restates a fact from the sections above; a problem
     /// is a sentence with a remedy in it.
-    private func problems(network: (responder: String, problem: String?)) async -> [String] {
+    private func problems(
+        network: (responder: String, problem: String?),
+        at now: ContinuousClock.Instant
+    ) async -> [String] {
         var found: [String] = []
 
         if let report = sessionReport, report.problem?.isBlocking == true {
@@ -151,7 +158,7 @@ extension Daemon {
                 """
             )
         }
-        if sessionReport?.isXWaylandFallback == true && !hasReceivedClipboardSubmission {
+        if sessionReport?.isXWaylandFallback == true && !isShellExtensionLive(at: now) {
             found.append(
                 """
                 Capturing through XWayland, which sees only what X11 applications copy — \
