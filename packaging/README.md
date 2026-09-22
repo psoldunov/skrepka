@@ -443,7 +443,9 @@ release, and it is the one to tag.
    [`psoldunov/homebrew-tap`](https://github.com/psoldunov/homebrew-tap).
 6. **COPR:** once the release is public, `scripts/publish-copr.sh <version>`.
    It needs the tag and the published tarball, and waits until every Fedora has
-   built — a few minutes.
+   built — a few minutes. To check the repository itself afterwards, in a
+   container: `dnf -y install dnf5-plugins && dnf -y copr enable
+   psoldunov/skrepka && dnf -y install skrepka`.
 
 Attach the release's assets under exactly these names:
 
