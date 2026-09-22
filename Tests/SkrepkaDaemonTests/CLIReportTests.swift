@@ -149,24 +149,48 @@ struct CLIReportTests {
             DoctorReport.text(clean, timeZone: .gmt).hasPrefix("Everything Skrepka checks is working."))
     }
 
+    @Test("an extension submission accounts for native Wayland capture")
+    func nativeWaylandCoverage() throws {
+        let coveredDocument = diagnostics(
+            try stamp(),
+            problems: [],
+            isXWaylandFallback: true,
+            nativeWaylandCapture: .shellExtension
+        )
+        let uncoveredDocument = diagnostics(
+            try stamp(),
+            problems: [],
+            isXWaylandFallback: true
+        )
+        let covered = DoctorReport.text(coveredDocument, timeZone: .gmt)
+        let uncovered = DoctorReport.text(uncoveredDocument, timeZone: .gmt)
+
+        #expect(covered.contains("GNOME Shell extension covers native Wayland copies"))
+        #expect(!covered.contains("copies from Wayland apps are invisible"))
+        #expect(uncovered.contains("copies from Wayland apps are invisible"))
+    }
+
     private func diagnostics(
         _ stamp: Date,
-        problems: [String] = ["Nothing on this session can watch the clipboard."]
+        problems: [String] = ["Nothing on this session can watch the clipboard."],
+        isXWaylandFallback: Bool = false,
+        nativeWaylandCapture: DiagnosticsDocument.Session.NativeWaylandCapture? = nil
     ) -> DiagnosticsDocument {
         DiagnosticsDocument(
             daemonVersion: "0.1.4",
             deviceFingerprint: "ab-cd-ef",
             session: DiagnosticsDocument.Session(
-                backend: "wlrDataControl",
-                backendName: "wlr-data-control",
+                backend: isXWaylandFallback ? "xFixes" : "wlrDataControl",
+                backendName: isXWaylandFallback ? "X11 (XFIXES)" : "wlr-data-control",
                 waylandGlobals: ["wl_seat", "zwlr_data_control_manager_v1"],
                 waylandDisplay: "wayland-0",
-                x11Display: nil,
-                desktop: "sway",
-                isXWaylandFallback: false,
+                x11Display: isXWaylandFallback ? ":0" : nil,
+                desktop: isXWaylandFallback ? "GNOME" : "sway",
+                isXWaylandFallback: isXWaylandFallback,
                 problem: nil,
                 isBlocking: true,
-                restarts: 1
+                restarts: 1,
+                nativeWaylandCapture: nativeWaylandCapture
             ),
             network: DiagnosticsDocument.Network(
                 responder: "avahi",

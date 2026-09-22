@@ -77,7 +77,9 @@ public enum SkrepkaInterface {
     ///   ``SettingsDocument`` and ``SettingsPatch``, and ``Member/transfers``
     ///   with ``Signal/transfersChanged`` — the progress of an entry whose
     ///   bytes are arriving from a peer.
-    public static let version: UInt32 = 5
+    /// - 6: ``Member/setShellExtensionActive`` — the GNOME Shell extension's
+    ///   heartbeat and explicit disable notification.
+    public static let version: UInt32 = 6
 
     /// Every member this build exports, spelled once.
     public enum Member {
@@ -99,6 +101,11 @@ public enum SkrepkaInterface {
         /// the Shell extension is the only thing that can see a copy happen.
         /// Takes ``SubmitRequest``, answers ``ActionDocument``.
         public static let submit = "Submit"
+
+        /// `(b active) -> s`. Registers or refreshes the GNOME Shell extension
+        /// while `active` is true, and removes its registration when false.
+        /// ``ActionDocument`` as JSON. Since version 6.
+        public static let setShellExtensionActive = "SetShellExtensionActive"
 
         /// `() -> s`. ``PeersDocument`` as JSON.
         public static let peers = "Peers"

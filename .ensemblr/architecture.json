@@ -1,5 +1,5 @@
 {
-	"generatedAt": "2026-09-21T21:27:16.871Z",
+	"generatedAt": "2026-09-22T05:25:32.811Z",
 	"ir": {
 		"boundaries": [
 			{
@@ -89,14 +89,15 @@
 			},
 			{
 				"kind": "region",
-				"label": "Linux GUI — GTK4",
+				"label": "Linux desktop — GTK4 + GNOME Shell",
 				"wraps": [
 					"linux-picker",
 					"linux-settings",
 					"gtk-session",
 					"linux-app",
 					"linux-desktop-bus",
-					"linux-paste"
+					"linux-paste",
+					"gnome-capture"
 				]
 			}
 		],
@@ -147,6 +148,17 @@
 				],
 				"sublabel": "non-activating NSPanel + SwiftUI list; a row's subtitle becomes a progress bar while its bytes arrive",
 				"type": "frontend"
+			},
+			{
+				"id": "gnome-capture",
+				"label": "GNOME Wayland capture",
+				"sources": [
+					{
+						"path": "gnome-extension"
+					}
+				],
+				"sublabel": "Shell 46–50 reads Mutter clipboard text, images and files; drops secret-marked clips before payload reads; submits only over local session D-Bus",
+				"type": "security"
 			},
 			{
 				"id": "linux-picker",
@@ -201,7 +213,7 @@
 						"path": "packaging"
 					}
 				],
-				"sublabel": "skrepka-gui: GtkApplication owns tray, shortcut, picker, paste-back and Settings; ensures skrepkad runs; --status reports tray, shortcut and paste mechanism",
+				"sublabel": "skrepka-gui: GtkApplication owns tray, shortcut, picker, paste-back and Settings; the separate Shell extension captures GNOME Wayland; --status reports the app surfaces",
 				"type": "frontend"
 			},
 			{
@@ -671,9 +683,12 @@
 				"sources": [
 					{
 						"path": "scripts"
+					},
+					{
+						"path": "install.sh"
 					}
 				],
-				"sublabel": "doctor, doctor-linux, probe-runbook, linux, build-deck, kde-smoke, gnome-smoke, screenshot-settings, install, bundle, notarize",
+				"sublabel": "doctor and platform smoke gates; builds release artifacts; install.sh packages, upgrades and removes the Linux app plus GNOME capture extension",
 				"type": "backend"
 			},
 			{
@@ -721,7 +736,7 @@
 						"path": "scripts/gnome-smoke.sh"
 					}
 				],
-				"sublabel": "headless GNOME Shell 50 on Ubuntu 26.04 — Mutter, the GNOME portal, the Ubuntu AppIndicator host; driven through Shell Eval in unsafe mode",
+				"sublabel": "headless GNOME Shell 50 on Ubuntu 26.04; drives the active capture extension with Wayland text, image and file selections, then disables it to attribute X11 capture to XFIXES",
 				"type": "backend"
 			},
 			{
@@ -1487,6 +1502,27 @@
 				"id": "e-linuxdesktopbus-gtksession",
 				"label": "GDBus on the GTK main loop",
 				"to": "gtk-session"
+			},
+			{
+				"from": "gnome-capture",
+				"id": "e-gnomecapture-daemon",
+				"label": "local session D-Bus Submit; daemon reapplies capture rules",
+				"to": "linux-daemon",
+				"variant": "security"
+			},
+			{
+				"from": "scripts",
+				"id": "e-scripts-gnomecapture",
+				"label": "package, install, update and uninstall",
+				"to": "gnome-capture",
+				"variant": "dashed"
+			},
+			{
+				"from": "gnome-image",
+				"id": "e-gnomeimage-gnomecapture",
+				"label": "exercises Wayland text, image and file capture",
+				"to": "gnome-capture",
+				"variant": "dashed"
 			}
 		],
 		"layout": {

@@ -36,6 +36,7 @@ extension Daemon {
             return .refused("that clip is \(total) bytes, over the \(SubmitRequest.sizeLimit) limit")
         }
         guard !payloads.isEmpty else { return .refused("the submission carried no representations") }
+        refreshShellExtensionRegistration()
 
         let snapshot = LinuxSubmission.snapshot(
             representations: payloads,
@@ -57,6 +58,37 @@ extension Daemon {
         notifyHistoryChanged()
         await offerLivePush(item)
         return .succeeded("recorded", subject: item.contentHash)
+    }
+
+    /// Registers the Shell extension, refreshes its heartbeat, or clears it on
+    /// an explicit disable notification.
+    public func setShellExtensionActive(_ active: Bool) -> ActionDocument {
+        setShellExtensionActive(active, at: .now)
+    }
+
+    func setShellExtensionActive(
+        _ active: Bool,
+        at now: ContinuousClock.Instant
+    ) -> ActionDocument {
+        if active {
+            refreshShellExtensionRegistration(at: now)
+            return .succeeded("registered")
+        }
+        shellExtensionDeadline = nil
+        return .succeeded("unregistered")
+    }
+
+    func refreshShellExtensionRegistration(at now: ContinuousClock.Instant = .now) {
+        shellExtensionDeadline = now.advanced(by: Self.shellExtensionTimeout)
+    }
+
+    func isShellExtensionLive(at now: ContinuousClock.Instant = .now) -> Bool {
+        guard let deadline = shellExtensionDeadline else { return false }
+        guard now <= deadline else {
+            shellExtensionDeadline = nil
+            return false
+        }
+        return true
     }
 
     /// Dials a peer this device has seen, and parks until somebody confirms.

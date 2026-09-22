@@ -7,6 +7,7 @@
 #                                                 the unit, the launcher and
 #                                                 autostart entries, the icons,
 #                                                 the D-Bus activation file,
+#                                                 GNOME Shell extension,
 #                                                 install.sh
 #   build/deck/skrepka-linux-x86_64-tools.tar.gz  the probes, picker demo, and
 #                                                 Settings demo for bring-up
@@ -263,11 +264,13 @@ chmod 0755 "${STAGE}/install.sh"
 # The directories install.sh reads, whole: the unit, the D-Bus activation file,
 # the launcher and autostart entries, and the icons. packaging/README.md is the
 # one file in there install.sh does not read, and it goes too — it explains the
-# rest to whoever opens the tarball.
+# rest to whoever opens the tarball. The Shell extension sits at payload root
+# because GNOME installs its contents as one directory named by metadata UUID.
 for directory in systemd dbus desktop autostart icons; do
 	cp -R "${REPO}/packaging/${directory}" "${STAGE}/packaging/${directory}"
 done
 cp "${REPO}/packaging/README.md" "${STAGE}/packaging/README.md"
+cp -R "${REPO}/gnome-extension" "${STAGE}/gnome-extension"
 # In the tarball as well as beside it: the Deck session reads it on the Deck.
 cp "${REPORT}" "${STAGE}/runtime-report.txt"
 
@@ -296,6 +299,8 @@ What is in this tarball
   packaging/                  the systemd USER unit, the D-Bus activation file,
                               the launcher and autostart entries and the icons
                               install.sh writes — see packaging/README.md
+  gnome-extension/            captures native Wayland copies inside GNOME Shell;
+                              installed and enabled automatically for GNOME
   runtime-report.txt          the shared libraries and glibc version each binary
                               needs, recorded when it was built
 
@@ -316,7 +321,8 @@ The installer places skrepkad, skrepka and skrepka-gui into ~/.local/bin, the
 systemd user unit into ~/.config/systemd/user, a private copy of
 libgtk4-layer-shell into ~/.local/lib/skrepka, a launcher entry named
 "Skrepka" into ~/.local/share/applications, the app's icons into
-~/.local/share/icons, an autostart entry into ~/.config/autostart, and a D-Bus
+~/.local/share/icons, an autostart entry into ~/.config/autostart, a GNOME
+capture extension into ~/.local/share/gnome-shell/extensions, and a D-Bus
 activation file into ~/.local/share/dbus-1/services so the daemon starts
 whenever anything asks for it. Those are the defaults: an absolute
 XDG_BIN_HOME, XDG_CONFIG_HOME or XDG_DATA_HOME moves its part to wherever it

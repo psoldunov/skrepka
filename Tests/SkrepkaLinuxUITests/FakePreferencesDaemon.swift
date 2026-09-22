@@ -99,21 +99,27 @@ enum PreferencesFixtures {
         )
     }
 
-    static func diagnostics(problems: [String] = [], isBlocking: Bool = false) -> DiagnosticsDocument {
+    static func diagnostics(
+        problems: [String] = [],
+        isBlocking: Bool = false,
+        isXWaylandFallback: Bool = false,
+        nativeWaylandCapture: DiagnosticsDocument.Session.NativeWaylandCapture? = nil
+    ) -> DiagnosticsDocument {
         DiagnosticsDocument(
             daemonVersion: "0.2.1",
             deviceFingerprint: "1A2B-3C4D",
             session: DiagnosticsDocument.Session(
-                backend: "extDataControl",
-                backendName: "ext-data-control-v1",
+                backend: isXWaylandFallback ? "xFixes" : "extDataControl",
+                backendName: isXWaylandFallback ? "X11 (XFIXES)" : "ext-data-control-v1",
                 waylandGlobals: [],
                 waylandDisplay: "wayland-0",
-                x11Display: nil,
-                desktop: "KDE",
-                isXWaylandFallback: false,
+                x11Display: isXWaylandFallback ? ":0" : nil,
+                desktop: isXWaylandFallback ? "GNOME" : "KDE",
+                isXWaylandFallback: isXWaylandFallback,
                 problem: isBlocking ? "no data-control protocol" : nil,
                 isBlocking: isBlocking,
-                restarts: 0),
+                restarts: 0,
+                nativeWaylandCapture: nativeWaylandCapture),
             network: DiagnosticsDocument.Network(
                 responder: "avahi",
                 responderProblem: nil,

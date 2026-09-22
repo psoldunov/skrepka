@@ -42,7 +42,11 @@ struct MDNSAnnouncerTests {
         try await announcer.assume(Self.descriptor(), attempt: 1)
         await announcer.receive(try Self.rival(for: "steamdeck", fromPort: 5353), on: 0)
         #expect(await announcer.registration == nil)
-        try await Task.sleep(for: .seconds(1.5))
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            if await announcer.registration?.name == "steamdeck #2" { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(await announcer.registration?.name == "steamdeck #2")
         await announcer.stop()
     }

@@ -121,6 +121,17 @@ struct GeneralAndDiagnosticsStateTests {
         #expect(state.cards.first?.notes == ["No data-control protocol."])
     }
 
+    @Test("an extension submission accounts for native Wayland capture")
+    func nativeWaylandCoverage() {
+        let document = PreferencesFixtures.diagnostics(
+            isXWaylandFallback: true, nativeWaylandCapture: .shellExtension)
+        let state = DiagnosticsPaneState(.ready(document), timeZone: .gmt)
+        let notes = state.cards.first?.notes ?? []
+
+        #expect(notes.contains("The GNOME Shell extension covers native Wayland copies."))
+        #expect(!notes.contains { $0.contains("invisible") })
+    }
+
     @Test("with no report yet, Copy has nothing to copy")
     func diagnosticsLoading() {
         let state = DiagnosticsPaneState(.loading, timeZone: .gmt)

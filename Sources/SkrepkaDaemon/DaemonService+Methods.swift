@@ -94,6 +94,19 @@ extension DaemonService {
                 let request = try SkrepkaDocumentCoding.decode(SubmitRequest.self, from: json)
                 return [.string(try SkrepkaDocumentCoding.encode(await daemon.submit(request)))]
             },
+            DBusObjectServer.Method(
+                name: SkrepkaInterface.Member.setShellExtensionActive,
+                inputArgs: [DBusObjectServer.MethodArg(name: "active", type: "b")],
+                outputArgs: [DBusObjectServer.MethodArg(name: "result", type: "s")]
+            ) { context in
+                guard context.arguments.count == 1,
+                    case .boolean(let active)? = context.arguments.first
+                else {
+                    throw ServiceError.badArguments(SkrepkaInterface.Member.setShellExtensionActive)
+                }
+                let result = await daemon.setShellExtensionActive(active)
+                return [.string(try SkrepkaDocumentCoding.encode(result))]
+            },
         ]
     }
 

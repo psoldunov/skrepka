@@ -20,7 +20,11 @@ enum DiagnosticsCards {
             notes.append(SyncText.sentence(problem))
         }
         if session.isXWaylandFallback {
-            notes.append("Reading through XWayland, so copies from Wayland apps are invisible.")
+            notes.append(
+                session.nativeWaylandCapture == .shellExtension
+                    ? "The GNOME Shell extension covers native Wayland copies."
+                    : "Copies from Wayland apps are invisible without the GNOME Shell extension."
+            )
         }
         if session.restarts > 0 {
             let times = session.restarts == 1 ? "once" : "\(session.restarts) times"

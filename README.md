@@ -60,8 +60,11 @@ curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh
 It downloads the build from the latest release and checks it against the
 published SHA-256. Then it installs the daemon (`skrepkad`), the CLI (`skrepka`)
 and the desktop app (`skrepka-gui`, with a "Skrepka" launcher entry) under
-`~/.local`, and starts the daemon as a systemd user service. It needs no root.
-Run inside a graphical session, it also starts the app in the tray.
+`~/.local`, and starts the daemon as a systemd user service. It also installs a
+small GNOME Shell extension so native Wayland copies reach the daemon on GNOME.
+It needs no root. Run inside a graphical session, it starts the app in the tray.
+A first GNOME install needs one log out and back in so Shell can discover the
+new extension; it is already enabled for that next login.
 
 The desktop app is one program with three parts:
 

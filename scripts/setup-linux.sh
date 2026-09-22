@@ -122,9 +122,9 @@ BIN_PATH="$(swift build -c release --show-bin-path)"
 # Stage and hand off
 # ---------------------------------------------------------------------------
 
-# The payload install.sh expects: bin/ and packaging/, laid out as the release
-# tarball lays them out. Symlinks, not copies — install.sh copies with
-# `install`, which follows them. No lib/: a source build links the system's
+# The payload install.sh expects: bin/, packaging/ and gnome-extension/, laid
+# out as the release tarball lays them out. Symlinks, not copies — install.sh
+# copies with `install`, which follows them. No lib/: a source build links the system's
 # gtk4-layer-shell, and install.sh removes a private copy an earlier release
 # install left behind so it cannot shadow that one.
 #
@@ -143,5 +143,6 @@ if [[ "${BUILT_GUI}" -eq 1 ]]; then
 	ln -s "${BIN_PATH}/${GUI_NAME}" "${STAGE}/bin/${GUI_NAME}"
 fi
 ln -s "${REPOSITORY}/packaging" "${STAGE}/packaging"
+ln -s "${REPOSITORY}/gnome-extension" "${STAGE}/gnome-extension"
 
 "${INSTALLER}" --from-dir "${STAGE}"

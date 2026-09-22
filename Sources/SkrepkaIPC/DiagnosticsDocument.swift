@@ -16,6 +16,10 @@ import Foundation
 public struct DiagnosticsDocument: SkrepkaDocument, Hashable {
     /// The clipboard half: what the session probe found.
     public struct Session: Codable, Sendable, Hashable {
+        public enum NativeWaylandCapture: String, Codable, Sendable {
+            case shellExtension
+        }
+
         /// `extDataControl`, `wlrDataControl`, `xFixes`, or nil where the
         /// session offers nothing to watch.
         public let backend: String?
@@ -38,6 +42,11 @@ public struct DiagnosticsDocument: SkrepkaDocument, Hashable {
         /// Whether X11 was chosen while a Wayland session was running — the
         /// lossy path, since XWayland sees only what XWayland clients copy.
         public let isXWaylandFallback: Bool
+
+        /// Set after the daemon receives a well-formed clipboard handoff from
+        /// the GNOME Shell extension. Optional so clients can still decode a
+        /// report from a daemon built before this fact was added.
+        public let nativeWaylandCapture: NativeWaylandCapture?
 
         /// The probe's finding, or nil where it found nothing to say.
         public let problem: String?
@@ -62,7 +71,8 @@ public struct DiagnosticsDocument: SkrepkaDocument, Hashable {
             isXWaylandFallback: Bool,
             problem: String?,
             isBlocking: Bool,
-            restarts: Int
+            restarts: Int,
+            nativeWaylandCapture: NativeWaylandCapture? = nil
         ) {
             self.backend = backend
             self.backendName = backendName
@@ -71,6 +81,7 @@ public struct DiagnosticsDocument: SkrepkaDocument, Hashable {
             self.x11Display = x11Display
             self.desktop = desktop
             self.isXWaylandFallback = isXWaylandFallback
+            self.nativeWaylandCapture = nativeWaylandCapture
             self.problem = problem
             self.isBlocking = isBlocking
             self.restarts = restarts

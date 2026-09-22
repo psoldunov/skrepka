@@ -24,6 +24,7 @@ struct DaemonServiceInterfaceTests {
         SkrepkaInterface.Member.history: (["u"], ["s"]),
         SkrepkaInterface.Member.copy: (["s"], ["s"]),
         SkrepkaInterface.Member.submit: (["s"], ["s"]),
+        SkrepkaInterface.Member.setShellExtensionActive: (["b"], ["s"]),
         SkrepkaInterface.Member.peers: ([], ["s"]),
         SkrepkaInterface.Member.diagnostics: ([], ["s"]),
         SkrepkaInterface.Member.openPairing: (["u"], ["s"]),
