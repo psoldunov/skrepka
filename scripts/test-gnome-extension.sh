@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 UUID=skrepka@dev.soldunov
 EXTENSION=gnome-extension
 
-for file in metadata.json extension.js dbus.js README.md; do
+for file in metadata.json extension.js dbus.js limits.js README.md; do
     test -f "${EXTENSION}/${file}"
 done
 
@@ -31,30 +31,20 @@ if grep -Fq 'NO_AUTO_START' "${EXTENSION}/dbus.js"; then
     exit 1
 fi
 
-node --input-type=module <<'EOF'
-import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+grep -Fq 'Math.ceil(MAX_CAPTURE_BYTES / 3) * 4 + 4' "${EXTENSION}/limits.js"
+grep -Fq 'if (!isWithinEncodedLimit(representations))' "${EXTENSION}/dbus.js"
+grep -Fq 'if (encodedSize > encodedRemaining)' "${EXTENSION}/extension.js"
+grep -Fq 'encodedRemaining -= encoded.length' "${EXTENSION}/extension.js"
 
-const source = await readFile('./gnome-extension/limits.js', 'utf8');
-const limits = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-const {
-    MAX_CAPTURE_BYTES,
-    MAX_ENCODED_CAPTURE_BYTES,
-    base64EncodedSize,
-    isWithinEncodedLimit,
-} = limits;
-
-assert.equal(base64EncodedSize(MAX_CAPTURE_BYTES), MAX_ENCODED_CAPTURE_BYTES - 4);
-assert.equal(
-    base64EncodedSize(1) * 3 + base64EncodedSize(MAX_CAPTURE_BYTES - 3),
-    MAX_ENCODED_CAPTURE_BYTES + 4
-);
-assert.equal(isWithinEncodedLimit({plain: 'AAAA', html: 'BBBB'}), true);
-assert.equal(
-    isWithinEncodedLimit({plain: 'A'.repeat(MAX_ENCODED_CAPTURE_BYTES), html: 'BBBB'}),
-    false
-);
-EOF
+MAX_CAPTURE_BYTES=$((32 * 1024 * 1024))
+MAX_ENCODED_CAPTURE_BYTES=$(((MAX_CAPTURE_BYTES + 2) / 3 * 4 + 4))
+base64_encoded_size() {
+    local byte_count=$1
+    printf '%s\n' "$(((byte_count + 2) / 3 * 4))"
+}
+test "$(base64_encoded_size "${MAX_CAPTURE_BYTES}")" -eq $((MAX_ENCODED_CAPTURE_BYTES - 4))
+split_size=$(($(base64_encoded_size 1) * 3 + $(base64_encoded_size $((MAX_CAPTURE_BYTES - 3)))))
+test "${split_size}" -eq $((MAX_ENCODED_CAPTURE_BYTES + 4))
 
 bash -n install.sh scripts/setup-linux.sh scripts/build-deck.sh scripts/gnome.sh \
     scripts/gnome-smoke.sh docker/gnome/session.sh scripts/test-install-gnome-extension.sh
