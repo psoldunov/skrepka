@@ -6,13 +6,11 @@ choose an entry and it lands where you were typing. Machines you pair share
 their history over the local network — a Mac and a Linux box included — with no
 account, no server and no relay.
 
-![The Skrepka picker on macOS: a Liquid Glass panel over the macOS 26 desktop,
-listing a photo, a link, code, a colour and a masked password, each with the
-app it was copied from and a ⌘N shortcut](docs/images/picker.png)
-
-![The Skrepka picker on KDE Plasma: the same kind of list over a Dolphin window,
-with a photo selected, an Alt+N shortcut on each row and the Skrepka paperclip
-in the system tray](docs/images/kde-picker.png)
+![A macOS desktop, then a KDE Plasma one. On the Mac a wallpaper file is copied
+in Finder and ⌘⇧V opens the Skrepka picker with it at the top of the list. On
+the Plasma desktop that follows, Meta+Shift+V opens the same list, choosing the
+file pastes it into a Dolphin window, and setting it as the wallpaper turns the
+desktop into the Mac's](docs/images/demo-sequential.gif)
 
 - **On a Mac** it lives in the menu bar with no Dock icon, and ⌘⇧V opens a
   Liquid Glass picker.
@@ -60,12 +58,55 @@ The same caution applies, less loudly, to sway and X11: their code paths are
 tested against real protocol traffic, but only headless. Hyprland, which
 Skrepka treats like sway, has not been tried at all.
 
+![The Skrepka picker on macOS: a Liquid Glass panel over the macOS 26 desktop,
+listing a photo, a link, code, a colour and a masked password, each with the
+app it was copied from and a ⌘N shortcut](docs/images/picker.png)
+
+![The Skrepka picker on KDE Plasma: the same kind of list over a Dolphin window,
+with a photo selected, an Alt+N shortcut on each row and the Skrepka paperclip
+in the system tray](docs/images/kde-picker.png)
+
+The same run as the animation at the top, with both machines in one frame —
+the same nine entries in both pickers, the file on top of each:
+
+![The macOS picker on the left and the KDE Plasma one on the right, open at the
+same moment over the same history, the copied wallpaper file at the top of
+both](docs/images/demo.gif)
+
 About the screenshots: the Mac ones are the app on macOS 26 at 2× on a real
 display. The KDE ones come from the headless Plasma session, also drawn at 2×;
 KWin composites there without a GPU, so blur and other OpenGL-only effects are
 missing from them. The history in both was copied for the picture; the photo
 in it is by [Evgenii Zolotarev](https://unsplash.com/@qester) on
 [Unsplash](https://unsplash.com/photos/a-bridge-over-a-frozen-river-with-a-building-in-the-background-yESKxiijQ3w).
+
+About the animation at the top: **its two halves were filmed separately and cut
+together**, so the file does not travel between those two machines on camera —
+the same nine entries were seeded on each, and the Mac copies the wallpaper on
+camera while the Linux side already has it. Everything else in it is real and
+reproducible: `scripts/record-demo-macos.sh` films the Mac on a real display,
+`scripts/record-demo-linux.sh` films the headless Plasma session in one
+continuous capture, and `scripts/make-demo-gif.sh` cuts them either way — one
+screen after the other at the top, both at once above. The wallpaper is
+`Sonoma.heic` out of macOS's own `/System/Library/Desktop Pictures`, and it is
+set on the Linux desktop the way anyone would: right-click in Dolphin, Set as
+Wallpaper.
+
+One difference between the two pickers in it is the app rather than the
+recording: the copied file previews as a picture on the Mac and as a generic
+file icon on Linux. Skrepka reads a preview out of an image file on macOS only
+— image *data* previews on both — and generating those thumbnails on Linux is
+planned for the next release.
+
+One thing in it is the box rather than the app. KWin implements no
+`zwp_virtual_keyboard_manager_v1`, so pasting there goes through the
+RemoteDesktop portal, and the container's portal refuses to open a session at
+all — Skrepka cannot type the paste itself in that recording, and the script
+sends Dolphin's own Ctrl+V so the file lands visibly. Whether KWin's
+RemoteDesktop portal does the job on a real Plasma session has not been tested
+yet. The recording script also installs `libheif` and `kimageformats` into that
+session, because without them nothing there can decode a HEIC — whether a given
+Linux desktop already has them is its distribution's business, not Skrepka's.
 
 ## Why not Maccy, CopyQ or KDE Connect?
 

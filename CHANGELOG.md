@@ -15,6 +15,15 @@ Fedora, or `nix flake update`.
 
 ## Unreleased
 
+### Planned
+
+- **Row previews for copied image files on Linux.** A picture copied in a file
+  manager shows as a generic file icon in the Linux picker, where the same copy
+  on a Mac shows the picture; image data copied out of an app previews on both.
+  `Sources/SkrepkaCore/Store/ImageFileThumbnail.swift` is the macOS decoder, and
+  the Linux one is to be built on GdkPixbuf and shared-mime-info rather than
+  shimmed over it. The README's demo animation shows the difference.
+
 ### Added
 
 - **A COPR repository for Fedora 43 and newer.** `sudo dnf copr enable
