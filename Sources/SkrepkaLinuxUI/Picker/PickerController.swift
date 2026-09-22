@@ -23,7 +23,7 @@ public final class PickerController {
     /// The full history from the latest `history` reply, so opening the picker
     /// paints the whole list from cache before any search runs.
     private var historyRows: [ClipDocument] = []
-    /// The rows currently on screen, by hash, for preview source sizes.
+    /// The rows currently on screen, by hash, for the context menu's pin state.
     private var documents: [String: ClipDocument] = [:]
     private var requestedPreviews: Set<String> = []
     private var appearance = AppearancePreference.unknown
@@ -254,8 +254,7 @@ extension PickerController {
 
     private func store(preview document: PreviewDocument, for hash: String) {
         guard let bytes = document.bytes else { return }
-        let source = documents[hash].flatMap(\.pixelSize)
-        guard thumbnails.store(hash: hash, data: bytes, source: source) != nil else { return }
+        guard thumbnails.store(hash: hash, data: bytes) != nil else { return }
         render(rebuild: true)
     }
 

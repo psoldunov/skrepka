@@ -94,9 +94,10 @@ Wallpaper.
 
 One difference between the two pickers in it is the app rather than the
 recording: the copied file previews as a picture on the Mac and as a generic
-file icon on Linux. Skrepka reads a preview out of an image file on macOS only
-— image *data* previews on both — and generating those thumbnails on Linux is
-planned for the next release.
+file icon on Linux. The recording predates Linux previews of copied image files,
+and they would not change this one: the wallpaper is a HEIC, which the Linux
+picker does not preview. It previews a copied PNG, JPEG, GIF, BMP, TIFF or WebP
+file, and SteamOS's GdkPixbuf has no HEIF loader to draw one with.
 
 One thing in it is the box rather than the app. KWin implements no
 `zwp_virtual_keyboard_manager_v1`, so pasting there goes through the

@@ -291,8 +291,12 @@ with it. Copy a few things first, in Kate and Firefox, so the picker has rows.
 7. Open the picker and click the gear.
    - **Pass:** the Settings window opens. Section 5 uses it.
 8. Check the empty and image states: copy a screenshot, and look at its row.
-   - **Pass:** the row shows a thumbnail. A file copied from Dolphin shows a kind
-     tile instead; thumbnails of copied files are not built yet.
+   Then copy a PNG or JPEG file in Dolphin — a phone photo taken upright, if
+   there is one.
+   - **Pass:** both rows show a thumbnail. The Dolphin copy's row says Image and
+     gives the picture's size, and the photo is the right way up. A `.webp`
+     says Image with the picture symbol in place of the picture, because
+     SteamOS's GdkPixbuf has no WebP loader; a `.heic` stays a File.
 
 ### Alternative: the palette demo
 

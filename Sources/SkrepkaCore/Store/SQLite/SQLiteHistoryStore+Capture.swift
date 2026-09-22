@@ -12,10 +12,10 @@
         /// Stores a newly captured item, collapsing a repeat copy onto the entry it
         /// duplicates rather than adding a second row.
         ///
-        /// No thumbnail is rendered. That needs `ThumbnailMaker`, which is AppKit,
-        /// and D-9 defers `ThumbnailProducing` to Phase 7 rather than giving macOS
-        /// a protocol with a nil-returning stub behind it — so a Linux row carries
-        /// the dimensions the capture already knew and no picture.
+        /// No thumbnail is rendered or stored: this process links no image
+        /// decoder. A picture row carries its dimensions, and a copied picture
+        /// file arrives already called `.imageFile` by ``ImageFileProbe``;
+        /// `skrepka-gui` decodes the picture itself when it draws the row.
         @discardableResult
         public func capture(_ item: ClipItem) -> Bool {
             do {
@@ -32,6 +32,7 @@
                             ]
                         )
                         try relistFiles(of: item, onto: existing)
+                        try relabelPicture(from: item, onto: existing)
                         return
                     }
                     let row = SQLiteClipRow.make(from: item, originDeviceID: localDeviceID?.hex)
@@ -67,6 +68,31 @@
             try database.run(
                 "UPDATE clip SET file_urls = ?, \"text\" = ? WHERE id = ?",
                 [.value(encoded), .value(item.text), .value(existing.id)]
+            )
+        }
+
+        /// Calls a file row an image file when a repeat copy found it to be one.
+        ///
+        /// What corrects a picture copied before Linux told pictures apart, the
+        /// next time it is copied — the counterpart of the Mac store writing a
+        /// refined kind onto a row it already has. Only ever `.file` to
+        /// `.imageFile`, never back: a re-copy that could not read the file says
+        /// nothing about what it was. Dimensions the row already knows are kept.
+        private func relabelPicture(from item: ClipItem, onto existing: SQLiteClipRow) throws {
+            guard item.kind == .imageFile, existing.kindRaw == ClipKind.file.rawValue else { return }
+            try database.run(
+                """
+                UPDATE clip SET kind_raw = ?,
+                    image_width = COALESCE(image_width, ?),
+                    image_height = COALESCE(image_height, ?)
+                WHERE id = ?
+                """,
+                [
+                    .value(ClipKind.imageFile.rawValue),
+                    .value(item.imageSize?.width),
+                    .value(item.imageSize?.height),
+                    .value(existing.id),
+                ]
             )
         }
     }

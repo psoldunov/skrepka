@@ -89,8 +89,12 @@ extension Daemon {
         return .succeeded("cleared \(count) entr\(count == 1 ? "y" : "ies")")
     }
 
-    /// Returns one locally held picture, capped before base64 expands it onto
-    /// the session bus. A peer-only index has no payload and answers unavailable.
+    /// Returns one entry's picture, capped before base64 expands it onto the
+    /// session bus. A peer-only index has no payload and answers unavailable.
+    ///
+    /// Bytes the entry holds come first — a picture stored as itself, or the
+    /// one file of its bundle, which is the copy as it was. Only a picture file
+    /// copied on this device with neither is read off disk, now.
     public func preview(_ selector: ClipSelector, maxBytes: UInt32) async -> PreviewDocument {
         guard let listing = await readHistoryListing() else {
             return .unavailable("could not read the history", contentHash: selector.wireValue)
@@ -105,19 +109,44 @@ extension Daemon {
         guard let contents = await store.contents(for: entry.summary.id) else {
             return .unavailable("that entry has no bytes on this device yet", contentHash: entry.contentHash)
         }
-        // A synced image file previews as the picture its bundle holds.
-        let representations = ForeignFileGuard.withBundledPicture(contents.payload.representations)
-        guard let picture = Self.picture(in: representations) else {
-            return .unavailable("that entry has no picture to preview", contentHash: entry.contentHash)
+        let limit = Int(
+            min(
+                maxBytes == 0 ? UInt32(PreviewDocument.defaultByteLimit) : maxBytes,
+                UInt32(PreviewDocument.defaultByteLimit)))
+        guard let picture = Self.heldPicture(in: contents.payload.representations) else {
+            return await previewFromDisk(entry, fileURLs: contents.fileURLs, limit: limit)
         }
-        let limit = min(
-            maxBytes == 0 ? UInt32(PreviewDocument.defaultByteLimit) : maxBytes,
-            UInt32(PreviewDocument.defaultByteLimit))
-        guard picture.bytes.count <= Int(limit) else {
+        guard picture.bytes.count <= limit else {
             return .unavailable(
                 "too large to preview", contentHash: entry.contentHash, byteCount: picture.bytes.count)
         }
         return .picture(picture.bytes, mediaType: picture.mediaType, contentHash: entry.contentHash)
+    }
+
+    /// The picture file a row copied here names, read when the row is drawn —
+    /// what a copy with no bundle previews from, since the daemon keeps no
+    /// thumbnail and the file-size limit may have kept no bytes.
+    ///
+    /// Never a row from another device: its path is one on the machine that
+    /// made the copy, and whatever this one keeps there is not that picture.
+    private func previewFromDisk(
+        _ entry: SQLiteHistoryStore.ClipListing,
+        fileURLs: [URL],
+        limit: Int
+    ) async -> PreviewDocument {
+        let hash = entry.contentHash
+        let local = await localDeviceHex(ifAnyOf: [entry])
+        guard entry.summary.kind == .imageFile, fileURLs.count == 1, let url = fileURLs.first,
+            !Self.isForeign(origin: entry.originDeviceID, local: local)
+        else { return .unavailable("that entry has no picture to preview", contentHash: hash) }
+        switch await ImageFileProbe.picture(atFileURL: url, limit: limit) {
+        case .picture(let format, let bytes):
+            return .picture(bytes, mediaType: format.mediaType, contentHash: hash)
+        case .tooLarge:
+            return .unavailable("too large to preview", contentHash: hash)
+        case .unavailable:
+            return .unavailable("the copied picture is gone or can no longer be read", contentHash: hash)
+        }
     }
 
     private func readHistoryListing() async -> [SQLiteHistoryStore.ClipListing]? {
@@ -130,6 +159,15 @@ extension Daemon {
                     "error": .string(String(describing: error))
                 ])
             return nil
+        }
+    }
+
+    /// A picture the entry holds itself: stored as a picture, or failing that
+    /// the one file of its bundle, in any format a GTK client draws.
+    private static func heldPicture(in representations: [String: Data]) -> (mediaType: String, bytes: Data)? {
+        if let picture = picture(in: representations) { return picture }
+        return ImageFileProbe.bundledPicture(in: representations).map {
+            ($0.header.format.mediaType, $0.bytes)
         }
     }
 

@@ -60,6 +60,25 @@ enum OpenedFile {
         }
     }
 
+    /// The first `length` bytes of a regular file, however large it is, or nil
+    /// when `url` is not one. Judged by its descriptor for the reason
+    /// ``read(_:atMost:)`` is.
+    static func head(_ url: URL, length: Int) -> Data? {
+        let descriptor = open(url.path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)
+        guard descriptor >= 0 else { return nil }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+
+        var status = stat()
+        guard fstat(descriptor, &status) == 0, (status.st_mode & S_IFMT) == S_IFREG else { return nil }
+        do {
+            return try readAll(handle, atMost: length)
+        } catch {
+            // A file that cannot be read has no header to report, which is
+            // the same answer as a file that is not a picture.
+            return nil
+        }
+    }
+
     /// Reads until end of file or `cap` bytes, whichever is first.
     private static func readAll(_ handle: FileHandle, atMost cap: Int) throws -> Data {
         var bytes = Data()

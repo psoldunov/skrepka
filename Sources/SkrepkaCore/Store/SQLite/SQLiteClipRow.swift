@@ -161,9 +161,8 @@
         /// A row for something copied on this machine.
         ///
         /// `thumbnail` is always nil: rendering one needs `ThumbnailMaker`, which
-        /// is AppKit, and D-9 defers `ThumbnailProducing` to Phase 7 rather than
-        /// giving macOS a protocol with a nil-returning stub behind it. A Linux row
-        /// gets its preview when GdkPixbuf arrives.
+        /// is AppKit. A Linux row gets its preview in `skrepka-gui`, which asks
+        /// the daemon for the picture and decodes it on GdkPixbuf as it draws.
         static func make(from item: ClipItem, originDeviceID: String?) -> SQLiteClipRow {
             SQLiteClipRow(
                 id: item.id,

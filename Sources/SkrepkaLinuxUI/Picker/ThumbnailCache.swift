@@ -11,9 +11,11 @@ import Foundation
 ///
 /// Runs on GTK's loop thread and touches only GDK — like everything else in
 /// this target it makes no cross-thread claim, because it never crosses one.
-/// The bytes arrive from the daemon already; decoding is bounded by
-/// ``ThumbnailSizing`` so a full-screen screenshot is scaled down as it loads
-/// rather than decoded whole.
+/// The bytes arrive from the daemon already — a picture copied as pixels, or
+/// the picture file a row names — and this is where they become pixels at all:
+/// the daemon links no decoder. Decoding is bounded by ``ThumbnailSizing`` so a
+/// full-screen screenshot or a camera's photo is scaled down as it loads rather
+/// than decoded whole.
 final class ThumbnailCache {
     /// The tile a thumbnail covers, in logical pixels — the macOS 84×48
     /// preview. The source is scaled to cover this as it decodes.
@@ -36,26 +38,37 @@ final class ThumbnailCache {
 
     /// Decodes `data` into a texture, caches it under `hash`, and returns it —
     /// or nil when the bytes are not a picture GDK can read.
-    ///
-    /// - Parameter source: the picture's own size, from the row's
-    ///   ``ClipDocument``, so the decode can be scaled to cover the tile without
-    ///   knowing the bytes first. Nil decodes at full size.
     @discardableResult
-    func store(hash: String, data: Data, source: PixelSize?) -> OpaquePointer? {
-        guard let texture = decode(data, source: source) else { return nil }
+    func store(hash: String, data: Data) -> OpaquePointer? {
+        guard let texture = decode(data) else { return nil }
         for displaced in store.insert(hash, texture) {
             g_object_unref(UnsafeMutableRawPointer(displaced))
         }
         return texture
     }
 
-    private func decode(_ data: Data, source: PixelSize?) -> OpaquePointer? {
+    /// The picture in `data`, scaled to cover ``tile`` and turned the way its
+    /// EXIF orientation says.
+    ///
+    /// The scale is chosen from the size the loader reads out of the header,
+    /// not the one the row's document states. That one is the size the picture
+    /// is *shown* at, which for a rotated phone photo is the transpose of what
+    /// is stored — and `gdk_pixbuf_loader_set_size` scales the stored pixels,
+    /// so feeding it the shown size squashes them. It also bounds the decode of
+    /// a picture whose document states no size at all, which a TIFF never does.
+    private func decode(_ data: Data) -> OpaquePointer? {
         guard let loader = gdk_pixbuf_loader_new() else { return nil }
         defer { g_object_unref(UnsafeMutableRawPointer(loader)) }
-        if let source {
-            let size = ThumbnailSizing.loaderSize(source: source, box: Self.tile)
-            gdk_pixbuf_loader_set_size(loader, Int32(size.width), Int32(size.height))
-        }
+        // Emitted during the first write that reaches the end of the header,
+        // before any pixel is decoded; the loader dies with this function, and
+        // the handler with it.
+        skrepka_connect(
+            UnsafeMutableRawPointer(loader),
+            "size-prepared",
+            unsafeBitCast(Self.onSizePrepared, to: GCallback.self),
+            nil,
+            nil
+        )
         let wrote = data.withUnsafeBytes { buffer -> Bool in
             guard let base = buffer.baseAddress, !buffer.isEmpty else { return false }
             return gdk_pixbuf_loader_write(
@@ -63,6 +76,21 @@ final class ThumbnailCache {
         }
         let closed = gdk_pixbuf_loader_close(loader, nil) != 0
         guard wrote, closed, let pixbuf = gdk_pixbuf_loader_get_pixbuf(loader) else { return nil }
-        return gdk_texture_new_for_pixbuf(pixbuf)
+        // The loader records a JPEG's or TIFF's orientation as an option on the
+        // pixbuf and leaves applying it to the caller. A new reference, or a
+        // second one to `pixbuf` when there is nothing to turn.
+        guard let oriented = gdk_pixbuf_apply_embedded_orientation(pixbuf) else { return nil }
+        defer { g_object_unref(UnsafeMutableRawPointer(oriented)) }
+        return gdk_texture_new_for_pixbuf(oriented)
+    }
+
+    private typealias SizePrepared =
+        @convention(c) (UnsafeMutablePointer<GdkPixbufLoader>?, Int32, Int32, gpointer?) -> Void
+
+    /// `size-prepared`: asks for the smallest size that still covers the tile.
+    private static let onSizePrepared: SizePrepared = { loader, width, height, _ in
+        let size = ThumbnailSizing.loaderSize(
+            source: PixelSize(width: Int(width), height: Int(height)), box: tile)
+        gdk_pixbuf_loader_set_size(loader, Int32(size.width), Int32(size.height))
     }
 }

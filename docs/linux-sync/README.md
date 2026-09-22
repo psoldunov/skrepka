@@ -93,6 +93,10 @@ Steam Deck. One new question came out of it —
 [D-11](open-questions.md#d-11): XTest on X11, a virtual keyboard on wlroots and
 the RemoteDesktop portal elsewhere on Wayland.
 
+**Amended 2026-09-23:** thumbnails of copied image files have landed, without the
+`ThumbnailProducing` protocol this phase planned —
+[the amendment to its step 6](phase-7-linux-gui.md#6-thumbnails) says why.
+
 [Phase 4](phase-4-core-on-linux.md) is done. Its storage week landed and
 `scripts/doctor-linux.sh` exists; the tooling questions its step 8 left open
 are answered inside that script — swift-format is bundled, and SwiftLint and

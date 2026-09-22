@@ -10,14 +10,16 @@
         /// when the bytes that just arrived hold one picture and nothing else.
         ///
         /// The Linux counterpart of the Mac store rendering a thumbnail from the
-        /// bundle: there is no image decoder here yet (D-9, Phase 7), but the
-        /// header says how large the picture is, and the kind says it is one.
-        /// Dimensions a row already knows are kept. Caller owns the transaction.
+        /// bundle: there is no image decoder in this process, but the header
+        /// says how large the picture is, and the kind says it is one. The same
+        /// rule a picture copied here is judged by — ``ImageFileProbe`` — so a
+        /// GIF previews whichever machine it was copied on. Dimensions a row
+        /// already knows are kept. Caller owns the transaction.
         func recordBundledPicture(of meta: SyncClipMeta, payloads: [RepresentationKey: Data]) throws {
             guard meta.kind == ClipKind.file.rawValue || meta.kind == ClipKind.imageFile.rawValue,
-                let picture = ForeignFileGuard.picture(in: RepresentationKeyMap.utiKeyed(payloads))
+                let picture = ImageFileProbe.bundledPicture(in: RepresentationKeyMap.utiKeyed(payloads))
             else { return }
-            let size = picture.type.pixelSize(of: picture.bytes)
+            let size = picture.header.displaySize
             try database.run(
                 """
                 UPDATE clip SET kind_raw = ?,

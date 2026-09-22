@@ -1,6 +1,7 @@
-// AppKit + ImageIO + UniformTypeIdentifiers. Phase 7 rebuilds this on GdkPixbuf
-// and shared-mime-info, which is a different decoder rather than a shim over
-// this one.
+// AppKit + ImageIO + UniformTypeIdentifiers. Linux has a different design
+// rather than a shim over this one: ImageFileProbe reads the file's header at
+// copy time, and skrepka-gui decodes the picture on GdkPixbuf when it draws the
+// row.
 #if canImport(AppKit)
 
     import AppKit
