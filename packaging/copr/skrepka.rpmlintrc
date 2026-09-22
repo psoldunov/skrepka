@@ -1,0 +1,32 @@
+# rpmlint findings scripts/test-copr.sh accepts, each for the reason given.
+# Everything else it reports as an error fails the test. The package repacks
+# the release binaries rather than building them, so a finding about how a
+# binary was built is fixed in scripts/build-deck.sh or not at all.
+
+# Program names, not misspellings: skrepkad, skrepka-gui, systemd.
+addFilter(r"spelling-error .*'(skrepkad|gui|systemd)'")
+
+# The release binaries link the Swift runtime and Foundation statically, and
+# the mktemp call comes in with them: Skrepka's own sources never make it.
+addFilter(r"call-to-mktemp /usr/bin/skrepka")
+
+# $ORIGIN, $ORIGIN/../lib and $ORIGIN/../lib/skrepka: the paths the tarball
+# needs to find its bundled libgtk4-layer-shell when it runs in place, and
+# after install.sh. From /usr/bin they resolve to /usr/bin, /usr/lib and a
+# /usr/lib/skrepka that does not exist, all root-owned, so the loader falls
+# through to Fedora's own library.
+addFilter(r"binary-or-shlib-defines-rpath /usr/bin/skrepka")
+
+# Deliberate: build-deck.sh strips the debug info and keeps the symbol table,
+# so a crash backtrace still names its functions.
+addFilter(r"unstripped-binary-or-object /usr/bin/skrepka")
+
+# TLS for sync is swift-nio-ssl's BoringSSL, linked in, and the cipher-list
+# call is swift-nio-ssl's own. Sources/SkrepkaSync/Transport/SyncTLS.swift pins
+# TLS 1.3, whose cipher suites that call does not touch. The system OpenSSL
+# and its crypto policy are not involved.
+addFilter(r"crypto-policy-non-compliance-openssl /usr/bin/skrepka")
+
+# The binaries document themselves with --help, and README.md is on GitHub.
+addFilter(r"no-manual-page-for-binary skrepka")
+addFilter(r"no-documentation")

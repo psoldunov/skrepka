@@ -6,7 +6,7 @@
 # handful of X11 and Wayland libraries from the system. A source build waits
 # for nixpkgs' Swift 6 to have some track record; packaging/README.md says why.
 #
-# scripts/update-nix-release.sh rewrites `version` and `hash` for each release.
+# scripts/pin-release.sh rewrites `version` and `hash` for each release.
 {
   lib,
   stdenv,

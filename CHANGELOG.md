@@ -10,7 +10,19 @@ the Linux tarballs with their checksums, from 0.3.0 also a `.deb` and an
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path on a Mac. On Linux it is re-running
-`install.sh`, installing the next release's package, or `nix flake update`.
+`install.sh`, installing the next release's package, `dnf upgrade` from COPR on
+Fedora, or `nix flake update`.
+
+## Unreleased
+
+### Added
+
+- **A COPR repository for Fedora 43 and newer.** `sudo dnf copr enable
+  psoldunov/skrepka && sudo dnf install skrepka` installs the release build,
+  and `dnf upgrade` keeps it current. It carries the same files as the
+  release's `.rpm`, except the private `libgtk4-layer-shell`: it uses Fedora's
+  own. It upgrades the GitHub `.rpm` in place. 0.3.0 is the first version
+  published there.
 
 ## [0.3.0](https://github.com/psoldunov/skrepka/releases/tag/v0.3.0) — 2026-09-22
 
