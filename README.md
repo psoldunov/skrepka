@@ -75,9 +75,10 @@ in it is by [Evgenii Zolotarev](https://unsplash.com/@qester) on
 brew install --cask psoldunov/tap/skrepka
 ```
 
-Or download `Skrepka.zip` from the
-[latest release](https://github.com/psoldunov/skrepka/releases/latest), unzip
-it, and drag `Skrepka.app` into `/Applications`.
+Or download `skrepka-macos-universal.dmg` from the
+[latest release](https://github.com/psoldunov/skrepka/releases/latest), open
+it, and drag Skrepka onto Applications. `skrepka-macos-universal.zip` holds the
+same app, to unzip instead.
 
 Either way the build is universal and notarized, so it opens on first launch
 with no Gatekeeper detour. It needs macOS 26.0 or later.
@@ -334,7 +335,7 @@ something an uninstall should do silently.
 ```sh
 scripts/run.sh        # build, bundle, sign, launch
 scripts/bundle.sh     # produce build/Skrepka.app only
-scripts/notarize.sh   # build, sign, notarize, staple — the copy you send out
+scripts/notarize.sh   # build, sign, notarize, staple — the .zip and .dmg you send out
 scripts/doctor.sh     # the quality gate
 scripts/make-icon.sh  # redraw Sources/Skrepka/Resources/AppIcon.icns
 ```

@@ -16,7 +16,9 @@ that distinction in anything you write about them.
 scripts/setup.sh      # resolve dependencies, warm the debug build
 scripts/run.sh        # build, bundle, sign, launch
 scripts/bundle.sh     # build build/Skrepka.app only
-scripts/notarize.sh   # build, sign, notarize, staple — for builds you send out
+scripts/notarize.sh   # build, sign, notarize, staple — the .zip and .dmg a release carries
+scripts/make-dmg.sh   # just the notarized .dmg, from the last notarized build
+scripts/release-notes.sh <version>  # a CHANGELOG.md section as a GitHub release body
 scripts/doctor.sh     # the quality gate — run after every change
 scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
 scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols from its XML

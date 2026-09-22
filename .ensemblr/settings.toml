@@ -87,7 +87,8 @@ icon = "package"
 
 [scripts.run.notarize]
 # Build, sign with a secure timestamp, submit to Apple's notary service, staple
-# the ticket, and leave build/Skrepka.zip ready to send to someone else.
+# the ticket, and leave build/skrepka-macos-universal.zip and .dmg ready to send
+# to someone else.
 #
 # Not part of the edit loop: it costs a round-trip to Apple's timestamp server
 # plus a notary submission that usually takes a few minutes. scripts/bundle.sh

@@ -316,20 +316,25 @@ commit changes no byte of the release, and it is the one to tag.
    heading, the `--version` examples in `README.md`, `install.sh` and this file,
    `SECURITY.md`, the bug-report placeholder and the smoke tests' default
    release.
-2. **Build:** `scripts/notarize.sh` for `build/Skrepka.zip`, then
-   `scripts/build-deck.sh`, on a Mac with OrbStack or Docker, for the Linux
-   assets in `build/deck/`.
+2. **Build:** `scripts/notarize.sh` for the macOS zip and disk image in
+   `build/`, then `scripts/build-deck.sh`, on a Mac with OrbStack or Docker, for
+   the Linux assets in `build/deck/`.
 3. **Pin Nix:** `scripts/update-nix-release.sh`, as above, and commit.
 4. **Smoke-test:** `SKREPKA_TARBALL=build/deck/skrepka-linux-x86_64.tar.gz
    scripts/kde-smoke.sh`, and each package installed in a clean container.
-5. **Publish:** tag the commit, create the GitHub release with the changelog
-   section as its notes and the nine assets below, and bump the version and the
-   `Skrepka.zip` SHA-256 in `Casks/skrepka.rb` in
+5. **Publish:** tag the commit, create the GitHub release with the twelve
+   assets below and `scripts/release-notes.sh <version>` as its notes — the
+   changelog section, unwrapped, because a release renders every newline as a
+   line break — and bump the version and the `skrepka-macos-universal.zip`
+   SHA-256 in `Casks/skrepka.rb` in
    [`psoldunov/homebrew-tap`](https://github.com/psoldunov/homebrew-tap).
 
 Attach them under exactly these names:
 
-- `Skrepka.zip` — the notarized, universal macOS app.
+- `skrepka-macos-universal.dmg` — the notarized, universal macOS app on a
+  notarized disk image, beside a link to `/Applications`.
+- `skrepka-macos-universal.zip` — the same app, zipped; what the Homebrew cask
+  installs. Up to 0.2.1 this was `Skrepka.zip`.
 - `skrepka-linux-x86_64.tar.gz` — what `install.sh` installs: the daemon, the
   CLI, the desktop app, the GNOME extension, everything under `packaging/` and
   `install.sh` itself.
@@ -338,7 +343,7 @@ Attach them under exactly these names:
   both side by side merges them.
 - `skrepka-linux-x86_64.deb` and `skrepka-linux-x86_64.rpm` — the same build as
   system packages.
-- a `.sha256` beside each Linux asset.
+- a `.sha256` beside each of the above.
 
 The two tarballs are split because every binary carries its own static Swift
 runtime, Foundation and ICU data, and all six in one tarball came to 256 MB.

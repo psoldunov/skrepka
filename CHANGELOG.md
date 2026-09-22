@@ -3,8 +3,9 @@
 Every released version, newest first. Dates are the day the release was
 published. Each heading links to the tag it was cut from; the
 [releases page](https://github.com/psoldunov/skrepka/releases) carries the same
-notes alongside the notarized `Skrepka.zip` for that version and, from 0.2.0,
-the Linux tarballs with their checksums — from 0.3.0 also a `.deb` and an
+notes alongside the notarized Mac app for that version — `Skrepka.zip` up to
+0.2.1, `skrepka-macos-universal.zip` and `.dmg` from 0.3.0 — and, from 0.2.0,
+the Linux tarballs with their checksums, from 0.3.0 also a `.deb` and an
 `.rpm`.
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
@@ -43,6 +44,10 @@ but not files.
 - **A Nix flake,** for x86_64-linux, with a NixOS module and a Home Manager
   module — `programs.skrepka.enable` in either. It repackages the release
   tarball, so it installs the same build as every other route.
+- **A disk image for the Mac,** `skrepka-macos-universal.dmg`, notarized like
+  the app inside it: open it and drag Skrepka onto Applications. The zip beside
+  it is now `skrepka-macos-universal.zip`, named like the Linux assets, and
+  both have a `.sha256`. The Homebrew cask installs the zip, as before.
 - **GNOME on Wayland records what you copy.** GNOME does not let an ordinary
   program watch the clipboard, so the installer adds a small GNOME Shell
   extension, `skrepka@dev.soldunov`, that hands each copy to `skrepkad` over the
