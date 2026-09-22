@@ -31,3 +31,7 @@ gnome-extensions info skrepka@dev.soldunov
 
 GNOME Shell 46–50 are supported. KDE, Sway, other data-control compositors and
 X11 use Skrepka's native clipboard backends and do not load this extension.
+
+The extension has only run in the headless Ubuntu 26.04 / GNOME Shell 50
+session that `scripts/gnome-smoke.sh` starts in a container, where it captures
+text, images and files. It has not yet run on a real GNOME machine.

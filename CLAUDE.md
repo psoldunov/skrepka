@@ -1,7 +1,14 @@
 # Skrepka
 
-A clipboard-history manager for macOS 26. Menu-bar daemon, no Dock icon, a
-global hotkey opens a Liquid Glass picker panel over the frontmost app.
+A clipboard-history manager for macOS 26 and Linux. On the Mac: menu-bar
+daemon, no Dock icon, a global hotkey opens a Liquid Glass picker panel over
+the frontmost app. On Linux: the `skrepkad` daemon, the `skrepka` CLI, and
+`skrepka-gui` — tray icon, picker and Settings in one GTK 4 process. Paired
+machines on either platform sync over the local network.
+
+Linux is supported on KDE Plasma (tested on a real Steam Deck), GNOME, sway and
+X11 — but GNOME, sway and X11 have only ever run in headless containers. Keep
+that distinction in anything you write about them.
 
 ## Build and run
 
@@ -136,8 +143,16 @@ the real permission path.
 ## Layout
 
 - `Sources/SkrepkaCore/` — models, storage, pasteboard, search. Testable, no UI.
-- `Sources/Skrepka/` — app shell, panel, SwiftUI views, platform glue.
-- `Tests/SkrepkaCoreTests/` — Swift Testing.
+  Compiles on both platforms.
+- `Sources/SkrepkaSync/` — sync protocol, wire codec, merge engine, TLS. Both
+  platforms.
+- `Sources/Skrepka/` — the Mac app: shell, panel, SwiftUI views, platform glue.
+- `Sources/SkrepkaLinuxPlatform/`, `SkrepkaDaemon/`, `SkrepkaIPC/`,
+  `SkrepkaCLI/`, `SkrepkaLinuxUI/` — the Linux clipboard backends, `skrepkad`,
+  its D-Bus interface, `skrepka`, and `skrepka-gui`.
+- `gnome-extension/` — the GNOME Shell extension that forwards clipboard
+  changes to `skrepkad`.
+- `Tests/` — Swift Testing, one suite directory per library.
 
 ## Rules
 

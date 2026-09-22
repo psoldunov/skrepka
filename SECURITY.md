@@ -77,16 +77,19 @@ encrypted at rest.** This device's sync private key lives in the login Keychain
 under the service `dev.soldunov.skrepka.sync` and is never synchronised to
 iCloud.
 
-On Linux — a preview since 0.2.0 — `skrepkad` runs as a systemd user service
-and keeps history in SQLite at `~/.local/share/skrepka/skrepka.sqlite3`. This
-device's sync private key is the file `device.key` beside it, not a keyring
-entry: the daemon creates the directory `0700` and the key `0600`, and no
-installer touches either. The CLI and the Settings window reach the daemon over
-the session D-Bus, which any process running as you can call. Sync on Linux is
-**on unless the daemon is started with `--no-sync`**: it advertises itself over
-Avahi and serves history to devices already pinned from the start, while
-pairing a new one still needs the pairing window opened and the code confirmed
-on both screens, exactly as on a Mac.
+On Linux, `skrepkad` runs as a systemd user service and keeps history in
+SQLite at `~/.local/share/skrepka/skrepka.sqlite3`. This device's sync private
+key is the file `device.key` beside it, not a keyring entry: the daemon creates
+the directory `0700` and the key `0600`, and no installer touches either. The
+CLI and the desktop app reach the daemon over the session D-Bus, which any
+process running as you can call. On GNOME, a Shell extension installed with the
+app forwards clipboard changes to the daemon over the same bus; it has no
+network access and no storage of its own. Sync on Linux is **on by default** —
+Settings → Sync, `skrepka config set sync.enabled off` or starting the daemon
+with `--no-sync` turns it off. While on, it advertises itself on the local
+network and serves history to devices already pinned, while pairing a new one
+still needs the pairing window opened and the code confirmed on both screens,
+exactly as on a Mac.
 
 ### In scope
 
@@ -158,12 +161,13 @@ will be closed with a pointer to this section:
   the trust and forgets the certificate; it does not reach into the other
   machine and delete history. Sync is a copy, and a copy on a machine you no
   longer trust is a machine you need to deal with directly.
-- **Anyone on your local network can see that a Mac is running Skrepka.** While
-  sharing is on, the Bonjour advertisement carries the device name you see in
-  the Sync pane, its device identifier and the protocol version, and — only
-  while you have opened the pairing window — that it is accepting pairings. No
-  clipboard content is in it. Discovery without an advertisement is not a thing
-  Bonjour offers.
+- **Anyone on your local network can see that a machine is running Skrepka.**
+  While sharing is on, the Bonjour advertisement carries the device name you
+  see in the Sync pane, its device identifier and the protocol version, and —
+  only while you have opened the pairing window — that it is accepting
+  pairings. No clipboard content is in it. Discovery without an advertisement
+  is not a thing Bonjour offers, and Linux advertises the same record through
+  Avahi, or through `skrepkad`'s own responder where Avahi will not.
 - **A live-pushed item over 256 KB reaches history but not the clipboard.** A
   known limitation, recorded in [CHANGELOG.md](CHANGELOG.md); it fails towards
   less content moving, not more.
@@ -177,5 +181,5 @@ Released builds are universal, signed with a Developer ID identity and
 notarized by Apple, so they open with no Gatekeeper detour. If you would rather
 not trust a binary, `scripts/notarize.sh` and `scripts/bundle.sh` build the
 same thing from source — see [CONTRIBUTING.md](CONTRIBUTING.md). On Linux,
-`scripts/setup-linux.sh` builds the daemon, the CLI and the Settings window from
-a checkout and installs them the same way the release installer does.
+`scripts/setup-linux.sh` builds the daemon, the CLI and the desktop app from a
+checkout and installs them the same way the release installer does.

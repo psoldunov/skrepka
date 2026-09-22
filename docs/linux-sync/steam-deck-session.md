@@ -1,5 +1,10 @@
 # Steam Deck bring-up: first hardware session
 
+**Amended 2026-09-22:** the first session ran on 2026-09-21, against 0.2.1;
+its findings and fixes are in
+[phase-7-linux-gui.md](phase-7-linux-gui.md#first-steam-deck-session-2026-09-21).
+The checklist below stays the template for the next one.
+
 **Status, 2026-09-18: deferred.** The owner put Linux hardware testing on hold
 the day this checklist was written. It is ready to run as it stands. Since 0.2.0
 the Deck installs straight from a GitHub release, so no ssh and no copy from

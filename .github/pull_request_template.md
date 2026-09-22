@@ -26,13 +26,16 @@ it. Say what you actually did, not what should work.
 - [ ] `scripts/doctor.sh` is green — format, lint, build with warnings as errors, tests, dead-code scan
 - [ ] SwiftLint and Periphery are installed, so neither step was skipped with a warning
 - [ ] Launched with `scripts/run.sh`, not by executing the binary
+- [ ] Touches Linux code: `scripts/doctor-linux.sh` is green, and the desktops it was run on are named below — real hardware or a headless image
 
 Manual checks performed:
 
 <!--
 For example: opened the picker over a full-screen app; confirmed focus returned
 to the previous app after pasting; checked the menu bar mark in both light and
-dark appearance; revoked and re-granted Accessibility.
+dark appearance; revoked and re-granted Accessibility. On Linux: ran
+scripts/kde-smoke.sh and scripts/gnome-smoke.sh against a tarball from
+scripts/build-deck.sh, or tried it on a real Steam Deck.
 -->
 
 ## Tests
