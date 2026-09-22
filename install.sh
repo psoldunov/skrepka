@@ -99,7 +99,7 @@ LAYER_SHELL_LIBRARY="libgtk4-layer-shell.so.0"
 # The GNOME Shell extension that observes native Wayland copies. Its directory
 # must equal the UUID in metadata.json or Shell does not discover it.
 GNOME_EXTENSION_UUID="skrepka@dev.soldunov"
-GNOME_EXTENSION_FILES="metadata.json extension.js dbus.js README.md"
+GNOME_EXTENSION_FILES="metadata.json extension.js dbus.js limits.js README.md"
 # What 0.2.0 installed and skrepka-gui replaces: a separate Settings window with
 # its own launcher entry. Removed on install and on uninstall.
 LEGACY_SETTINGS_NAME="skrepka-settings"

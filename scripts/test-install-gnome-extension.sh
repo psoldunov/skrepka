@@ -87,6 +87,7 @@ mkdir -p "${HOME}"
 
 ./install.sh --from-dir "${PAYLOAD}" >"${ROOT}/first.log" 2>&1
 test -f "${XDG_DATA_HOME}/gnome-shell/extensions/${UUID}/extension.js"
+test -f "${XDG_DATA_HOME}/gnome-shell/extensions/${UUID}/limits.js"
 grep -Fq "'${UUID}'" "${ENABLED_STATE}" \
     || { cat "${ENABLED_STATE}" "${ROOT}/first.log" >&2; exit 1; }
 if grep -Fq "'${UUID}'" "${DISABLED_STATE}"; then
