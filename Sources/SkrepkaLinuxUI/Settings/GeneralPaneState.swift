@@ -6,8 +6,8 @@ import SkrepkaLinuxPlatform
 /// launch at login.
 ///
 /// Nothing here comes from the daemon. The shortcut is the app's own portal
-/// session and launch at login is a file in `~/.config/autostart`, so this
-/// pane works against a daemon of any version, or none.
+/// session and launch at login is an autostart entry (see ``AutostartEntry``),
+/// so this pane works against a daemon of any version, or none.
 public struct GeneralPaneState: Sendable, Hashable {
     /// The shortcut's keys, one keycap each — empty when there is no binding
     /// to show, and ``shortcutValue`` says why in a word.
