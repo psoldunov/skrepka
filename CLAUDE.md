@@ -29,7 +29,9 @@ reachable from a Mac without the container:
 ```
 scripts/linux.sh <command>   # run anything inside the Linux build image
 scripts/doctor-linux.sh      # the Linux quality gate
-scripts/build-deck.sh        # the x86_64 release tarball + .sha256 for a GitHub release
+scripts/build-deck.sh        # the x86_64 release tarballs, .deb and .rpm, each with a .sha256
+scripts/build-packages.sh    # just the .deb and .rpm, from the stage build-deck.sh leaves
+scripts/update-nix-release.sh <version> <tarball>  # point the Nix flake at a release
 scripts/screenshot-settings.sh  # the Settings window and the picker under headless sway
 scripts/kde-image.sh         # a headless Plasma 6.4.3 image built from SteamOS 3.8's packages
 scripts/kde.sh <command>     # run, screenshot, type or click inside that Plasma session
@@ -74,6 +76,15 @@ Wayland or X11 display, and a system unit has neither. `--uninstall` reverses it
 leaves the history database and the device key alone — deleting the key
 un-pairs the machine from every peer, which is not something an uninstall
 should do silently.
+
+The same tarball ships two more ways. `scripts/build-packages.sh` lays its
+files out under `/usr` for the `.deb` and `.rpm` (`packaging/nfpm.yaml`), with
+no maintainer scripts — change a package's file placement there, not in
+`install.sh`. `flake.nix` and `nix/` repackage it for Nix, with a NixOS module
+and a Home Manager module, each `programs.skrepka`; every release ends with
+`scripts/update-nix-release.sh` and a commit. `packaging/README.md` has the
+release checklist, and why SteamOS stays on `install.sh` and nothing ships as a
+Flatpak.
 
 `scripts/bundle.sh` signs without a secure timestamp, which is fine locally and
 fatal for distribution: the notary service rejects it, and the signature dies

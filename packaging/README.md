@@ -139,7 +139,7 @@ needs no toolchain, only `curl`:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
-curl -fsSL <same url> | bash -s -- --version v0.2.1   a specific release
+curl -fsSL <same url> | bash -s -- --version v0.3.0   a specific release
 curl -fsSL <same url> | bash -s -- --uninstall        stop, disable, and remove
 ./install.sh                     inside an untarred release: install that one
 ./install.sh --tarball FILE      a release tarball already on disk
@@ -204,36 +204,183 @@ mode is an exposure, not a convenience. `--uninstall` leaves them in place for
 the same reason and prints where they are: deleting `device.key` un-pairs the
 machine from every peer it has synced with.
 
+## `.deb` and `.rpm`: `nfpm.yaml` and `scripts/build-packages.sh`
+
+The same build as the release tarball, as a system package for Ubuntu 24.04 and
+newer, Debian 13 and newer, and Fedora 39 and newer. Those floors are the
+tarball's own: glibc 2.38 and GTK 4.12. Debian 12, on glibc 2.36, refuses the
+`.deb` rather than installing binaries that cannot start. The `.rpm` names its
+libraries by soname, so it should also resolve on openSUSE Tumbleweed — not
+tried.
+
+```
+sudo apt install ./skrepka-linux-x86_64.deb
+sudo dnf install ./skrepka-linux-x86_64.rpm
+```
+
+`scripts/build-deck.sh` runs `scripts/build-packages.sh` once the tarballs are
+packed. It compiles nothing. It lays the stage out under `build/deck/pkgroot`
+the way a system install wants it, and nFPM — `goreleaser/nfpm`, pinned, in
+Docker — packs that tree as `nfpm.yaml` maps it. The package version is asked of
+the staged `skrepkad --version`, so a package can only claim the version of the
+build inside it. Run `scripts/build-packages.sh` alone to try a change to
+`nfpm.yaml` without another build.
+
+| File | Goes to |
+| --- | --- |
+| `skrepkad`, `skrepka`, `skrepka-gui` | `/usr/bin` |
+| `libgtk4-layer-shell.so.0` | `/usr/lib/skrepka` — `$ORIGIN/../lib/skrepka` from `/usr/bin`, the rpath the binary already carries |
+| the user unit | `/usr/lib/systemd/user/skrepkad.service`, `ExecStart=/usr/bin/skrepkad` |
+| the D-Bus activation file | `/usr/share/dbus-1/services`, `Exec=/usr/bin/skrepkad` |
+| the launcher entry and the icons | `/usr/share/applications`, `/usr/share/icons/hicolor` |
+| the autostart entry | `/etc/xdg/autostart`, a conffile |
+| the GNOME extension | `/usr/share/gnome-shell/extensions/skrepka@dev.soldunov` |
+
+**No maintainer scripts.** Nothing runs as root at install time and nothing is
+enabled for every user. At login the autostart entry starts `skrepka-gui`, and
+its first call on the session bus starts `skrepkad` through the D-Bus activation
+file and the user unit, as after `install.sh`. Right after installing, before
+that first login, start "Skrepka" from the launcher. dbus-daemon notices a new
+service file on its own; dbus-broker, Fedora's bus, rereads its directories
+when asked to reload — which `install.sh` does and a package cannot do for every
+running session — so there the first start may need
+`systemctl --user start skrepkad.service`, or a log out and back in. That last
+case has not been tried on a live Fedora session.
+
+**Launch at login** in Settings reads the system entry when the user has none,
+and turns it off the way the Autostart spec says a user turns off a system
+entry: a copy with `Hidden=true` in `~/.config/autostart`. The system file is
+never edited.
+
+**GNOME** installs the extension for every user but enables none. Log out and
+back in once, so Shell discovers it, then run
+`gnome-extensions enable skrepka@dev.soldunov`.
+
+**Do not mix it with `install.sh`.** A copy in `~/.local` shadows the package's:
+`~/.local/bin` comes first on `$PATH`, and the user unit and D-Bus directories
+under `~/.config` and `~/.local/share` override the system ones. Run
+`install.sh --uninstall` first. History and the device key live in
+`~/.local/share/skrepka` either way, and neither route removes them.
+
+## Nix: `flake.nix` and `nix/`
+
+A flake for x86_64-linux that repackages the release tarball rather than
+building from source. nixpkgs carried Swift 5.10 until 2026-09-16, and nothing
+has built a SwiftPM package of this size with its Swift 6.2 yet; revisit a
+source build once that has a track record.
+
+`nix/package.nix` fetches `skrepka-linux-x86_64.tar.gz` for the version and
+hash it names, and:
+
+- links the binaries against nixpkgs' libraries with `autoPatchelfHook`, using
+  nixpkgs' `gtk4-layer-shell` rather than the bundled copy;
+- wraps `skrepka-gui` with `wrapGAppsHook4`, and sets `SKREPKA_GUI_EXECUTABLE`
+  so Settings writes `skrepka-gui` into a fresh autostart entry rather than a
+  store path that garbage collection deletes;
+- installs the unit, the D-Bus activation file, the launcher and autostart
+  entries with absolute store paths, the icons, and the GNOME extension under
+  `share/gnome-shell/extensions` with `passthru.extensionUuid`.
+
+The flake exposes `packages.x86_64-linux.default` (also `skrepka`), `apps` for
+`skrepka-gui`, `skrepka` and `skrepkad`, `overlays.default`, and two modules,
+each `programs.skrepka.enable`:
+
+- **`nixosModules.default`** installs the package system-wide — launcher, icons,
+  the GNOME extension, and the autostart entry, in the system profile's
+  `etc/xdg/autostart` on `$XDG_CONFIG_DIRS` — adds it to
+  `services.dbus.packages` and `systemd.packages`, and has `skrepkad` wanted by
+  every user's `default.target`.
+- **`homeManagerModules.default`**, for Nix on any distribution, a Steam Deck
+  included. It installs the package, the D-Bus activation file into
+  `~/.local/share/dbus-1/services` and the user unit into
+  `~/.config/systemd/user`, enabled. `programs.skrepka.autostart` (on by default)
+  writes the autostart entry once, if there is none, as an ordinary file
+  pointing at the profile's `skrepka-gui`, so the Settings switch can still hide
+  it. `programs.skrepka.gnomeExtension` links the extension into
+  `~/.local/share/gnome-shell/extensions`; enable it once, as above. Anyone who
+  manages GNOME through Home Manager can instead list
+  `config.programs.skrepka.package` in `programs.gnome-shell.extensions` — that
+  option replaces the whole enabled-extensions list, which is why this module
+  does not set it for you.
+
+Each release, after `scripts/build-deck.sh`, run
+`scripts/update-nix-release.sh <version> build/deck/skrepka-linux-x86_64.tar.gz`
+and commit what it changes. The tarball carries nothing from `nix/`, so that
+commit changes no byte of the release, and it is the one to tag.
+
 ## Publishing a release
 
-`scripts/build-deck.sh`, on a Mac with OrbStack or Docker, writes four files to
-`build/deck/`. Attach all four to the GitHub release, under exactly these names:
+1. **Bump the version:** `Info.plist` (`CFBundleShortVersionString` and
+   `CFBundleVersion`), `Sources/SkrepkaDaemon/DaemonVersion.swift` —
+   `DaemonVersionTests` fails the gate when the two disagree — the `CHANGELOG.md`
+   heading, the `--version` examples in `README.md`, `install.sh` and this file,
+   `SECURITY.md`, the bug-report placeholder and the smoke tests' default
+   release.
+2. **Build:** `scripts/notarize.sh` for `build/Skrepka.zip`, then
+   `scripts/build-deck.sh`, on a Mac with OrbStack or Docker, for the Linux
+   assets in `build/deck/`.
+3. **Pin Nix:** `scripts/update-nix-release.sh`, as above, and commit.
+4. **Smoke-test:** `SKREPKA_TARBALL=build/deck/skrepka-linux-x86_64.tar.gz
+   scripts/kde-smoke.sh`, and each package installed in a clean container.
+5. **Publish:** tag the commit, create the GitHub release with the changelog
+   section as its notes and the nine assets below, and bump the version and the
+   `Skrepka.zip` SHA-256 in `Casks/skrepka.rb` in
+   [`psoldunov/homebrew-tap`](https://github.com/psoldunov/homebrew-tap).
 
+Attach them under exactly these names:
+
+- `Skrepka.zip` — the notarized, universal macOS app.
 - `skrepka-linux-x86_64.tar.gz` — what `install.sh` installs: the daemon, the
   CLI, the desktop app, the GNOME extension, everything under `packaging/` and
   `install.sh` itself.
 - `skrepka-linux-x86_64-tools.tar.gz` — the probes and the palette demo, for
   hardware bring-up only. It unpacks into the same directory name, so untarring
   both side by side merges them.
-- a `.sha256` beside each.
+- `skrepka-linux-x86_64.deb` and `skrepka-linux-x86_64.rpm` — the same build as
+  system packages.
+- a `.sha256` beside each Linux asset.
 
-The two are split because every binary carries its own static Swift runtime,
-Foundation and ICU data, and all six in one tarball came to 256 MB. Debug info
-is stripped with the symbol table kept, so crash backtraces still name
-functions. The release tarball comes to about 95 MB.
+The two tarballs are split because every binary carries its own static Swift
+runtime, Foundation and ICU data, and all six in one tarball came to 256 MB.
+Debug info is stripped with the symbol table kept, so crash backtraces still
+name functions. The release tarball comes to about 95 MB.
 
 `install.sh` downloads through `/releases/latest/download/`, which only
 resolves a name that is the same in every release, so no asset name carries a
-version.
+version — the packages' included, so their download links are stable too.
 
-## Why an installer and not a `.deb` or an `.rpm`
+## Why `install.sh` is still the SteamOS path
 
 Recorded as D-10 in `docs/linux-sync/open-questions.md`. SteamOS's root
 filesystem is read-only, `steamos-readonly disable` is undone by the next
 atomic OS update, and with systemd-sysext extensions merged `/usr` stays
-read-only even after disabling it — so a distribution package has nowhere to
-land. `/home` survives OS updates, which is why the installer writes only
-there. Flatpak, the SteamOS-native answer, stays out: a sandboxed client is
-refused the Wayland data-control globals the clipboard needs. None of this is
-Deck-specific, though — the same script is the no-root install path for any
-distribution.
+read-only even after disabling it — so a `.deb` or `.rpm` has nowhere to land
+there, or on any other atomic desktop. `/home` survives OS updates, which is why
+the installer writes only there, and it doubles as the no-root install path for
+any distribution. The packages are for the distributions whose `/usr` is
+writable.
+
+## Why not Flatpak
+
+Flatpak is SteamOS's own answer to a read-only root, and it stays out because a
+sandbox cannot watch the clipboard on most of the desktops Skrepka targets.
+Flatpak tags a sandboxed app's Wayland connection with a security context, and
+compositors refuse privileged protocols to such connections. Checked on
+2026-09-22 against each compositor's source (OQ-4 in
+`docs/linux-sync/open-questions.md`):
+
+- **KDE Plasma 6.4 to 6.7** — the Deck runs 6.4.3 — refuse a sandboxed client
+  nothing Skrepka needs: KWin's `allowInterface()` hides only
+  `wp_security_context_manager_v1` itself from it.
+- **KDE Plasma 6.8** adds `ext_data_control_manager_v1` to the interfaces a
+  sandboxed client may not bind, and that is the only data-control protocol its
+  KWin implements. A Flatpak on Plasma 6.8 cannot see a single copy.
+- **sway** refuses a sandboxed client both data-control managers, layer-shell
+  and the virtual keyboard: no capture, no picker, no paste.
+- **GNOME** implements no data-control at all. Capture there is the Shell
+  extension, which has to be installed outside the sandbox.
+
+So a Flatpak would work on the Deck today and stop recording the day SteamOS
+moves to Plasma 6.8. Flathub's `org.freedesktop.Sdk.Extension.swift6` now ships
+Swift 6.3.3, so building one from source is no longer the obstacle; the
+compositors are.

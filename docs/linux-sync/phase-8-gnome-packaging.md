@@ -197,6 +197,10 @@ is a `DiagnosticsProblem` like any other.
 `.deb` and `.rpm`. Both install `skrepkad`, `skrepka`, the GUI if Phase 7
 shipped, the systemd user unit, and a desktop entry.
 
+**Amended 2026-09-22: shipped in 0.3.0.** `scripts/build-packages.sh` packs the
+release tarball's own files under `/usr` with nFPM, from `packaging/nfpm.yaml`,
+and `scripts/build-deck.sh` runs it; `packaging/README.md` documents the layout.
+
 **Flatpak is out, and the reason belongs in `packaging/README.md` rather than
 being rediscovered.** Sway's `is_privileged()` lists both
 `wlr_data_control_manager_v1` and `ext_data_control_manager_v1`, and its global
@@ -211,6 +215,11 @@ unconditionally, but the `Display` global filter was not traced. It does not
 change the decision; it changes how the decision is explained. **There is now a
 KWin session to check it on** ([D-10](open-questions.md#d-10)), and doing so
 while writing `packaging/README.md` is twenty minutes well spent.
+
+**Amended 2026-09-22:** answered from KWin's source instead. Plasma 6.4 to 6.7
+filter nothing Skrepka needs; Plasma 6.8 refuses `ext_data_control_manager_v1`,
+its only data-control protocol, to sandboxed clients. See
+[OQ-4](open-questions.md#oq-4).
 
 Ruling Flatpak out matters more on an **immutable distribution**, not less:
 there, Flatpak is the sanctioned way to install anything, so "we do not ship a

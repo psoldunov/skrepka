@@ -436,7 +436,7 @@ its answer, the date, and where it was verified.
 | [OQ-1](#oq-1) | Is a Continuity pasteboard change detectable? | **open** — a candidate marker, `com.apple.is-remote-clipboard`, is known but not yet observed (2026-09-18) | Phase 0 |
 | [OQ-2](#oq-2) | Bytes or a promise? | **open** — needs a second Apple device | Phase 0, and a possible shipping bug |
 | [OQ-3](#oq-3) | Does GNOME show a sharing indicator for a clipboard-only RemoteDesktop session? | **open, deferred** — needs a real GNOME session, and the project has none ([D-10](#d-10)) | nothing — it reopens a rejected option |
-| [OQ-4](#oq-4) | Does KWin apply sway's sandbox filter? | **open, and now answerable** — the [Steam Deck](README.md#the-test-hardware) is a real KWin session ([D-10](#d-10)) | nothing — it changes an explanation |
+| [OQ-4](#oq-4) | Does KWin apply sway's sandbox filter? | **answered** — not in Plasma 6.4 to 6.7; Plasma 6.8 refuses `ext_data_control_manager_v1` to sandboxed clients (2026-09-22, KWin source) | nothing — it changes an explanation |
 | [OQ-5](#oq-5) | `NIOSSLCustomVerificationCallback` and `TLSConfiguration` shape | **answered** — `([NIOSSLCertificate], EventLoopPromise<NIOSSLVerificationResult>) -> Void`, set on the *handler*, and dead unless `certificateVerification` is stronger than `.none` | Phase 2 transport |
 | [OQ-6](#oq-6) | `swift-certificates` API, and does it build on Linux? | **answered** — builds on Linux aarch64; DER re-encodes byte-identically on both platforms | Phase 2 identity, Phase 4 |
 | [OQ-7](#oq-7) | `NWListener.Service` / `NWBrowser.Descriptor` signatures | **answered** — and `Network.swiftinterface` *does* ship, so there is a ground truth | Phase 2 discovery |
@@ -464,6 +464,8 @@ OLED — so [OQ-4](#oq-4) is now work rather than a hardware gap. GNOME hardware
 is still missing and [OQ-3](#oq-3) is deferred with it.
 Nothing on the roadmap is blocked on them — OQ-1 and OQ-2 gate Phase 0, which is
 its own spike, and OQ-3 and OQ-4 only change how a settled decision is explained.
+**Amended 2026-09-22:** OQ-4 is answered, from KWin's source rather than the
+Deck; see below.
 
 <a id="oq-1"></a>
 ### OQ-1 — Is a Universal Clipboard change detectable at all?
@@ -578,6 +580,33 @@ the other is exactly the kind of finding this question exists for.
 Does not change the packaging decision — Flatpak is out either way, because a
 GNOME Shell extension cannot register from a sandbox. It changes how the
 decision is explained in `packaging/README.md`.
+
+**Answered 2026-09-22, from KWin's source** on each Plasma branch, which settles
+it for every KWin rather than for the one Deck the comparison above would have
+covered:
+
+- **`Plasma/6.4` to `Plasma/6.7`:** no. `KWinDisplay::allowInterface()` in
+  `src/wayland_server.cpp` refuses a client with a security context only
+  `wp_security_context_manager_v1` itself. Its `interfacesBlackList` —
+  window management, fake input, keystate, screencast, activation feedback,
+  the lock-screen overlay — holds no data-control, layer-shell or
+  virtual-keyboard interface. The Deck's 6.4.3 would let a Flatpak capture.
+- **`Plasma/6.8`, and `master`:** yes, for ext. `allowInterface()` became
+  `if (client->isSandboxed()) return !restrictedInterfaces.contains(...)`, and
+  `restrictedInterfaces` gained `ext_data_control_manager_v1`.
+  `src/wayland/datacontroldevicemanager_v1.cpp` on that branch implements only
+  `ext_data_control_manager_v1` — there is no wlr manager to fall back to — so
+  a sandboxed client on Plasma 6.8 sees no data-control at all. Layer-shell and
+  virtual-keyboard are still allowed.
+
+Sway's `is_privileged()` on `master`, read the same day, lists both
+data-control managers, `layer_shell`, `virtual_keyboard` and `virtual_pointer`
+among the globals `filter_global()` hides from any client with a security
+context. So a Flatpak would capture on the Deck today and stop the day SteamOS
+ships Plasma 6.8, and on sway it would have no capture, no picker and no paste.
+Flathub's `org.freedesktop.Sdk.Extension.swift6` ships Swift 6.3.3 on the 26.08
+runtime, so a source build for Flathub is possible; the compositors are what
+keep Flatpak out. `packaging/README.md` carries the short version.
 
 <a id="oq-5"></a>
 ### OQ-5 — `NIOSSLCustomVerificationCallback` and `TLSConfiguration`

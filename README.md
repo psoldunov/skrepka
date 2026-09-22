@@ -107,7 +107,7 @@ Run inside a graphical session, it starts the app in the tray.
   newer from the host. The installer refuses a machine whose glibc is too old
   before it writes anything; a GTK that is too old shows up only when the app
   starts, as a missing symbol.
-- `bash -s -- --version v0.2.1` after the pipe pins a release.
+- `bash -s -- --version v0.3.0` after the pipe pins a release.
 - `bash -s -- --uninstall` removes everything except your history and this
   device's sync identity.
 - Re-running the line is the whole update path.
@@ -135,6 +135,52 @@ login. GNOME Shell shows tray icons only through the AppIndicator extension —
 Ubuntu enables it by default, many other distributions do not install it — so
 without it there is no tray icon, and the shortcut and the launcher entry are
 the way in.
+
+#### As a `.deb` or an `.rpm`
+
+On Ubuntu 24.04 or newer, Debian 13 or newer, or Fedora 39 or newer, the same
+build installs system-wide as a package:
+
+```sh
+base=https://github.com/psoldunov/skrepka/releases/latest/download
+curl -fLO "$base/skrepka-linux-x86_64.deb" && sudo apt install ./skrepka-linux-x86_64.deb
+curl -fLO "$base/skrepka-linux-x86_64.rpm" && sudo dnf install ./skrepka-linux-x86_64.rpm
+```
+
+Log out and back in once, or start "Skrepka" from the launcher. On GNOME, after
+that login, run `gnome-extensions enable skrepka@dev.soldunov`: a package
+installs the Shell extension for every user but cannot enable it for you. There
+is no package repository yet, so updating is installing the next release's
+package over this one. If you used `install.sh` before, run it with
+`--uninstall` first — its copy in `~/.local` would shadow the package's. The
+packages leave SteamOS and other read-only systems to `install.sh`;
+[packaging/README.md](packaging/README.md) says why, and why there is no
+Flatpak.
+
+#### With Nix
+
+The repository is a flake for x86_64-linux. Its Home Manager module works on
+any distribution, a Steam Deck included; NixOS has a module of its own:
+
+```nix
+# flake inputs
+inputs.skrepka.url = "github:psoldunov/skrepka";
+
+# Home Manager
+imports = [ inputs.skrepka.homeManagerModules.default ];
+programs.skrepka.enable = true;
+
+# or NixOS
+imports = [ inputs.skrepka.nixosModules.default ];
+programs.skrepka.enable = true;
+```
+
+To try it without installing, run the daemon in one terminal with
+`nix run github:psoldunov/skrepka#skrepkad` and the app with
+`nix run github:psoldunov/skrepka`; the modules are what start both at login.
+The flake repackages each release's tarball rather than building from source;
+[packaging/README.md](packaging/README.md) has the details, and the modules'
+options.
 
 To build from a checkout instead, on any architecture, see
 [Build and run](#build-and-run).
