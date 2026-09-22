@@ -1,0 +1,7 @@
+{
+  "uuid": "skrepka@dev.soldunov",
+  "name": "Skrepka Clipboard Capture",
+  "description": "Captures clipboard changes on GNOME Wayland and sends them only to the local Skrepka daemon over the user's session D-Bus. No telemetry or direct network access.",
+  "shell-version": ["46", "47", "48", "49", "50"],
+  "url": "https://github.com/psoldunov/skrepka"
+}

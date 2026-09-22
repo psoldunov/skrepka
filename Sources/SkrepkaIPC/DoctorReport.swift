@@ -39,7 +39,11 @@ public enum DoctorReport {
             "  x11          \(session.x11Display ?? "none")",
         ]
         if session.isXWaylandFallback {
-            lines.append("  note         reading through XWayland — copies from Wayland apps are invisible")
+            let note =
+                session.nativeWaylandCapture == .shellExtension
+                ? "GNOME Shell extension covers native Wayland copies"
+                : "copies from Wayland apps are invisible without the GNOME Shell extension"
+            lines.append("  note         reading through XWayland — \(note)")
         }
         if let problem = session.problem {
             lines.append("  \(session.isBlocking ? "blocked" : "note   ")      \(problem)")

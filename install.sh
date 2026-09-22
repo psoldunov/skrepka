@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Installs a released build of Skrepka for Linux — the daemon, the CLI and the
-# desktop app (tray icon, picker and Settings) — into your home directory. No
-# root, no package manager, nothing to compile.
+# desktop app (tray icon, picker and Settings) and GNOME Wayland capture
+# extension — into your home directory. No root, no package manager, nothing to
+# compile.
 #
 #   curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash
 #   curl -fsSL <same url> | bash -s -- --version v0.2.1
@@ -42,6 +43,9 @@
 #   ~/.local/share/dbus-1/services/dev.soldunov.Skrepka.service
 #                                    D-Bus activation: the bus starts skrepkad
 #                                    for any client that calls it
+#   ~/.local/share/gnome-shell/extensions/skrepka@dev.soldunov/
+#                                    captures native Wayland copies on GNOME;
+#                                    enabled for the next GNOME login
 #   ~/.config/autostart/dev.soldunov.Skrepka.App.desktop
 #                                    starts the app in the tray at login
 #   ~/.config/systemd/user/skrepkad.service          ($XDG_CONFIG_HOME too)
@@ -92,6 +96,10 @@ TRAY_ICON_NAME="skrepka-tray.svg"
 # The daemon's bus name, and the D-Bus activation file named after it.
 DBUS_SERVICE_NAME="dev.soldunov.Skrepka.service"
 LAYER_SHELL_LIBRARY="libgtk4-layer-shell.so.0"
+# The GNOME Shell extension that observes native Wayland copies. Its directory
+# must equal the UUID in metadata.json or Shell does not discover it.
+GNOME_EXTENSION_UUID="skrepka@dev.soldunov"
+GNOME_EXTENSION_FILES="metadata.json extension.js dbus.js README.md"
 # What 0.2.0 installed and skrepka-gui replaces: a separate Settings window with
 # its own launcher entry. Removed on install and on uninstall.
 LEGACY_SETTINGS_NAME="skrepka-settings"
@@ -118,6 +126,8 @@ ICON_DIR=""
 DBUS_SERVICE_DIR=""
 STATE_DIR=""
 PRIVATE_LIB_DIR=""
+GNOME_EXTENSION_ROOT=""
+GNOME_EXTENSION_DIR=""
 MODE="install"
 VERSION=""
 TARBALL=""
@@ -155,9 +165,9 @@ usage() {
 	cat << 'USAGE'
 Installs a released build of Skrepka for Linux into your home directory: the
 daemon (skrepkad), the CLI (skrepka) and the desktop app (skrepka-gui — the
-tray icon, the clipboard picker and Settings), plus a systemd user unit that
-starts the daemon with your session. No root, no package manager, nothing to
-compile.
+tray icon, the clipboard picker and Settings), the GNOME Wayland capture
+extension, plus a systemd user unit that starts the daemon with your session.
+No root, no package manager, nothing to compile.
 
 Usage:
   install.sh                    download the latest release and install it
@@ -194,6 +204,7 @@ honoured when they hold an absolute path):
   ~/.local/share/icons/hicolor/*/apps/dev.soldunov.Skrepka.App.png
   ~/.local/share/icons/hicolor/scalable/status/skrepka-tray.svg
   ~/.local/share/dbus-1/services/dev.soldunov.Skrepka.service
+  ~/.local/share/gnome-shell/extensions/skrepka@dev.soldunov/
   ~/.config/autostart/dev.soldunov.Skrepka.App.desktop
   ~/.config/systemd/user/skrepkad.service
   ~/.local/share/skrepka/  — history and device key, created by the daemon,
@@ -304,6 +315,8 @@ resolve_paths() {
 	# that is ~/.local/lib/skrepka; with XDG_BIN_HOME=/opt/me/bin it is
 	# /opt/me/lib/skrepka, and a copy left in ~/.local/lib would never be found.
 	PRIVATE_LIB_DIR="$(dirname "${BIN_DIR}")/lib/skrepka"
+	GNOME_EXTENSION_ROOT="${DATA_HOME}/gnome-shell/extensions"
+	GNOME_EXTENSION_DIR="${GNOME_EXTENSION_ROOT}/${GNOME_EXTENSION_UUID}"
 }
 
 # One temporary directory per run, made on first use and removed on exit.
@@ -470,6 +483,7 @@ uninstall() {
 	bold "Removing Skrepka"
 
 	stop_gui
+	uninstall_gnome_extension
 	if has_systemd_user_instance; then
 		# `|| true` on both: disabling a unit that was never enabled, or one
 		# whose file is already gone, exits non-zero, and neither is a failure
@@ -541,6 +555,7 @@ uninstall() {
 #   packaging/desktop/<desktop entry>     needed for the launcher entry
 #   packaging/autostart/<desktop entry>   needed to start in the tray at login
 #   packaging/icons/hicolor/…             the app icon and the tray icon
+#   gnome-extension/                      the GNOME Wayland capture extension
 #
 # Four ways to get one, tried in this order: --from-dir names it, --tarball
 # names an archive of one, this script sits inside one (an untarred release),
@@ -584,6 +599,7 @@ resolve_payload() {
 		fail "${PAYLOAD}/packaging/systemd/${UNIT_NAME} is missing;" \
 			"that is not a Skrepka build this installer understands."
 	fi
+	validate_gnome_extension_payload
 }
 
 # From a file on disk, ${BASH_SOURCE[0]} is this script. Piped from curl, bash
@@ -730,6 +746,163 @@ install_binaries() {
 	install -m 0755 "${PAYLOAD}/bin/${CLI_NAME}" "${BIN_DIR}/${CLI_NAME}"
 	echo "installed ${BIN_DIR}/${DAEMON_NAME}"
 	echo "installed ${BIN_DIR}/${CLI_NAME}"
+}
+
+# Refuses a half-present extension before any install step writes to the home
+# directory. An older release payload may have no extension at all; that stays
+# installable so `--version` remains useful across the release that introduced
+# GNOME capture.
+validate_gnome_extension_payload() {
+	local source="${PAYLOAD}/gnome-extension" file
+	[[ -d "${source}" ]] || return 0
+	for file in ${GNOME_EXTENSION_FILES}; do
+		[[ -f "${source}/${file}" ]] || fail "${source}/${file} is missing."
+	done
+	grep -Fq "\"uuid\": \"${GNOME_EXTENSION_UUID}\"" "${source}/metadata.json" \
+		|| fail "${source}/metadata.json does not declare ${GNOME_EXTENSION_UUID}."
+}
+
+# Reads or changes GNOME Shell's extension lists without needing Shell to run.
+# That is the frictionless first-install path: a newly copied extension is not
+# discovered by a live Wayland Shell, but enabling its UUID and removing any
+# stale disabled marker makes it active automatically at the next login.
+gnome_extension_is_enabled() {
+	local value
+	command -v gsettings > /dev/null 2>&1 || return 1
+	value="$(gsettings get org.gnome.shell enabled-extensions 2> /dev/null)" || return 1
+	[[ "${value}" == *"'${GNOME_EXTENSION_UUID}'"* \
+		|| "${value}" == *"\"${GNOME_EXTENSION_UUID}\""* ]]
+}
+
+set_gnome_extension_list() {
+	local key="$1" wanted="$2" value list raw item output separator=""
+	local -a items=() kept=()
+	value="$(gsettings get org.gnome.shell "${key}" 2> /dev/null)" || return 1
+	list="${value#@as }"
+	list="${list#[}"
+	list="${list%]}"
+	IFS=',' read -r -a items <<< "${list}"
+	if ((${#items[@]})); then
+		for raw in "${items[@]}"; do
+			item="${raw#"${raw%%[![:space:]]*}"}"
+			item="${item%"${item##*[![:space:]]}"}"
+			item="${item#\'}"
+			item="${item%\'}"
+			item="${item#\"}"
+			item="${item%\"}"
+			[[ -n "${item}" && "${item}" != "${GNOME_EXTENSION_UUID}" ]] && kept+=("${item}")
+		done
+	fi
+	[[ "${wanted}" == "yes" ]] && kept+=("${GNOME_EXTENSION_UUID}")
+	output="["
+	if ((${#kept[@]})); then
+		for item in "${kept[@]}"; do
+			output+="${separator}'${item}'"
+			separator=", "
+		done
+	fi
+	output+="]"
+	gsettings set org.gnome.shell "${key}" "${output}" > /dev/null 2>&1
+}
+
+set_gnome_extension_enabled() {
+	local wanted="$1"
+	command -v gsettings > /dev/null 2>&1 || return 1
+	if [[ "${wanted}" == "yes" ]]; then
+		set_gnome_extension_list enabled-extensions yes \
+			&& set_gnome_extension_list disabled-extensions no
+	else
+		# Uninstall owns no extension preference after it removes the directory.
+		set_gnome_extension_list enabled-extensions no \
+			&& set_gnome_extension_list disabled-extensions no
+	fi
+}
+
+# A running Shell knows only the extension directories it scanned at login.
+# `info` is therefore both a liveness check and the answer to whether an
+# upgrade can be reloaded now instead of at the next login.
+gnome_shell_knows_extension() {
+	command -v gnome-extensions > /dev/null 2>&1 \
+		&& gnome-extensions info "${GNOME_EXTENSION_UUID}" > /dev/null 2>&1
+}
+
+install_gnome_extension() {
+	local source="${PAYLOAD}/gnome-extension" file stage previous=""
+	local was_present=0 was_enabled=0 shell_knew=0
+	if [[ ! -d "${source}" ]]; then
+		yellow "no GNOME Shell extension in this build; native GNOME Wayland copies will not be captured."
+		return 0
+	fi
+	[[ -d "${GNOME_EXTENSION_DIR}" ]] && was_present=1
+	gnome_extension_is_enabled && was_enabled=1
+	gnome_shell_knows_extension && shell_knew=1
+
+	# Prepare the replacement before disabling a live extension. A missing file
+	# or full disk must not turn working capture off.
+	mkdir -p "${GNOME_EXTENSION_ROOT}"
+	stage="$(mktemp -d "${GNOME_EXTENSION_ROOT}/.${GNOME_EXTENSION_UUID}.new.XXXXXX")"
+	for file in ${GNOME_EXTENSION_FILES}; do
+		install -m 0644 "${source}/${file}" "${stage}/${file}"
+	done
+
+	# Disable only for the atomic replacement. On first install Shell cannot know
+	# the new directory until the next login; a deliberately disabled upgrade
+	# stays disabled.
+	if [[ "${shell_knew}" -eq 1 && "${was_enabled}" -eq 1 ]]; then
+		gnome-extensions disable "${GNOME_EXTENSION_UUID}" > /dev/null 2>&1 || true
+	fi
+	if [[ -e "${GNOME_EXTENSION_DIR}" || -L "${GNOME_EXTENSION_DIR}" ]]; then
+		previous="${GNOME_EXTENSION_ROOT}/.${GNOME_EXTENSION_UUID}.previous.$$"
+		rm -rf -- "${previous}"
+		if ! mv "${GNOME_EXTENSION_DIR}" "${previous}"; then
+			rm -rf -- "${stage}"
+			[[ "${shell_knew}" -eq 1 && "${was_enabled}" -eq 1 ]] \
+				&& gnome-extensions enable "${GNOME_EXTENSION_UUID}" > /dev/null 2>&1 || true
+			fail "could not replace the GNOME Shell extension."
+		fi
+	fi
+	if ! mv "${stage}" "${GNOME_EXTENSION_DIR}"; then
+		if [[ -n "${previous}" ]] && ! mv "${previous}" "${GNOME_EXTENSION_DIR}"; then
+			fail "could not restore the previous GNOME Shell extension."
+		fi
+		rm -rf -- "${stage}"
+		[[ "${shell_knew}" -eq 1 && "${was_enabled}" -eq 1 ]] \
+			&& gnome-extensions enable "${GNOME_EXTENSION_UUID}" > /dev/null 2>&1 || true
+		fail "could not install the GNOME Shell extension."
+	fi
+	[[ -z "${previous}" ]] || rm -rf -- "${previous}"
+	echo "installed ${GNOME_EXTENSION_DIR}"
+
+	if [[ "${was_present}" -eq 1 && "${was_enabled}" -eq 0 ]]; then
+		yellow "kept the Skrepka GNOME Shell extension disabled, as it was before this upgrade."
+		return 0
+	fi
+	if ! set_gnome_extension_enabled yes; then
+		yellow "GNOME settings are unavailable here. At your next GNOME login, run:"
+		yellow "  gnome-extensions enable ${GNOME_EXTENSION_UUID}"
+		return 0
+	fi
+	if [[ "${shell_knew}" -eq 1 ]] \
+		&& gnome-extensions enable "${GNOME_EXTENSION_UUID}" > /dev/null 2>&1 \
+		&& gnome-extensions info "${GNOME_EXTENSION_UUID}" 2> /dev/null | grep -q 'State: ACTIVE'; then
+		green "✓ GNOME Wayland clipboard capture is active"
+	else
+		yellow "GNOME will activate clipboard capture at the next GNOME login."
+		yellow "  If GNOME is running now, log out and back in once."
+	fi
+}
+
+uninstall_gnome_extension() {
+	if gnome_shell_knows_extension; then
+		gnome-extensions disable "${GNOME_EXTENSION_UUID}" > /dev/null 2>&1 || true
+	fi
+	set_gnome_extension_enabled no || true
+	if [[ -e "${GNOME_EXTENSION_DIR}" || -L "${GNOME_EXTENSION_DIR}" ]]; then
+		# The directory name is the extension's globally unique identity; it is
+		# wholly owned by this installer, unlike any of its parent directories.
+		rm -rf -- "${GNOME_EXTENSION_DIR}"
+		echo "removed ${GNOME_EXTENSION_DIR}"
+	fi
 }
 
 install_unit() {
@@ -1249,6 +1422,7 @@ main() {
 	install_binaries
 	install_unit
 	install_dbus_activation
+	install_gnome_extension
 	install_gui
 	enable_unit
 	start_gui

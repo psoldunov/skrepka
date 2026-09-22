@@ -58,6 +58,7 @@ optional_note() {
 }
 
 check "format" xcrun swift-format lint --strict --recursive --parallel Sources Tests
+check "GNOME extension" scripts/test-gnome-extension.sh
 
 # SwiftLint is not in the toolchain and is easy not to have installed, which
 # used to mean a Mac developer got a green gate for code the Linux gate refuses.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Drive a live headless Ubuntu GNOME session.
-#   scripts/gnome.sh up [--fresh] | down | shot NAME | key MOD+KEY
+#   scripts/gnome.sh up [--fresh] | restart | down | shot NAME | key MOD+KEY
 #   scripts/gnome.sh type TEXT | click X Y | eval JAVASCRIPT | windows
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,14 +19,7 @@ if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
 fi
 running() { [[ $(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null) == true ]]; }
 down() { docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true; }
-up() {
-    if running; then return; fi
-    down
-    mkdir -p "${REPO}/build/gnome"
-    docker run -d --name "${CONTAINER}" --platform linux/amd64 \
-        --cap-add SYS_NICE --shm-size 512m \
-        -v "${REPO}/build/gnome:/out" \
-        "${IMAGE}" skrepka-gnome-session >/dev/null
+wait_until_ready() {
     local waited=0
     until docker exec "${CONTAINER}" test -f /tmp/gnome/ready 2>/dev/null; do
         if ! running; then
@@ -44,6 +37,22 @@ up() {
     done
     docker logs "${CONTAINER}" 2>&1 | tail -1
 }
+up() {
+    if running; then return; fi
+    down
+    mkdir -p "${REPO}/build/gnome"
+    docker run -d --name "${CONTAINER}" --platform linux/amd64 \
+        --cap-add SYS_NICE --shm-size 512m \
+        -v "${REPO}/build/gnome:/out" \
+        "${IMAGE}" skrepka-gnome-session >/dev/null
+    wait_until_ready
+}
+restart() {
+    running || { echo "${CONTAINER} is not running" >&2; exit 1; }
+    docker exec "${CONTAINER}" rm -f /tmp/gnome/ready
+    docker restart "${CONTAINER}" >/dev/null
+    wait_until_ready
+}
 TTY_ARGS=(-i)
 [[ -t 0 && -t 1 ]] && TTY_ARGS=(-it)
 in_session() {
@@ -53,6 +62,7 @@ in_session() {
 
 case ${1:-} in
     up) [[ ${2:-} == --fresh ]] && down; up ;;
+    restart) restart ;;
     down) down ;;
     shot)
         [[ -n ${2:-} ]] || { echo "usage: scripts/gnome.sh shot NAME" >&2; exit 64; }

@@ -59,7 +59,8 @@ extension Daemon {
                 isXWaylandFallback: false,
                 problem: "the session has not been probed yet",
                 isBlocking: true,
-                restarts: sessionRestarts
+                restarts: sessionRestarts,
+                nativeWaylandCapture: nil
             )
         }
         return DiagnosticsDocument.Session(
@@ -75,7 +76,8 @@ extension Daemon {
             // captures perfectly well, which is the whole distinction
             // `LinuxCaptureProblem.isBlocking` exists to draw.
             isBlocking: report.problem?.isBlocking ?? false,
-            restarts: sessionRestarts
+            restarts: sessionRestarts,
+            nativeWaylandCapture: hasReceivedClipboardSubmission ? .shellExtension : nil
         )
     }
 
@@ -149,11 +151,12 @@ extension Daemon {
                 """
             )
         }
-        if sessionReport?.isXWaylandFallback == true {
+        if sessionReport?.isXWaylandFallback == true && !hasReceivedClipboardSubmission {
             found.append(
                 """
                 Capturing through XWayland, which sees only what X11 applications copy — \
-                anything copied from a native Wayland application is invisible.
+                anything copied from a native Wayland application is invisible unless the \
+                Skrepka GNOME Shell extension is active.
                 """
             )
         }

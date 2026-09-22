@@ -46,6 +46,7 @@ extension Daemon {
         guard let accepted = decision.item else {
             return .refused(decision.rejectionLogMessage ?? "nothing in that clip could be recorded")
         }
+        hasReceivedClipboardSubmission = true
         // The Shell extension's copy names files on this machine, so they are
         // read here exactly as a copy the daemon watched would be.
         let item = await FileBundleReader.attachingBundle(

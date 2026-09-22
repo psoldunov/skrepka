@@ -11,6 +11,10 @@ HEIGHT=${SKREPKA_GNOME_HEIGHT:-800}
 mkdir -p "${LOGS}" "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
 rm -f "${STATE}/ready" "${STATE}/env"
+# A smoke-test login restart keeps the container's filesystem. Mutter's old
+# Xauthority file and socket names do not belong to the new Xwayland process;
+# leaving them lets the environment probe select a dead cookie or display.
+rm -f "${XDG_RUNTIME_DIR}"/.mutter-Xwaylandauth.* /tmp/.X11-unix/X*
 
 wait_for() {
     local check=$1 seconds=$2

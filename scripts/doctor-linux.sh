@@ -99,6 +99,7 @@ fi
 # major version as the macOS one, and takes the same flags the macOS gate uses.
 # There is no `xcrun` here, so it is invoked directly.
 check "format" swift-format lint --strict --recursive --parallel Sources Tests
+check "GNOME extension" scripts/test-gnome-extension.sh
 
 # SwiftLint publishes a prebuilt Linux aarch64 binary but it is not in the
 # stock swift image, so from macOS this always skips. Bake it into a derived

@@ -195,6 +195,9 @@ public actor Daemon {
     /// where the two get different retry policies.
     var hasEverCaptured = false
     var lastCapturedAt: Date?
+    /// A well-formed clipboard handoff proves the GNOME Shell extension can
+    /// cover native Wayland copies that the XFIXES fallback cannot see.
+    var hasReceivedClipboardSubmission = false
     var sessionReport: SessionProbe.Report?
 
     // MARK: - Bookkeeping

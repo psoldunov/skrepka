@@ -57,7 +57,8 @@ file placement in `install.sh`, building in `setup-linux.sh`.
 Together they are the no-root install path for the Linux daemon
 (`skrepkad`) and its CLI (`skrepka`): binaries into `~/.local/bin`, a systemd
 **user** unit into `~/.config/systemd/user`, a D-Bus activation file so any
-client starts the daemon on demand, and — when the build has it — the GTK4
+client starts the daemon on demand, the GNOME Wayland capture extension into
+`~/.local/share/gnome-shell/extensions`, and — when the build has it — the GTK4
 desktop app (`skrepka-gui`: tray icon, picker and Settings in one process) with
 its launcher and autostart entries, the macOS app icon in the hicolor theme and,
 from the Deck tarball, a private `libgtk4-layer-shell` in `~/.local/lib/skrepka`. A user

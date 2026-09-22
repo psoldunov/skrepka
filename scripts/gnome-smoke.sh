@@ -61,48 +61,124 @@ nohup dbus-monitor "type=error" \
 nohup ~/.local/bin/skrepka-gui --background >"${RUN}/logs/skrepka-gui.log" 2>&1 &
 echo $! >/tmp/gnome/gui.pid
 sleep 3
-if [[ ${installed} == yes ]] && busctl --user status dev.soldunov.Skrepka >/dev/null 2>&1; then
-    echo "RESULT 1 install PASS: install.sh --tarball completed and skrepkad owns dev.soldunov.Skrepka"
+extension_dir=${XDG_DATA_HOME}/gnome-shell/extensions/skrepka@dev.soldunov
+extension_enabled=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || true)
+if [[ ${installed} == yes ]] \
+    && busctl --user status dev.soldunov.Skrepka >/dev/null 2>&1 \
+    && [[ -f ${extension_dir}/extension.js ]] \
+    && [[ ${extension_enabled} == *"'skrepka@dev.soldunov'"* ]]; then
+    echo "RESULT 1 install PASS: daemon, app and enabled GNOME capture extension installed"
 else
-    echo "RESULT 1 install FAIL: installer or daemon startup failed"
+    echo "RESULT 1 install FAIL: installer, daemon startup or GNOME extension setup failed"
 fi
 EOF
 
-# 2. Capture from native Wayland GTK4 and X11 xclip; preserve doctor output.
+# A live Wayland Shell does not discover a brand-new extension directory. The
+# installer enables its UUID for the next login, which this restart exercises
+# without throwing away the clean home we just installed into.
+scripts/gnome.sh restart
+
+# 2. Capture from GNOME's server-side Wayland selection and X11 xclip. The
+# headless virtual monitor advertises no keyboard to Wayland clients, so a GTK
+# client cannot claim wl_data_device; setting a memory selection inside Shell
+# drives the same Meta.Selection path the extension observes on a real seat.
 session <<'EOF' | tee "${RUN_DIR}/logs/2-capture.txt"
 set -uo pipefail
-cat > /tmp/wayland-copy.py <<'PY'
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GLib, Gtk
-app = Gtk.Application(application_id="dev.soldunov.Skrepka.WaylandCopy")
-def activate(application):
-    window = Gtk.ApplicationWindow(application=application, title="Wayland clipboard owner")
-    window.set_default_size(320, 80)
-    window.present()
-    Gdk.Display.get_default().get_clipboard().set("gnome wayland capture")
-    GLib.timeout_add_seconds(8, lambda: application.quit() or GLib.SOURCE_REMOVE)
-app.connect("activate", activate)
-app.run()
-PY
-nohup python3 /tmp/wayland-copy.py >"${RUN}/logs/wayland-copy.log" 2>&1 &
+wait_bus_down() {
+    for _ in $(seq 40); do
+        busctl --user status dev.soldunov.Skrepka >/dev/null 2>&1 || return 0
+        sleep 0.1
+    done
+    return 1
+}
+wait_bus_up() {
+    for _ in $(seq 40); do
+        busctl --user status dev.soldunov.Skrepka >/dev/null 2>&1 && return 0
+        sleep 0.25
+    done
+    return 1
+}
+pkill -x skrepka-gui 2>/dev/null || true
+pkill -x skrepkad 2>/dev/null || true
+wait_bus_down || { echo 'old daemon kept the D-Bus name'; exit 1; }
+# With DISPLAY absent the daemon has no XFIXES fallback, so every native
+# Wayland result below can only have arrived through the Shell extension.
+nohup env -u DISPLAY ~/.local/bin/skrepkad >"${RUN}/logs/skrepkad-wayland.log" 2>&1 &
+wait_bus_up || { echo 'Wayland-only daemon did not claim the D-Bus name'; exit 1; }
+nohup dbus-monitor "type=error" \
+    "interface=org.freedesktop.portal.RemoteDesktop" \
+    "interface=org.freedesktop.portal.Request" \
+    "interface=org.freedesktop.portal.Session" \
+    >"${RUN}/logs/dbus-portal.log" 2>&1 &
+sleep 1
+extension=$(gnome-extensions info skrepka@dev.soldunov 2>&1)
+printf '%s\n' "${extension}"
+skrepka-gnome-eval 'const Meta = imports.gi.Meta; const GLib = imports.gi.GLib; globalThis.skrepkaSmokeSource = Meta.SelectionSourceMemory.new("text/plain;charset=utf-8", new GLib.Bytes(new TextEncoder().encode("gnome wayland capture"))); global.display.get_selection().set_owner(Meta.SelectionType.SELECTION_CLIPBOARD, globalThis.skrepkaSmokeSource); "set text"' >/dev/null
 sleep 2
-wayland=$(~/.local/bin/skrepka list --json 2>&1)
-printf '%s\n' "${wayland}" >"${RUN}/logs/list-after-wayland.json"
+wayland_text=$(~/.local/bin/skrepka list --json 2>&1)
+printf '%s\n' "${wayland_text}" >"${RUN}/logs/list-after-wayland-text.json"
+skrepka-gnome-eval 'const Meta = imports.gi.Meta; const GLib = imports.gi.GLib; const png = GLib.base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="); globalThis.skrepkaSmokeSource = Meta.SelectionSourceMemory.new("image/png", new GLib.Bytes(png)); global.display.get_selection().set_owner(Meta.SelectionType.SELECTION_CLIPBOARD, globalThis.skrepkaSmokeSource); "set image"' >/dev/null
+sleep 2
+wayland_image=$(~/.local/bin/skrepka list --json 2>&1)
+printf '%s\n' "${wayland_image}" >"${RUN}/logs/list-after-wayland-image.json"
+printf 'gnome wayland file capture' >/tmp/gnome/wayland-capture.txt
+skrepka-gnome-eval 'const Meta = imports.gi.Meta; const GLib = imports.gi.GLib; globalThis.skrepkaSmokeSource = Meta.SelectionSourceMemory.new("text/uri-list", new GLib.Bytes(new TextEncoder().encode("file:///tmp/gnome/wayland-capture.txt\r\n"))); global.display.get_selection().set_owner(Meta.SelectionType.SELECTION_CLIPBOARD, globalThis.skrepkaSmokeSource); "set file"' >/dev/null
+sleep 2
+wayland_file=$(~/.local/bin/skrepka list --json 2>&1)
+printf '%s\n' "${wayland_file}" >"${RUN}/logs/list-after-wayland-file.json"
+
+# Prove X11 capture belongs to the daemon's XFIXES backend, not the Shell
+# extension observing an Xwayland client's selection through Mutter.
+gnome-extensions disable skrepka@dev.soldunov >/dev/null
+extension_disabled=no
+for _ in $(seq 20); do
+    if ! gnome-extensions info skrepka@dev.soldunov 2>&1 | grep -q 'State: ACTIVE'; then
+        extension_disabled=yes
+        break
+    fi
+    sleep 0.1
+done
+pkill -x skrepkad 2>/dev/null || true
+wait_bus_down || { echo 'Wayland-only daemon kept the D-Bus name'; exit 1; }
+nohup ~/.local/bin/skrepkad >"${RUN}/logs/skrepkad.log" 2>&1 &
+wait_bus_up || { echo 'XFIXES daemon did not claim the D-Bus name'; exit 1; }
 printf 'gnome x11 capture' | xclip -selection clipboard
 sleep 2
 x11=$(~/.local/bin/skrepka list --json 2>&1)
 printf '%s\n' "${x11}" >"${RUN}/logs/list-after-x11.json"
+gnome-extensions enable skrepka@dev.soldunov >/dev/null
+for _ in $(seq 20); do
+    extension=$(gnome-extensions info skrepka@dev.soldunov 2>&1)
+    [[ ${extension} == *'State: ACTIVE'* ]] && break
+    sleep 0.1
+done
+# The restarted XFIXES daemon should stop warning once an extension submission
+# proves native Wayland capture is covered.
+skrepka-gnome-eval 'const Meta = imports.gi.Meta; const GLib = imports.gi.GLib; globalThis.skrepkaSmokeSource = Meta.SelectionSourceMemory.new("text/plain;charset=utf-8", new GLib.Bytes(new TextEncoder().encode("gnome wayland diagnostics"))); global.display.get_selection().set_owner(Meta.SelectionType.SELECTION_CLIPBOARD, globalThis.skrepkaSmokeSource); "set diagnostics"' >/dev/null
+sleep 2
+nohup ~/.local/bin/skrepka-gui --background >"${RUN}/logs/skrepka-gui.log" 2>&1 &
+echo $! >/tmp/gnome/gui.pid
+sleep 3
 ~/.local/bin/skrepka doctor --json >"${RUN}/logs/doctor.json" 2>&1
 backend=$(jq -r '.session.backendName + "; xwayland=" + (.session.isXWaylandFallback|tostring)' "${RUN}/logs/doctor.json" 2>/dev/null || echo unknown)
+wayland_warnings=$(jq '[.problems[] | select(test("XWayland|native Wayland"))] | length' "${RUN}/logs/doctor.json" 2>/dev/null || echo 1)
 echo "backend: ${backend}"
-if grep -q 'gnome wayland capture' <<<"${wayland}"; then echo "Wayland client: seen"; else echo "Wayland client: missing"; fi
-if grep -q 'gnome x11 capture' <<<"${x11}"; then echo "X11 client: seen"; else echo "X11 client: missing"; fi
-if grep -q 'gnome wayland capture' <<<"${wayland}" && grep -q 'gnome x11 capture' <<<"${x11}"; then
-    echo "RESULT 2 capture PASS: both native Wayland and X11 clipboard changes reached history (${backend})"
+echo "stale Wayland warnings after extension submission: ${wayland_warnings}"
+if grep -q 'gnome wayland capture' <<<"${wayland_text}"; then echo "GNOME Wayland text: seen"; else echo "GNOME Wayland text: missing"; fi
+if grep -q '"kind":"image"' <<<"${wayland_image}"; then echo "GNOME Wayland image: seen"; else echo "GNOME Wayland image: missing"; fi
+if grep -q 'wayland-capture.txt' <<<"${wayland_file}"; then echo "GNOME Wayland file: seen"; else echo "GNOME Wayland file: missing"; fi
+if [[ ${extension_disabled} == yes ]] && grep -q 'gnome x11 capture' <<<"${x11}"; then echo "X11 client: seen without extension"; else echo "X11 client: missing or extension stayed active"; fi
+if [[ ${extension} == *'State: ACTIVE'* ]] \
+    && grep -q 'gnome wayland capture' <<<"${wayland_text}" \
+    && grep -q '"kind":"image"' <<<"${wayland_image}" \
+    && grep -q 'wayland-capture.txt' <<<"${wayland_file}" \
+    && [[ ${extension_disabled} == yes ]] \
+    && grep -q 'gnome x11 capture' <<<"${x11}" \
+    && [[ ${wayland_warnings} == 0 ]]; then
+    echo "RESULT 2 capture PASS: Shell extension captured Wayland text, image and file; XFIXES captured X11 (${backend})"
 else
     problem=$(jq -r '.session.problem // "clipboard entries missing"' "${RUN}/logs/doctor.json" 2>/dev/null)
-    echo "RESULT 2 capture FAIL: one or both clipboard changes missing (${backend}); ${problem}"
+    echo "RESULT 2 capture FAIL: extension inactive or a selection missing (${backend}); ${problem}"
 fi
 EOF
 

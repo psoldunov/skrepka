@@ -79,6 +79,33 @@ find the icon by name.
 `install.sh` installs them into `~/.local/share/icons/hicolor` and refreshes an
 existing `icon-theme.cache` there, but never creates one.
 
+## `gnome-extension/`
+
+The release tarball carries `gnome-extension/` at its root. `install.sh` copies
+its four reviewed source files into the user extension directory:
+
+```text
+$XDG_DATA_HOME/gnome-shell/extensions/skrepka@dev.soldunov/
+```
+
+GNOME/Mutter exposes neither Wayland data-control protocol to an ordinary
+client. The extension therefore runs inside Shell, listens to Mutter's
+server-side clipboard selection and submits supported representations to the
+local daemon through `dev.soldunov.Skrepka1.Submit`. It has no UI, store,
+subprocess, direct network access or capture policy; the daemon still owns
+privacy markers, exclusions, size validation, de-duplication and retention.
+
+A running Wayland Shell does not discover a directory added after login. On a
+first install, the installer adds the UUID to GNOME's `enabled-extensions`
+setting, so it becomes active automatically at the next login, and tells the
+user to log out once when GNOME is already running. An upgrade that Shell
+already knows is disabled, replaced and re-enabled live. An extension the user
+disabled stays disabled. Uninstall disables it before removing its one named
+directory. All of this works at user scope; nothing is written under `/usr`.
+
+KDE, Sway, other data-control compositors and X11 use the native clipboard
+backends and ignore this directory.
+
 ## The layer-shell library
 
 `skrepka-gui` links `libgtk4-layer-shell` dynamically, and SteamOS does not
@@ -135,9 +162,10 @@ curl -fsSL <same url> | bash -s -- --uninstall        stop, disable, and remove
   goes beside the binaries when the build has it, with its launcher entry in
   `~/.local/share/applications`, its autostart entry in `~/.config/autostart`,
   its icons in `~/.local/share/icons/hicolor`, plus, from the release tarball,
-  the private `libgtk4-layer-shell` in `~/.local/lib/skrepka` (see above).
-  `--uninstall` removes exactly those files, and the private directory if it is
-  then empty.
+  the private `libgtk4-layer-shell` in `~/.local/lib/skrepka` (see above). The
+  GNOME extension goes to
+  `~/.local/share/gnome-shell/extensions/skrepka@dev.soldunov`. `--uninstall`
+  removes exactly those files and directories.
 - **The 0.2.0 Settings window.** 0.2.0 installed Settings as its own program,
   `skrepka-settings`, with its own "Skrepka Settings" launcher entry.
   `skrepka-gui` replaces both, so installing — and uninstalling — removes those
@@ -182,7 +210,8 @@ machine from every peer it has synced with.
 `build/deck/`. Attach all four to the GitHub release, under exactly these names:
 
 - `skrepka-linux-x86_64.tar.gz` — what `install.sh` installs: the daemon, the
-  CLI, the desktop app, everything under `packaging/` and `install.sh` itself.
+  CLI, the desktop app, the GNOME extension, everything under `packaging/` and
+  `install.sh` itself.
 - `skrepka-linux-x86_64-tools.tar.gz` — the probes and the palette demo, for
   hardware bring-up only. It unpacks into the same directory name, so untarring
   both side by side merges them.
