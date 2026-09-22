@@ -11,7 +11,9 @@
 # writing `Hidden=true` into ~/.config/autostart, which it cannot do to a link
 # into the store, and Home Manager would refuse the next switch over the file
 # Settings put in its place. So it is written once, as an ordinary file, only
-# when there is none — the way install.sh keeps a hidden entry hidden.
+# when there is none — the way install.sh keeps a hidden entry hidden. With
+# `autostart` off nothing is written, and nothing else starts the app: the
+# package keeps its entry out of the profile's etc/xdg (see nix/package.nix).
 self:
 {
   config,
@@ -31,7 +33,7 @@ let
   # than this generation's store path, so it keeps working after the store
   # path is collected.
   autostartEntry = pkgs.runCommand "${appId}.desktop" { } ''
-    substitute ${cfg.package}/etc/xdg/autostart/${appId}.desktop $out \
+    substitute ${cfg.package}/share/skrepka/autostart/${appId}.desktop $out \
       --replace-fail "Exec=${cfg.package}/bin/skrepka-gui" \
         "Exec=${config.home.profileDirectory}/bin/skrepka-gui"
   '';

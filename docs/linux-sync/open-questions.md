@@ -125,6 +125,9 @@ installer writes only there: `~/.local/bin`, `~/.local/share/applications`,
 `~/.config/systemd/user`. Flatpak is the SteamOS-native answer and remains **out**
 for the reason already recorded — a sandboxed client is refused the data-control
 globals ([OQ-4](#oq-4) governs only how that is explained, not whether it holds).
+**Amended 2026-09-22:** not everywhere — Plasma 6.4 to 6.7, the Deck's included,
+let a sandboxed client bind data-control; sway and Plasma 6.8 refuse it, and that
+is enough to keep Flatpak out. See [OQ-4](#oq-4).
 
 The installer is not Deck-specific and should not be written as if it were. It
 is the no-root install path for any distribution, and after
@@ -560,9 +563,10 @@ extension path in Phase 8 is being reconsidered.
 <a id="oq-4"></a>
 ### OQ-4 — Does KWin apply sway's sandbox filter to the data-control globals?
 
-**Still open as of 2026-09-05. Answerable from 2026-09-07** — [D-10](#d-10)
-brought a KWin session onto the project in the shape of a Steam Deck OLED, so
-this is now a task rather than a hardware gap.
+**Answered 2026-09-22, from KWin's source** — see the end of this section. The
+rest records the question as it stood: open as of 2026-09-05, and answerable
+from 2026-09-07, when [D-10](#d-10) brought a KWin session onto the project in
+the shape of a Steam Deck OLED.
 
 Sway's `is_privileged()` refuses both data-control managers to any client with a
 security context, which is what rules Flatpak out. KWin's `wayland_server.cpp`
@@ -581,9 +585,9 @@ Does not change the packaging decision — Flatpak is out either way, because a
 GNOME Shell extension cannot register from a sandbox. It changes how the
 decision is explained in `packaging/README.md`.
 
-**Answered 2026-09-22, from KWin's source** on each Plasma branch, which settles
-it for every KWin rather than for the one Deck the comparison above would have
-covered:
+**Answered 2026-09-22, from KWin's source** for Plasma 6.4 to 6.8 and `master`,
+which settles it for those branches rather than for the one Deck the comparison
+above would have covered. Plasma 6.3 and older were not read:
 
 - **`Plasma/6.4` to `Plasma/6.7`:** no. `KWinDisplay::allowInterface()` in
   `src/wayland_server.cpp` refuses a client with a security context only

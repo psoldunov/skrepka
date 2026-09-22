@@ -89,9 +89,13 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace $out/share/dbus-1/services/dev.soldunov.Skrepka.service \
       --replace-fail "Exec=skrepkad" "Exec=$out/bin/skrepkad"
 
+    # The autostart entry goes in share/skrepka rather than etc/xdg/autostart.
+    # A profile's etc/xdg is on $XDG_CONFIG_DIRS on NixOS, so an entry there
+    # would start the app for anyone with the package installed, whatever a
+    # module's `autostart` option says. The modules put it where it belongs.
     install -Dm644 packaging/desktop/${appId}.desktop $out/share/applications/${appId}.desktop
-    install -Dm644 packaging/autostart/${appId}.desktop $out/etc/xdg/autostart/${appId}.desktop
-    for entry in $out/share/applications/${appId}.desktop $out/etc/xdg/autostart/${appId}.desktop; do
+    install -Dm644 packaging/autostart/${appId}.desktop $out/share/skrepka/autostart/${appId}.desktop
+    for entry in $out/share/applications/${appId}.desktop $out/share/skrepka/autostart/${appId}.desktop; do
       substituteInPlace "$entry" --replace-fail "Exec=skrepka-gui" "Exec=$out/bin/skrepka-gui"
     done
 

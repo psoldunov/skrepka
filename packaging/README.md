@@ -213,8 +213,15 @@ tarball's own: glibc 2.38 and GTK 4.12. Debian 12, on glibc 2.36, refuses the
 libraries by soname, so it should also resolve on openSUSE Tumbleweed — not
 tried.
 
+On Ubuntu or Debian:
+
 ```
 sudo apt install ./skrepka-linux-x86_64.deb
+```
+
+On Fedora:
+
+```
 sudo dnf install ./skrepka-linux-x86_64.rpm
 ```
 
@@ -277,26 +284,31 @@ hash it names, and:
 - wraps `skrepka-gui` with `wrapGAppsHook4`, and sets `SKREPKA_GUI_EXECUTABLE`
   so Settings writes `skrepka-gui` into a fresh autostart entry rather than a
   store path that garbage collection deletes;
-- installs the unit, the D-Bus activation file, the launcher and autostart
-  entries with absolute store paths, the icons, and the GNOME extension under
-  `share/gnome-shell/extensions` with `passthru.extensionUuid`.
+- installs the unit, the D-Bus activation file and the launcher entry with
+  absolute store paths, the icons, and the GNOME extension under
+  `share/gnome-shell/extensions` with `passthru.extensionUuid`;
+- keeps the autostart entry in `share/skrepka/autostart` rather than
+  `etc/xdg/autostart`. A profile's `etc/xdg` is on `$XDG_CONFIG_DIRS` on NixOS,
+  so an entry there would start the app for anyone who installs the package,
+  whatever a module's `autostart` says; the modules put it where it belongs.
 
 The flake exposes `packages.x86_64-linux.default` (also `skrepka`), `apps` for
 `skrepka-gui`, `skrepka` and `skrepkad`, `overlays.default`, and two modules,
 each `programs.skrepka.enable`:
 
-- **`nixosModules.default`** installs the package system-wide — launcher, icons,
-  the GNOME extension, and the autostart entry, in the system profile's
-  `etc/xdg/autostart` on `$XDG_CONFIG_DIRS` — adds it to
-  `services.dbus.packages` and `systemd.packages`, and has `skrepkad` wanted by
-  every user's `default.target`.
+- **`nixosModules.default`** installs the package system-wide — launcher, icons
+  and the GNOME extension — adds it to `services.dbus.packages` and
+  `systemd.packages`, and has `skrepkad` wanted by every user's
+  `default.target`. `programs.skrepka.autostart` (on by default) puts the
+  autostart entry in `/etc/xdg/autostart`, where Settings reads it as the
+  system entry and each user can hide it.
 - **`homeManagerModules.default`**, for Nix on any distribution, a Steam Deck
   included. It installs the package, the D-Bus activation file into
   `~/.local/share/dbus-1/services` and the user unit into
   `~/.config/systemd/user`, enabled. `programs.skrepka.autostart` (on by default)
   writes the autostart entry once, if there is none, as an ordinary file
   pointing at the profile's `skrepka-gui`, so the Settings switch can still hide
-  it. `programs.skrepka.gnomeExtension` links the extension into
+  it; off, nothing starts the app at login. `programs.skrepka.gnomeExtension` links the extension into
   `~/.local/share/gnome-shell/extensions`; enable it once, as above. Anyone who
   manages GNOME through Home Manager can instead list
   `config.programs.skrepka.package` in `programs.gnome-shell.extensions` — that

@@ -142,10 +142,18 @@ the way in.
 On Ubuntu 24.04 or newer, Debian 13 or newer, or Fedora 39 or newer, the same
 build installs system-wide as a package:
 
+On Ubuntu or Debian:
+
 ```sh
-base=https://github.com/psoldunov/skrepka/releases/latest/download
-curl -fLO "$base/skrepka-linux-x86_64.deb" && sudo apt install ./skrepka-linux-x86_64.deb
-curl -fLO "$base/skrepka-linux-x86_64.rpm" && sudo dnf install ./skrepka-linux-x86_64.rpm
+curl -fLO https://github.com/psoldunov/skrepka/releases/latest/download/skrepka-linux-x86_64.deb
+sudo apt install ./skrepka-linux-x86_64.deb
+```
+
+On Fedora:
+
+```sh
+curl -fLO https://github.com/psoldunov/skrepka/releases/latest/download/skrepka-linux-x86_64.rpm
+sudo dnf install ./skrepka-linux-x86_64.rpm
 ```
 
 Log out and back in once, or start "Skrepka" from the launcher. On GNOME, after
