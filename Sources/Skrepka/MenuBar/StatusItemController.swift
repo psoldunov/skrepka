@@ -79,6 +79,13 @@ final class StatusItemController {
             systemSymbolName: "exclamationmark.triangle.fill",
             accessibilityDescription: nil
         )
+        // macOS 27 hides menu item images by default for apps linked on the
+        // macOS 26 SDK and later. The triangle is the row's warning, not
+        // decoration on an action, so it opts back in. macOS 26 already shows
+        // it, and the property does not exist there.
+        if #available(macOS 27, *) {
+            item.preferredImageVisibility = .visible
+        }
         item.isHidden = true
         return item
     }
