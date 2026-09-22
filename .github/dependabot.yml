@@ -1,0 +1,27 @@
+# Dependabot version and security updates for the Swift packages in
+# Package.swift. Dependabot only reads this file from the default branch.
+#
+# Dependabot finds dependencies with `swift package show-dependencies`, so it
+# sees only the `#if os(...)` branch that matches the machine it runs on:
+# KeyboardShortcuts (macOS) or dbus (Linux), not both. Bump whichever one it
+# never opens a pull request for by hand.
+
+version: 2
+updates:
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # swift-nio-ssl needs a matching swift-nio, and swift-certificates a
+      # matching swift-crypto and swift-asn1, so these land in one pull request
+      # rather than several that each fail to resolve. Majors stay separate.
+      apple:
+        patterns:
+          - "github.com/apple/*"
+        update-types:
+          - "minor"
+          - "patch"
