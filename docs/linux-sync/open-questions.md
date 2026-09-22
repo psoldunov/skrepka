@@ -465,7 +465,7 @@ is still missing and [OQ-3](#oq-3) is deferred with it.
 Nothing on the roadmap is blocked on them — OQ-1 and OQ-2 gate Phase 0, which is
 its own spike, and OQ-3 and OQ-4 only change how a settled decision is explained.
 **Amended 2026-09-22:** OQ-4 is answered, from KWin's source rather than the
-Deck; see below.
+Deck, so three remain open; see below.
 
 <a id="oq-1"></a>
 ### OQ-1 — Is a Universal Clipboard change detectable at all?
