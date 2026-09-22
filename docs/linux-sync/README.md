@@ -78,9 +78,9 @@ sets live clipboard per device; what has not is thumbnails of copied image
 files, retention and exclusions in Settings, and any of it running on a real
 Steam Deck. One new question came out of it —
 [OQ-16](open-questions.md#oq-16), how the picker pastes into the app underneath
-— and it was decided 2026-09-18, as
-[D-11](open-questions.md#d-11): Return puts the clip on the clipboard and
-closes the picker, and the user pastes with Ctrl+V.
+— and automatic paste shipped 2026-09-21 as revised
+[D-11](open-questions.md#d-11): XTest on X11, a virtual keyboard on wlroots and
+the RemoteDesktop portal elsewhere on Wayland.
 
 [Phase 4](phase-4-core-on-linux.md) is done. Its storage week landed and
 `scripts/doctor-linux.sh` exists; the tooling questions its step 8 left open
@@ -212,10 +212,11 @@ in [`open-questions.md`](open-questions.md):
 | D-8 | One machine, expendable history — migration is not a constraint | [Phase 2](phase-2-plumbing.md) |
 | D-9 | The Mac app stays native; the Linux port never degrades it | [Phase 2](phase-2-plumbing.md), [Phase 4](phase-4-core-on-linux.md) |
 | D-10 | A Steam Deck OLED is the test rig, Desktop Mode only; a user-scope `install.sh` is how builds reach it | [Phase 5](phase-5-linux-clipboard.md), [Phase 6](phase-6-linux-daemon.md), [Phase 7](phase-7-linux-gui.md), [Phase 8](phase-8-gnome-packaging.md) |
-| D-11 | The picker does not synthesise a paste on Wayland; Return puts the clip on the clipboard and the user presses Ctrl+V | [Phase 7](phase-7-linux-gui.md) |
+| D-11 | Automatic paste is on by default: XTest on X11, virtual-keyboard-v1 on wlroots and RemoteDesktop elsewhere on Wayland; failure remains copy-only | [Phase 7](phase-7-linux-gui.md) |
 
-Ten of the fourteen research questions were answered on 2026-09-05, and OQ-16
-was decided on 2026-09-18, as D-11.
+Ten of the fourteen research questions were answered on 2026-09-05. OQ-16 was
+decided on 2026-09-18 and the decision was revised when automatic paste shipped
+on 2026-09-21.
 
 ## Gates
 

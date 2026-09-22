@@ -18,6 +18,15 @@ extension SettingsPatch {
         if let maximumAgeDays, let reason = Self.refusal(maximumAgeDays, limit: Self.maximumAgeDaysLimit) {
             return "the age limit \(reason)"
         }
+        if let maximumFileSyncBytes {
+            let ceiling = SettingsDocument.FileSync.ceiling
+            if maximumFileSyncBytes < 0 {
+                return "the file size limit cannot be negative — use 0 to stop syncing file contents"
+            }
+            if maximumFileSyncBytes > ceiling {
+                return "the file size limit can be at most \(ceiling / (1024 * 1024)) MB"
+            }
+        }
         return nil
     }
 

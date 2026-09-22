@@ -66,17 +66,22 @@ Run inside a graphical session, it also starts the app in the tray.
 The desktop app is one program with three parts:
 
 - **The picker.** The global shortcut Meta+Shift+V opens it over whatever you
-  are working in. Type to search, arrows to move, Return to copy the entry to
-  the clipboard and close, then paste with Ctrl+V. Skrepka does not paste for
-  you. Alt+1 to Alt+9 choose a row, Alt+P pins, and Alt+Backspace deletes. The
-  desktop asks you to confirm the shortcut the first time; where it has no
-  global-shortcuts portal, bind `skrepka-gui --picker` as a custom shortcut in
-  its keyboard settings.
+  are working in. Type to search, arrows to move, Return to paste the entry
+  into the window you were using, as on the Mac: Skrepka puts it on the
+  clipboard, closes, and presses Ctrl+V for you — through XTest on X11, a
+  virtual keyboard on sway and Hyprland, and the Remote Desktop portal on KDE
+  and GNOME, which asks once for permission. Terminals want Ctrl+Shift+V, so
+  there, and wherever the desktop refuses, the entry stays copied for you to
+  paste. Settings → General turns automatic paste off. Alt+1 to Alt+9 choose a
+  row, Alt+P pins, and Alt+Backspace deletes. The desktop asks you to confirm
+  the shortcut the first time; where it has no global-shortcuts portal, bind
+  `skrepka-gui --picker` as a custom shortcut in its keyboard settings.
 - **The tray icon.** A left click opens the picker. The menu has Open Skrepka,
   Clear History… (pinned entries stay), Settings… and Quit Skrepka.
 - **Settings.** Open it from the tray, from the gear in the picker, or from the
-  launcher's Settings action. It is the Sync pane: pair, unpair and choose
-  which devices push live.
+  launcher's Settings action. General, History, Privacy, Sync and Status panes:
+  among them automatic paste, retention, pairing, which devices push live, and
+  how large a copy of files may be and still sync.
 
 The app starts `skrepkad` when it is not running, and so does any `skrepka`
 command, through a D-Bus activation file the installer adds. Quitting the app

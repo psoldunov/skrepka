@@ -24,10 +24,34 @@ struct CLIConfigTests {
             (["retention.days", "unlimited"], SettingsPatch(maximumAgeDays: 0)),
             (["sync.enabled", "on"], SettingsPatch(syncEnabled: true)),
             (["sync.enabled", "off"], SettingsPatch(syncEnabled: false)),
+            (["sync.file-limit", "10"], SettingsPatch(maximumFileSyncBytes: 10 * 1024 * 1024)),
+            (["sync.file-limit", "32MB"], SettingsPatch(maximumFileSyncBytes: 32 * 1024 * 1024)),
+            (["sync.file-limit", "off"], SettingsPatch(maximumFileSyncBytes: 0)),
+            (["sync.file-limit", "0"], SettingsPatch(maximumFileSyncBytes: 0)),
+            (["paste.automatic", "on"], SettingsPatch(pasteAutomatically: true)),
+            (["paste.automatic", "off"], SettingsPatch(pasteAutomatically: false)),
         ]
     )
     func setBuildsAPatch(_ arguments: [String], _ expected: SettingsPatch) throws {
         #expect(try CLIOptions.parse(["config", "set"] + arguments).command == .configure(expected))
+    }
+
+    @Test(
+        "a file limit past the ceiling, below zero or not a number is refused before it is sent",
+        arguments: ["33", "-1", "ten", "9999999999999999999"]
+    )
+    func fileLimitRefusals(_ value: String) {
+        #expect(throws: CLIError.self) {
+            try CLIOptions.parse(["config", "set", "sync.file-limit", value])
+        }
+    }
+
+    @Test("the file limit and paste lines read as a person would say them")
+    func fileLimitAndPasteWording() {
+        #expect(SettingsReport.fileLimit(0).hasPrefix("off"))
+        #expect(SettingsReport.megabytes(5 * 1024 * 1024) == "5 MB")
+        #expect(SettingsReport.megabytes(1024 * 1024 * 25 / 2) == "12.5 MB")
+        #expect(SettingsReport.paste(.init(isAutomatic: false)).hasPrefix("off"))
     }
 
     @Test("an unknown key is a usage error that lists the keys")
@@ -102,6 +126,10 @@ struct CLIConfigTests {
 
                 SYNC
                   sync.enabled     off — skrepkad was started with --no-sync
+                  sync.file-limit  32 MB — larger copies of files reach other devices as their names
+
+                PASTE
+                  paste.automatic  on — choosing an entry in the picker pastes it into the window underneath
 
                 HISTORY
                   entries          12

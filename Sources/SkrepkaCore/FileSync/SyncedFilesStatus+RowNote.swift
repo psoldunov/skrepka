@@ -13,6 +13,7 @@ extension SyncedFilesStatus {
         case .synced: nil
         case .pending: "contents not synced yet"
         case .notSynced: "contents not synced"
+        case .overLimit: "contents over the sync size limit"
         }
     }
 }

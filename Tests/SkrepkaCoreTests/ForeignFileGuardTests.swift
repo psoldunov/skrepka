@@ -111,6 +111,46 @@ struct ForeignFileGuardTests {
             SyncedFilesStatus.of(kind: .file, isForeign: false, offeredTypes: path, heldTypes: path) == nil)
         #expect(SyncedFilesStatus.of(kind: .text, isForeign: true, offeredTypes: [], heldTypes: []) == nil)
     }
+
+    @Test("A bundle over this device's own limit is over the limit, not pending")
+    func statusOverLimit() {
+        let bundle: Set<String> = [PasteboardType.fileURL, FileBundle.storageType]
+        let path: Set<String> = [PasteboardType.fileURL]
+        let status = { (bytes: Int?, limit: Int) in
+            SyncedFilesStatus.of(
+                kind: .file,
+                isForeign: true,
+                offeredTypes: bundle,
+                heldTypes: path,
+                offeredBundleBytes: bytes,
+                fileLimit: limit
+            )
+        }
+        #expect(status(2_000, 1_000) == .overLimit)
+        #expect(status(2_000, 0) == .overLimit)
+        #expect(status(1_000, 1_000) == .pending)
+        // An index that records no size is taken at its word.
+        #expect(status(nil, 0) == .pending)
+        // Held bytes are held, whatever the limit says now.
+        let held = SyncedFilesStatus.of(
+            kind: .file,
+            isForeign: true,
+            offeredTypes: bundle,
+            heldTypes: bundle,
+            offeredBundleBytes: 2_000,
+            fileLimit: 0
+        )
+        #expect(held == .synced)
+    }
+
+    @Test("Only a row still waiting on bytes or on the limit can change by itself")
+    func canChange() {
+        #expect(SyncedFilesStatus.pending.canChange)
+        #expect(SyncedFilesStatus.overLimit.canChange)
+        #expect(!SyncedFilesStatus.synced.canChange)
+        #expect(!SyncedFilesStatus.notSynced.canChange)
+        #expect(SyncedFilesStatus.overLimit.rowNote == "contents over the sync size limit")
+    }
 }
 
 @Suite("The bundle stays off the clipboard")

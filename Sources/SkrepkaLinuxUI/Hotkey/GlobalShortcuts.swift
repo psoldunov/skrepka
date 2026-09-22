@@ -34,6 +34,7 @@ public final class GlobalShortcuts {
 
     let applicationID: String
     var connection: DBusConnection?
+    var desktopConnection: DBusConnection? { portalOwner == nil ? nil : connection }
     private var portalWatch: DBusNameWatch?
     var portalOwner: String?
     var session: String?

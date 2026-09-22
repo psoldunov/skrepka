@@ -63,11 +63,13 @@ public struct CLIOptions: Sendable, Hashable {
           skrepka doctor [--json]               what is working on this machine
           skrepka sync                          exchange indexes with every peer now
           skrepka unpair <fingerprint>          forget a paired device
-          skrepka config [--json]               retention, sync and what history holds
+          skrepka config [--json]               retention, sync, paste and what history holds
           skrepka config set <key> <value>      change one setting:
                                                   retention.items  N | unlimited
                                                   retention.days   N | unlimited
                                                   sync.enabled     on | off
+                                                  sync.file-limit  N (MB, up to 32) | off
+                                                  paste.automatic  on | off
           skrepka help                          this text
 
         NOTES

@@ -15,6 +15,10 @@ public enum SettingsReport {
             "",
             "SYNC",
             "  sync.enabled     \(sync(document.sync))",
+            "  sync.file-limit  \(fileLimit(document.fileSync.maximumBytes))",
+            "",
+            "PASTE",
+            "  paste.automatic  \(paste(document.paste))",
             "",
             "HISTORY",
             "  entries          \(history.entries)",
@@ -47,5 +51,24 @@ public enum SettingsReport {
     static func sync(_ sync: SettingsDocument.Sync) -> String {
         if sync.isLockedOff { return "off — skrepkad was started with --no-sync" }
         return sync.isEnabled ? "on" : "off"
+    }
+
+    static func fileLimit(_ bytes: Int) -> String {
+        guard bytes > 0 else { return "off — copied files reach other devices as their names" }
+        return "\(megabytes(bytes)) — larger copies of files reach other devices as their names"
+    }
+
+    /// Whole megabytes as `32 MB`; a hand-edited value that is not one as
+    /// `12.5 MB`, so it is never rounded into a choice it is not.
+    static func megabytes(_ bytes: Int) -> String {
+        let megabyte = 1024 * 1024
+        if bytes.isMultiple(of: megabyte) { return "\(bytes / megabyte) MB" }
+        return String(format: "%.1f MB", Double(bytes) / Double(megabyte))
+    }
+
+    static func paste(_ paste: SettingsDocument.Paste) -> String {
+        paste.isAutomatic
+            ? "on — choosing an entry in the picker pastes it into the window underneath"
+            : "off — choosing an entry only copies it; paste with Ctrl+V"
     }
 }

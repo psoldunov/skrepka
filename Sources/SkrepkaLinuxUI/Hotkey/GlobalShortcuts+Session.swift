@@ -136,6 +136,7 @@ extension GlobalShortcuts {
             connection: connection,
             token: token,
             requestPath: path,
+            interface: "org.freedesktop.portal.GlobalShortcuts",
             method: method,
             parameters: .tuple(values),
             completion: completion,

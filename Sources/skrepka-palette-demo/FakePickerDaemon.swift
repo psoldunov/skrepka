@@ -55,4 +55,22 @@ final class FakePickerDaemon: PickerDaemon, Sendable {
     func historyChanges() async throws -> AsyncStream<Void> {
         AsyncStream { _ in }
     }
+
+    /// The file row caught part-way through arriving, so a screenshot shows the
+    /// progress bar that stands in for a row's subtitle while its bytes come
+    /// from a peer.
+    func transfers() async throws -> TransfersDocument {
+        guard let file = rows.first(where: { $0.kind == "file" }) else {
+            return TransfersDocument(transfers: [])
+        }
+        return TransfersDocument(transfers: [
+            .init(contentHash: file.contentHash, receivedBytes: 1_000_000, totalBytes: 2_400_000)
+        ])
+    }
+
+    /// Never yields and never ends, for ``historyChanges()``'s reason: the
+    /// demo's transfer stands still.
+    func transferChanges() async throws -> AsyncStream<TransfersDocument> {
+        AsyncStream { _ in }
+    }
 }

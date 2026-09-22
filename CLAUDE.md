@@ -27,6 +27,9 @@ scripts/screenshot-settings.sh  # the Settings window and the picker under headl
 scripts/kde-image.sh         # a headless Plasma 6.4.3 image built from SteamOS 3.8's packages
 scripts/kde.sh <command>     # run, screenshot, type or click inside that Plasma session
 scripts/kde-smoke.sh         # tray, shortcut, picker and click-away checks against a tarball
+scripts/gnome-image.sh       # an Ubuntu 26.04 / GNOME 50 headless test image
+scripts/gnome.sh <command>   # run, screenshot, type, click or eval inside GNOME
+scripts/gnome-smoke.sh       # install, capture, tray, shortcut, picker and paste checks
 ```
 
 The KDE image is the Steam Deck's Desktop Mode without a Deck: the same KWin,
@@ -35,6 +38,13 @@ plasmashell, kglobalacceld and portals, down to the package release. Run
 after `scripts/build-deck.sh` before asking anyone to try a build on real
 hardware. It renders without a GPU, so blur and other OpenGL-only effects are
 missing from its screenshots.
+
+The GNOME image is Ubuntu 26.04 LTS's GNOME 50 session: Mutter runs headless,
+Ubuntu's AppIndicator extension hosts the tray, and GNOME's portal backends
+handle global shortcuts and remote desktop. It uses Mesa llvmpipe under
+OrbStack's amd64 Rosetta translation, so GPU-only Shell effects are not
+representative, but application surfaces, focus, shortcuts and portal consent
+are exercised through the real compositor.
 
 `install.sh`, at the repository root, is the release installer — what a user
 runs, with `curl … | bash`, to download the x86_64 tarball from a GitHub

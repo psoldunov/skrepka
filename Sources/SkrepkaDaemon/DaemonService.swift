@@ -35,6 +35,7 @@ public actor DaemonService {
     private var server: DBusObjectServer?
     private var historyTask: Task<Void, Never>?
     private var pairingTask: Task<Void, Never>?
+    private var transfersTask: Task<Void, Never>?
 
     /// The daemon, for the method table in `DaemonService+Methods.swift`.
     ///
@@ -99,15 +100,17 @@ public actor DaemonService {
         historyTask = nil
         pairingTask?.cancel()
         pairingTask = nil
+        transfersTask?.cancel()
+        transfersTask = nil
         await server?.unexport(path: SkrepkaInterface.objectPath)
         server = nil
     }
 
     /// Turns the daemon's change streams into bus signals.
     ///
-    /// Two pumps rather than one, because the two signals mean different things
-    /// to a subscriber and a client may want only the first — a GNOME menu
-    /// redraws on history and does not care about pairing.
+    /// One pump per signal rather than one for all, because the signals mean
+    /// different things to a subscriber and a client may want only one — a
+    /// GNOME menu redraws on history and does not care about pairing.
     private func startSignalPumps(on connection: DBusClient.Connection) {
         historyTask = Task { [weak self] in
             guard let self else { return }
@@ -124,6 +127,19 @@ public actor DaemonService {
                     body: [.string(json)],
                     on: connection
                 )
+            }
+        }
+        transfersTask = Task { [weak self] in
+            guard let self else { return }
+            for await transfers in await self.daemon.transferUpdates() {
+                // A snapshot that will not encode is skipped rather than
+                // reported: the next one replaces it, and `Transfers` answers
+                // the same state to whoever asks.
+                guard let json = try? SkrepkaDocumentCoding.encode(Daemon.document(transfers)) else {
+                    continue
+                }
+                await self.emit(
+                    SkrepkaInterface.Signal.transfersChanged, body: [.string(json)], on: connection)
             }
         }
     }

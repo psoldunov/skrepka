@@ -200,7 +200,8 @@ extension Daemon {
             }
             return
         }
-        let item = await FileBundleReader.attachingBundle(to: accepted)
+        let item = await FileBundleReader.attachingBundle(
+            to: accepted, limit: settings.fileSync.maximumBytes)
         guard await store.capture(item) else {
             livePushGate.noteUnrecordedCopy(item.contentHash)
             return

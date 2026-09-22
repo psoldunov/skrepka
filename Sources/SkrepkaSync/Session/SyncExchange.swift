@@ -106,6 +106,10 @@ public struct SyncExchange: Sendable {
     /// Bytes that show the item to be a Universal Clipboard relay are not
     /// stored: the row the merge just learned is discarded and tombstoned
     /// instead — see ``UniversalClipboardRelay``.
+    ///
+    /// A bundle over this device's file-size limit is never fetched — see
+    /// ``FileSyncLimit``. The row still arrives, and pastes as the files'
+    /// names, which is what the limit promises.
     private func fetchPayloads(
         offered: [SyncClipMeta],
         holding localItems: [SyncClipMeta],
@@ -113,6 +117,7 @@ public struct SyncExchange: Sendable {
     ) async throws {
         let servable = Self.servableRepresentations(localItems)
         let held = Self.contentHeld(afterApplying: plan, to: Set(servable.keys))
+        let fileLimit = await runtime.fileSync.maximumBytes
         var budget = self.budget
 
         // Newest first: what the user is about to reach for is what they copied
@@ -124,19 +129,38 @@ public struct SyncExchange: Sendable {
             guard held.contains(meta.contentHash) else { continue }
             let missing = meta.representations.filter {
                 !(servable[meta.contentHash] ?? []).contains($0.key)
+                    && FileSyncLimit.admits($0, under: fileLimit)
             }
             guard !missing.isEmpty else { continue }
-            let fetched = try await fetch(missing, of: meta, budget: &budget)
-            guard !fetched.isEmpty else { continue }
-            // The bytes are the first point at which a relay can be told from
-            // a file: an index entry names its files by display name alone.
-            if UniversalClipboardRelay.isRelay(meta, payloads: fetched) {
-                try await runtime.store.discardRelay(meta, by: runtime.deviceID, at: Date())
-                continue
+            // Ended however the fetch ends, and only once the bytes are stored,
+            // so a row's bar gives way to the finished row rather than to
+            // "not synced yet" for the moment in between.
+            do {
+                try await fetchAndStore(missing, of: meta, fileLimit: fileLimit, budget: &budget)
+            } catch {
+                await runtime.transfers.end(meta.contentHash)
+                throw error
             }
-            try await runtime.store.capture(meta, payloads: fetched)
-            await onFetched(meta, fetched)
+            await runtime.transfers.end(meta.contentHash)
         }
+    }
+
+    private func fetchAndStore(
+        _ missing: [RepresentationDescriptor],
+        of meta: SyncClipMeta,
+        fileLimit: Int,
+        budget: inout Int
+    ) async throws {
+        let fetched = try await fetch(missing, of: meta, fileLimit: fileLimit, budget: &budget)
+        guard !fetched.isEmpty else { return }
+        // The bytes are the first point at which a relay can be told from a
+        // file: an index entry names its files by display name alone.
+        if UniversalClipboardRelay.isRelay(meta, payloads: fetched) {
+            try await runtime.store.discardRelay(meta, by: runtime.deviceID, at: Date())
+            return
+        }
+        try await runtime.store.capture(meta, payloads: fetched)
+        await onFetched(meta, fetched)
     }
 
     private func fetchOrder(_ offered: [SyncClipMeta]) -> [SyncClipMeta] {
@@ -155,27 +179,53 @@ public struct SyncExchange: Sendable {
     /// cannot spend more than the budget either. What does not fit is left for
     /// a later round, which re-offers it — two 20 MB pictures are one round's
     /// work each, not 40 MB of one.
+    ///
+    /// Reports to ``SyncRuntime/transfers`` as it goes: the offered sizes of
+    /// what fits are the total, and every chunk moves the count on. The caller
+    /// ends the transfer, once the bytes are stored.
     private func fetch(
         _ missing: [RepresentationDescriptor],
         of meta: SyncClipMeta,
+        fileLimit: Int,
         budget: inout Int
     ) async throws -> [RepresentationKey: Data] {
+        let transfers = runtime.transfers
+        let contentHash = meta.contentHash
+        await transfers.begin(contentHash, totalBytes: Self.plannedBytes(missing, budget: budget))
         var fetched: [RepresentationKey: Data] = [:]
+        var received = 0
         for descriptor in missing {
-            guard descriptor.byteCount <= budget else { continue }
+            guard descriptor.byteCount >= 0, descriptor.byteCount <= budget else { continue }
+            let before = received
             let bytes = try await initiator.fetchPayload(
-                contentHash: meta.contentHash,
+                contentHash: contentHash,
                 key: descriptor.key,
-                atMost: budget
-            )
+                atMost: FileSyncLimit.fetchCap(for: descriptor.key, budget: budget, limit: fileLimit)
+            ) { count in
+                await transfers.advance(contentHash, to: before + count)
+            }
             // An empty final chunk at offset zero is how a peer says it cannot
             // serve those bytes after all — evicted since it offered them, or
             // never held them. An ordinary answer, not a fault.
             guard !bytes.isEmpty else { continue }
             fetched[descriptor.key] = bytes
             budget -= bytes.count
+            received += bytes.count
+            await transfers.advance(contentHash, to: received)
         }
         return fetched
+    }
+
+    /// The offered bytes of every descriptor ``fetch(_:of:budget:)`` will ask
+    /// for, taking them in its order and spending `budget` as it would.
+    static func plannedBytes(_ missing: [RepresentationDescriptor], budget: Int) -> Int {
+        var remaining = budget
+        var planned = 0
+        for descriptor in missing where descriptor.byteCount >= 0 && descriptor.byteCount <= remaining {
+            remaining -= descriptor.byteCount
+            planned += descriptor.byteCount
+        }
+        return planned
     }
 
     /// What each locally held item can already serve, so nothing is fetched

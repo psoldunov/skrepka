@@ -1,4 +1,6 @@
 import Foundation
+import SkrepkaIPC
+import SkrepkaLinuxPlatform
 
 /// The General pane, as the widgets draw it: the shortcut, pasting, and
 /// launch at login.
@@ -15,8 +17,16 @@ public struct GeneralPaneState: Sendable, Hashable {
     public let launchAtLogin: Bool
     /// What launch at login does — or, when the last change failed, why.
     public let launchSubtitle: String
+    public let pasteAutomatically: Bool
+    public let isPasteEditable: Bool
+    public let pasteSubtitle: String
 
-    public init(shortcut: GlobalShortcutsState, autostart: AutostartStatus) {
+    public init(
+        shortcut: GlobalShortcutsState,
+        autostart: AutostartStatus,
+        preferences: PreferencesModel = PreferencesModel(),
+        pasteMechanism: PasteMechanism = .copyOnly
+    ) {
         switch shortcut {
         case .bound(let trigger):
             shortcutKeys = Self.keys(trigger)
@@ -37,6 +47,13 @@ public struct GeneralPaneState: Sendable, Hashable {
         }
         launchAtLogin = autostart.isEnabled
         launchSubtitle = autostart.error ?? "Skrepka starts in the tray, with no window."
+        pasteAutomatically =
+            preferences.inFlight.reversed()
+            .compactMap(\.pasteAutomatically).first
+            ?? preferences.document?.paste.isAutomatic
+            ?? true
+        isPasteEditable = preferences.isEditable && (preferences.document?.version ?? 0) >= 5
+        pasteSubtitle = "\(pasteMechanism.settingsDetail) Terminals may need Ctrl+Shift+V instead."
     }
 
     /// Where the shortcut is changed. The Global Shortcuts portal on Plasma
@@ -47,11 +64,9 @@ public struct GeneralPaneState: Sendable, Hashable {
         Plasma, System Settings → Shortcuts — where Skrepka is listed by name.
         """
 
-    public static let pastingTitle = "Choose an entry, then press Ctrl+V"
-    public static let pastingSubtitle = "Skrepka copies what you choose; you paste it."
     public static let pastingFooter = """
-        Linux gives an app no safe way to type into another one, so Skrepka never pastes \
-        for you. The entry is on the clipboard the moment you choose it.
+        Skrepka always puts the entry on the clipboard first. If automatic paste fails, \
+        press Ctrl+V yourself; terminal emulators commonly use Ctrl+Shift+V.
         """
 
     /// "Meta+Shift+V" as ["Meta", "Shift", "V"] — see ``ShortcutKeyName``. A

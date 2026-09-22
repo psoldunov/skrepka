@@ -78,6 +78,10 @@ public struct ClipDocument: Codable, Sendable, Hashable {
         /// No files came — a folder, a copy over the size limit, or a sender
         /// too old to attach them. The entry pastes as the files' names.
         public static let notSynced = "notSynced"
+        /// The sender attached the files and they are over this device's own
+        /// file-size limit, so they are not fetched; the entry pastes as the
+        /// files' names. Since interface version 5.
+        public static let overLimit = "overLimit"
     }
 
     public init(

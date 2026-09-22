@@ -57,6 +57,8 @@ public final class PaletteWindow {
 
     let window: UnsafeMutablePointer<GtkWindow>
     let windowWidget: UnsafeMutablePointer<GtkWidget>
+    private let keyController: OpaquePointer
+    private let modifierWait: ModifierReleaseWait
     /// The full-output overlay the panel is laid out in, on a layer-shell
     /// session; nil for a plain window.
     var overlay: UnsafeMutablePointer<GtkWidget>?
@@ -82,6 +84,17 @@ public final class PaletteWindow {
         self.panel = panel
         self.window = window
         self.windowWidget = windowWidget
+        self.keyController = keys
+        self.modifierWait = ModifierReleaseWait(
+            modifiers: Self.modifiers,
+            schedulePoll: { action in
+                let timer = LoopTimer(milliseconds: 15, action)
+                return { timer.cancel() }
+            },
+            scheduleDeadline: { action in
+                let timer = LoopTimer(milliseconds: 1_000, action)
+                return { timer.cancel() }
+            })
 
         gtk_window_set_decorated(window, 0)
         gtk_widget_add_css_class(windowWidget, "skrepka-picker")
@@ -101,6 +114,7 @@ public final class PaletteWindow {
     // MARK: - Presenting
 
     public func present() {
+        modifierWait.cancel()
         hasBeenActive = false
         gtk_window_present(window)
         panel.list.scrollToTop()
@@ -110,6 +124,7 @@ public final class PaletteWindow {
     /// Hides the window, keeping it ready to open again — never destroys it, for
     /// the reasons the picker is opened dozens of times a session.
     public func close() {
+        modifierWait.cancel()
         gtk_widget_set_visible(windowWidget, 0)
     }
 
@@ -185,14 +200,32 @@ public final class PaletteWindow {
 
     // MARK: - Keys
 
+    /// Runs `action` when Shift, Alt, Ctrl and Super are up, or after one
+    /// second. The deadline keeps a lost release notification from blocking paste.
+    func afterModifiersReleased(_ action: @escaping () -> Void) {
+        modifierWait.perform(action)
+    }
+
+    private static func modifiers() -> PickerModifiers {
+        guard let display = gdk_display_get_default(),
+            let seat = gdk_display_get_default_seat(display),
+            let keyboard = gdk_seat_get_keyboard(seat)
+        else { return .pasteBlocking }
+        return PickerModifiers(rawValue: gdk_device_get_modifier_state(keyboard).rawValue)
+    }
+
     private func connectKeys(_ keys: OpaquePointer) {
         gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE)
+        connectKeySignal(keys, "key-pressed", unsafeBitCast(Self.onKeyPressed, to: GCallback.self))
+        gtk_widget_add_controller(windowWidget, keyController)
+    }
+
+    private func connectKeySignal(_ keys: OpaquePointer, _ name: String, _ callback: GCallback) {
         skrepka_connect(
             UnsafeMutableRawPointer(keys),
-            "key-pressed",
-            unsafeBitCast(Self.onKeyPressed, to: GCallback.self),
+            name,
+            callback,
             Unmanaged.passRetained(self).toOpaque(),
             Self.onContextReleased)
-        gtk_widget_add_controller(windowWidget, keys)
     }
 }

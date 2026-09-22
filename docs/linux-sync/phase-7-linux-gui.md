@@ -188,8 +188,9 @@ Sources/SkrepkaLinuxUI/Tray/                           StatusNotifierItem and db
 Sources/SkrepkaLinuxUI/Appearance/                     dark/light and accent, from the appearance portal
 Sources/SkrepkaLinuxUI/DBus/                           the GDBus wrappers the three above share
 Sources/SkrepkaLinuxUI/Branding/MarkRenderer.swift     the paperclip mark, drawn with Cairo
-Sources/SkrepkaIPC/                                    interface version 3; DaemonProxy+Picker,
-                                                       PreviewDocument, CopyStyle, DaemonStarter
+Sources/SkrepkaIPC/                                    interface version 3 (5 today); DaemonProxy+Picker,
+                                                       PreviewDocument, CopyStyle, DaemonStarter;
+                                                       later DaemonProxy+Transfers, TransfersDocument
 Sources/SkrepkaDaemon/                                 DaemonService+Picker, Daemon+History,
                                                        BusReplyConnection
 Sources/SkrepkaCLI/                                    pin, unpin, delete, clear, copy --plain
@@ -206,8 +207,8 @@ docs/images/linux-picker-{dark,light,empty,sway}.png   the screenshots
 image thumbnail, a subtitle (type, size, lines, dimensions, relative time), the
 pin glyph, Alt+1 to Alt+9 badges, the accent colour on the selection, footer key
 hints, a gear button that opens Settings, and empty states with the paperclip
-mark. The key map is still one tested function, `PickerKeyMap`. Return copies to
-the clipboard and closes, per D-11; Alt+Return is the rich form and
+mark. The key map is still one tested function, `PickerKeyMap`. Return copies,
+closes and pastes automatically by default, per revised D-11; Alt+Return is the rich form and
 Alt+Shift+Return plain text; Alt+P pins; Alt+Backspace and Alt+Delete delete,
 which the macOS picker offers only from its context menu. Home, End, Page Up and
 Page Down move the selection. A right-click menu offers Pin or Unpin, Copy as
@@ -234,7 +235,10 @@ top when the daemon cannot be started.
 `StartUnit` `skrepkad.service` if the probe finds nothing, with the installed
 D-Bus activation file doing the same for every other client. The interface is
 version 3: `Search`, `CopyAs`, `SetPinned`, `Delete`, `Clear` and `Preview`, and
-the row fields on `ClipDocument`.
+the row fields on `ClipDocument`. It has since moved on: version 4 added
+`Settings` and `SetSettings`, and version 5 the file-size limit and automatic
+paste among those settings, `Transfers`, and the `TransfersChanged` signal the
+picker draws its progress bars from.
 
 One daemon bug came out of it and is fixed: `skrepkad` answered its first
 D-Bus call and then none. `DBusObjectServer` replies through
@@ -256,7 +260,8 @@ affected 0.2.0: the Settings window and a second `skrepka` command timed out.
   `skrepka list` all answered;
 - the pure halves — the options, the key map, the row text, the picker model,
   the tray menu and properties, the appearance parser — in
-  `Tests/SkrepkaLinuxUITests/`.
+  `Tests/SkrepkaLinuxUITests/`;
+- virtual-keyboard-v1 binding and Ctrl+V delivery against headless Sway.
 
 **What was not:**
 
@@ -268,6 +273,14 @@ affected 0.2.0: the Settings window and a second `skrepka` command timed out.
 - **X11 under a window manager.** The fallback has been seen to map under Xvfb
   and nothing more; the keep-above hint and the keyboard grab are untested where
   a window manager can refuse them.
+
+**Amended 2026-09-22:** the headless desktop images have since closed part of
+that list. `scripts/kde-smoke.sh` runs the real KWin, plasmashell tray and KDE
+GlobalShortcuts portal from SteamOS 3.8's Plasma 6.4.3, overlay and click-away
+included. `scripts/gnome-smoke.sh` drove GNOME Shell 50.1's real RemoteDesktop
+portal — consent dialog, restore token, and Ctrl+V landing in a GTK4 window on
+the first attempt. Still unverified: KWin's RemoteDesktop portal, which no KDE
+smoke check exercises yet, and all of it on real hardware.
 
 [`steam-deck-session.md`](steam-deck-session.md) sections 4 and 5 are those
 checks.
@@ -286,9 +299,9 @@ checks.
 Done and no longer listed: the picker's rows, the daemon connection, the global
 shortcut and the tray.
 
-And [OQ-16](open-questions.md#oq-16) is decided, as
-[D-11](open-questions.md#d-11): Return puts the clip on the clipboard and
-closes the picker, and the user pastes with Ctrl+V.
+And [OQ-16](open-questions.md#oq-16) is shipped as revised
+[D-11](open-questions.md#d-11): XTest handles X11, wlroots uses a virtual
+keyboard and other Wayland desktops use the RemoteDesktop portal.
 
 ### First Steam Deck session, 2026-09-21
 
@@ -454,15 +467,11 @@ and that is a convention question rather than a port.
 > `PickerKeyMap.command(keysym:modifiers:pageJump:)`, transcribed from the macOS
 > picker's `handle(keyPress:)` so the two cannot drift.
 
-> **Decided 2026-09-18, as [D-11](open-questions.md#d-11):** "Return pastes
-> into the app underneath" has no mechanism behind it on Wayland — the two
-> Wayland-native ways to synthesise a keystroke are each implemented by exactly
-> one of the two target compositors, in opposite directions (see
-> [OQ-16](open-questions.md#oq-16)). Return instead puts the clip on the
-> clipboard, in the chosen [`PasteStyle`](../../Sources/SkrepkaCore/Picker/PasteStyle.swift)
-> (Shift+Return for plain text), and closes the picker; the user pastes with
-> Ctrl+V. The wlroots virtual-keyboard/KDE RemoteDesktop path comes later,
-> behind a setting.
+> **Revised 2026-09-21, as [D-11](open-questions.md#d-11):** Return puts the
+> clip on the clipboard, closes the picker, then sends Ctrl+V. X11 uses XTest,
+> wlroots uses `zwp_virtual_keyboard_manager_v1`, and other Wayland sessions use
+> the RemoteDesktop portal. The setting defaults on; failure leaves the clip on
+> the clipboard for a manual Ctrl+V.
 
 Read `Sources/Skrepka/Picker/` first. The row layout, the empty state, the
 footer hints and the metrics are all decided there, and the Linux picker should
@@ -533,10 +542,10 @@ genuine win, because it proves the two platforms draw the same mark.
 On KDE — the Steam Deck in Desktop Mode — **and** on Sway:
 
 1. Hotkey opens the picker over the frontmost app, which keeps its caret.
-2. Typing filters. Arrows navigate. Return copies the selected clip to the
-   clipboard, in the chosen paste style, and closes the picker — the user
-   pastes with Ctrl+V. Decided as [D-11](open-questions.md#d-11): no mechanism
-   works on both KWin and Sway, so v1 does not synthesise the paste itself.
+2. Typing filters. Arrows navigate. Return copies the selected clip in the
+   chosen paste style, closes the picker and pastes automatically. Revised
+   [D-11](open-questions.md#d-11) chooses a live-probed backend per session and
+   keeps copy-only as the failure mode.
 3. The tray icon appears, its menu works, and the mark is the right mark.
 4. Settings changes take effect without a restart.
 5. Pairing can be completed entirely from the GUI.

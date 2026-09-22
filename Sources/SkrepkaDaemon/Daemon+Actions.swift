@@ -48,7 +48,8 @@ extension Daemon {
         }
         // The Shell extension's copy names files on this machine, so they are
         // read here exactly as a copy the daemon watched would be.
-        let item = await FileBundleReader.attachingBundle(to: accepted)
+        let item = await FileBundleReader.attachingBundle(
+            to: accepted, limit: settings.fileSync.maximumBytes)
         guard await store.capture(item) else {
             return .succeeded("already held", subject: item.contentHash)
         }

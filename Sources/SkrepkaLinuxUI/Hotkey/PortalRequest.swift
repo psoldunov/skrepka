@@ -11,6 +11,7 @@ final class PortalRequest {
         connection: DBusConnection,
         token: String,
         requestPath: String,
+        interface: String,
         method: String,
         parameters: DBusValue,
         completion: @escaping Completion,
@@ -31,7 +32,7 @@ final class PortalRequest {
         connection.call(
             destination: "org.freedesktop.portal.Desktop",
             path: "/org/freedesktop/portal/desktop",
-            interface: "org.freedesktop.portal.GlobalShortcuts",
+            interface: interface,
             method: method,
             parameters: parameters
         ) { [weak self] result in

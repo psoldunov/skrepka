@@ -43,6 +43,10 @@ public actor SyncInitiator {
     /// handshake it advertises nothing — see ``CapabilityFilter``.
     private var peerFilter = CapabilityFilter.none
 
+    /// This device's own file-size limit, read at each push — see
+    /// ``FileSyncLimit``.
+    private let fileSync: FileSyncPolicy
+
     /// Fails unless the connection reached the device the caller meant to dial.
     ///
     /// ``PinPolicy/pinned(_:)`` carries the *whole* paired set, and the
@@ -64,6 +68,7 @@ public actor SyncInitiator {
         session: PairingSession,
         trust: any TrustStore,
         expecting expectedPeerDeviceID: SyncDeviceID?,
+        fileSync: FileSyncPolicy = FileSyncPolicy(),
         now: @escaping @Sendable () -> Date = Date.init
     ) throws {
         if let expectedPeerDeviceID, expectedPeerDeviceID != connection.peerDeviceID {
@@ -75,6 +80,7 @@ public actor SyncInitiator {
         self.connection = connection
         self.session = session
         self.trust = trust
+        self.fileSync = fileSync
         self.now = now
     }
 
@@ -187,12 +193,15 @@ public actor SyncInitiator {
     ///
     /// Filtered through what the peer advertised first, so a peer that keeps
     /// no file bundles is neither told about one nor sent its bytes — and the
-    /// inline limit is then measured over what actually travels.
+    /// inline limit is then measured over what actually travels. A bundle over
+    /// this device's own file-size limit is withheld the same way, so the peer
+    /// never shows a row waiting for bytes this device will not offer.
     public func push(_ meta: SyncClipMeta, payloads: [RepresentationKey: Data]) async throws {
+        let filter = peerFilter.limitingFiles(to: await fileSync.maximumBytes)
         try await connection.send(
             .livePush(
-                meta: peerFilter.meta(meta),
-                inline: LivePushPayload.inline(peerFilter.payloads(payloads))
+                meta: filter.meta(meta),
+                inline: LivePushPayload.inline(filter.payloads(payloads))
             )
         )
     }
@@ -238,10 +247,15 @@ public actor SyncInitiator {
     ///
     /// `atMost` caps what the peer may send, whatever it offered; the payload
     /// ceiling is the default and the hard upper bound.
+    ///
+    /// `onChunk` hears the running byte count after every chunk, for a progress
+    /// bar. It is awaited between requests, so it must be quick — ``SyncExchange``
+    /// hands it to ``TransferMonitor``, which only stores a number.
     public func fetchPayload(
         contentHash: String,
         key: RepresentationKey,
-        atMost limit: Int = SyncLimits.maximumPayloadBytes
+        atMost limit: Int = SyncLimits.maximumPayloadBytes,
+        onChunk: @Sendable (Int) async -> Void = { _ in }
     ) async throws -> Data {
         let limit = min(limit, SyncLimits.maximumPayloadBytes)
         var bytes = Data()
@@ -263,7 +277,13 @@ public actor SyncInitiator {
             guard bytes.count <= limit else {
                 throw SyncProtocolError.payloadTooLarge(bytes: bytes.count)
             }
-            if chunk.isFinal { return bytes }
+            // An empty final chunk after bytes have arrived is a payload that
+            // went away mid-fetch — evicted, or withheld under a limit lowered
+            // since the fetch began. What arrived is a fragment, and a fragment
+            // stored as the whole would never be fetched again; answering as a
+            // peer that cannot serve the bytes leaves them for a later round.
+            if chunk.isFinal { return chunk.bytes.isEmpty && chunk.offset > 0 ? Data() : bytes }
+            await onChunk(bytes.count)
         }
     }
 

@@ -1,6 +1,7 @@
 import CGtk4
 import Foundation
 import SkrepkaIPC
+import SkrepkaLinuxPlatform
 
 /// Joins the General, History, Privacy and Diagnostics panes and the Sync
 /// pane's sharing switch to the daemon, the autostart entry and the shortcut.
@@ -28,6 +29,8 @@ final class PreferencesController {
     private var model = PreferencesModel()
     private var shortcut: GlobalShortcutsState
     private var autostart: AutostartStatus
+    private let pasteMechanism: PasteMechanism
+    private let pasteAutomaticallyChanged: (Bool) -> Void
     private var watch: MainLoopWatch<PreferencesEvent>?
     private var ticker: LoopTimer?
     private var isClosed = false
@@ -41,6 +44,8 @@ final class PreferencesController {
         self.autostartEntry = services.autostart
         self.autostart = services.autostart.status
         self.shortcut = services.shortcut
+        self.pasteMechanism = services.pasteMechanism
+        self.pasteAutomaticallyChanged = services.pasteAutomaticallyChanged
         self.watch = try MainLoopWatch(inbox: inbox) { [weak self] event in
             self?.handle(event)
         }
@@ -56,12 +61,17 @@ final class PreferencesController {
 
     private func wire() {
         panes.general.onLaunchAtLogin = { [weak self] isOn in self?.setLaunchAtLogin(isOn) }
+        panes.general.onPasteAutomatically = { [weak self] isOn in
+            self?.setPasteAutomatically(isOn)
+        }
         panes.history.onKeepAtMost = { [weak self] items in self?.send(SettingsPatch(maximumItems: items)) }
         panes.history.onDiscardAfter = { [weak self] days in self?.send(SettingsPatch(maximumAgeDays: days)) }
         panes.history.onClear = { [weak self] in self?.confirmClear() }
         panes.history.onDismissBanner = { [weak self] in self?.dismissNotice() }
         panes.privacy.onDismissBanner = { [weak self] in self?.dismissNotice() }
         panes.sync.onSharing = { [weak self] isOn in self?.send(SettingsPatch(syncEnabled: isOn)) }
+        panes.sync.onFileLimit = { [weak self] bytes in self?.send(SettingsPatch(maximumFileSyncBytes: bytes))
+        }
         panes.diagnostics.onRefresh = { [weak self] in self?.diagnose() }
         panes.diagnostics.onCopy = { [weak self] text in
             guard let self else { return }
@@ -85,6 +95,12 @@ final class PreferencesController {
     func setShortcut(_ state: GlobalShortcutsState) {
         shortcut = state
         render()
+    }
+
+    private func setPasteAutomatically(_ isOn: Bool) {
+        guard model.document?.version ?? 0 >= 5 else { return }
+        pasteAutomaticallyChanged(isOn)
+        send(SettingsPatch(pasteAutomatically: isOn))
     }
 
     private func send(_ patch: SettingsPatch) {
@@ -139,10 +155,18 @@ final class PreferencesController {
 
     private func render() {
         guard !isClosed else { return }
-        panes.general.render(GeneralPaneState(shortcut: shortcut, autostart: autostart))
+        panes.general.render(
+            GeneralPaneState(
+                shortcut: shortcut,
+                autostart: autostart,
+                preferences: model,
+                pasteMechanism: pasteMechanism
+            )
+        )
         panes.history.render(HistoryPaneState(model))
         panes.privacy.render(PrivacyPaneState(model))
         panes.sync.renderSharing(SharingSwitchState(model))
+        panes.sync.renderFileLimit(FileLimitState(model))
         panes.diagnostics.render(DiagnosticsPaneState(model.diagnosis, timeZone: .current))
     }
 }

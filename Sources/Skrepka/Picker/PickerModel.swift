@@ -63,6 +63,7 @@ final class PickerModel {
     private let matcher = Matcher()
     private let thumbnails: ThumbnailCache
     private let filesNotes: SyncedFilesNoteCache
+    private let transfers: TransferProgress
 
     /// Sends a chosen entry back to the coordinator.
     var onChoose: ((ClipSummary, PasteStyle) -> Void)?
@@ -73,11 +74,19 @@ final class PickerModel {
     /// Height the panel needs for the current results.
     var desiredPanelHeight: CGFloat { PickerMetrics.panelHeight(for: results) }
 
-    init(store: HistoryStore, captureHealth: CaptureHealth) {
+    /// - Parameter fileLimit: this device's file-size limit, read each time a
+    ///   row's note is worked out — a synced file row over it says so.
+    init(
+        store: HistoryStore,
+        captureHealth: CaptureHealth,
+        transfers: TransferProgress,
+        fileLimit: @escaping () -> Int
+    ) {
         self.captureHealth = captureHealth
         self.store = store
+        self.transfers = transfers
         thumbnails = ThumbnailCache(store: store)
-        filesNotes = SyncedFilesNoteCache(store: store)
+        filesNotes = SyncedFilesNoteCache(store: store, fileLimit: fileLimit)
         refreshResults()
         observeStore()
     }
@@ -105,6 +114,13 @@ final class PickerModel {
     /// did not come, so pasting its names is never a surprise. Nil otherwise.
     func filesNote(for item: ClipSummary) -> String? {
         filesNotes.note(for: item)
+    }
+
+    /// How far a row's bytes have got on their way from a peer, from 0 to 1,
+    /// or nil when nothing is arriving for it. The row draws a progress bar in
+    /// place of its subtitle while this is non-nil.
+    func transferFraction(for item: ClipSummary) -> Double? {
+        transfers.fraction(for: item.id)
     }
 
     var selection: ClipSummary? {

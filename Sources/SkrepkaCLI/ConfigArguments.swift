@@ -13,11 +13,15 @@ enum ConfigArguments {
         case retentionItems = "retention.items"
         case retentionDays = "retention.days"
         case syncEnabled = "sync.enabled"
+        case syncFileLimit = "sync.file-limit"
+        case pasteAutomatic = "paste.automatic"
     }
 
     static let verb = "config"
     private static let setWord = "set"
     private static let unlimitedWord = "unlimited"
+    private static let offWord = "off"
+    private static let megabyte = 1024 * 1024
 
     /// `positionals` is everything after `config` that was not a flag.
     static func command(positionals: [String], isJSON: Bool) throws -> CLIOptions.Command {
@@ -53,6 +57,8 @@ enum ConfigArguments {
         case .retentionItems: patch = SettingsPatch(maximumItems: try limit(value, key: key))
         case .retentionDays: patch = SettingsPatch(maximumAgeDays: try limit(value, key: key))
         case .syncEnabled: patch = SettingsPatch(syncEnabled: try switchValue(value, key: key))
+        case .syncFileLimit: patch = SettingsPatch(maximumFileSyncBytes: try megabytes(value, key: key))
+        case .pasteAutomatic: patch = SettingsPatch(pasteAutomatically: try switchValue(value, key: key))
         }
         // The daemon checks again and is the authority; asking here first makes
         // a typo exit 2 with the reason, rather than a round trip and exit 1.
@@ -73,6 +79,23 @@ enum ConfigArguments {
                 reason: "it takes a whole number, or `\(unlimitedWord)`")
         }
         return number
+    }
+
+    /// A whole number of megabytes, or `off` for 0 — file contents never sync.
+    /// An `MB` suffix is accepted, since that is how `config` prints it.
+    private static func megabytes(_ value: String, key: Key) throws -> Int {
+        if value == offWord { return 0 }
+        let digits = value.hasSuffix("MB") ? String(value.dropLast(2)) : value
+        guard let number = Int(digits) else {
+            throw CLIError.invalidArgument(
+                value,
+                command: "\(verb) \(setWord) \(key.rawValue)",
+                reason: "it takes a whole number of megabytes, or `\(offWord)`")
+        }
+        let (bytes, overflow) = number.multipliedReportingOverflow(by: megabyte)
+        // An overflowing number is over the ceiling whichever way it wrapped;
+        // saying so beats a refusal quoting a wrapped negative.
+        return overflow ? Int.max : bytes
     }
 
     private static func switchValue(_ value: String, key: Key) throws -> Bool {

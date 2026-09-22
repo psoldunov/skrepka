@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SkrepkaSync
 
 /// User-visible settings, backed by `UserDefaults`.
 ///
@@ -23,6 +24,7 @@ public final class Preferences {
         pasteAutomatically = defaults.value(for: .pasteAutomatically)
         hasCompletedFirstRun = defaults.value(for: .hasCompletedFirstRun)
         syncEnabled = defaults.value(for: .syncEnabled)
+        maximumFileSyncBytes = FileSyncLimit.clamped(defaults.value(for: .maximumFileSyncBytes))
         hasRemovedUniversalClipboardRelays = defaults.value(for: .hasRemovedUniversalClipboardRelays)
     }
 
@@ -68,6 +70,22 @@ public final class Preferences {
     /// installed a clipboard manager.
     public var syncEnabled: Bool {
         didSet { defaults.set(syncEnabled, for: .syncEnabled) }
+    }
+
+    /// The largest copy of files whose contents sync, in bytes; 0 when file
+    /// contents never sync. See `SkrepkaSync.FileSyncLimit` for where it is
+    /// applied — at capture, when offering history, and when fetching it.
+    ///
+    /// Clamped on the way in, so a hand-edited defaults domain cannot hand
+    /// sync a negative limit or one past the protocol's ceiling.
+    public var maximumFileSyncBytes: Int {
+        didSet {
+            // Assigning inside `didSet` stores without calling it again, so
+            // the clamped value is written here rather than on a second pass.
+            let clamped = FileSyncLimit.clamped(maximumFileSyncBytes)
+            if clamped != maximumFileSyncBytes { maximumFileSyncBytes = clamped }
+            defaults.set(clamped, for: .maximumFileSyncBytes)
+        }
     }
 
     /// Set once history has been cleared of the Universal Clipboard relays
@@ -123,6 +141,9 @@ struct PreferenceKey<Value: Sendable>: Sendable {
     }
     static var syncEnabled: PreferenceKey<Bool> {
         .init(name: "syncEnabled", defaultValue: false)
+    }
+    static var maximumFileSyncBytes: PreferenceKey<Int> {
+        .init(name: "maximumFileSyncBytes", defaultValue: FileSyncLimit.defaultBytes)
     }
     static var hasRemovedUniversalClipboardRelays: PreferenceKey<Bool> {
         .init(name: "hasRemovedUniversalClipboardRelays", defaultValue: false)

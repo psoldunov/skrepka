@@ -221,13 +221,35 @@ final class SyncCoordinator {
     /// that nothing will ever stop again.
     var isTearingDown = false
 
-    init(preferences: Preferences, store: HistoryStore, livePushReceiver: LivePushReceiver) {
+    /// The file-size limit every runtime reads, kept in step with
+    /// ``Preferences/maximumFileSyncBytes`` by `setFileSyncLimit(_:)`.
+    let fileSync: FileSyncPolicy
+
+    /// Where fetches report their progress; `watchTransfers()` follows it.
+    let transfers = TransferMonitor()
+
+    /// What the picker's rows read to draw a progress bar. Handed in, because
+    /// the picker is built first and reads the same one.
+    let transferProgress: TransferProgress
+
+    var transferTask: Task<Void, Never>?
+    var fileLimitTail: Task<Void, Never>?
+
+    init(
+        preferences: Preferences,
+        store: HistoryStore,
+        livePushReceiver: LivePushReceiver,
+        transferProgress: TransferProgress
+    ) {
         self.preferences = preferences
         self.store = store
         self.livePushReceiver = livePushReceiver
+        self.transferProgress = transferProgress
         trust = KeychainTrustStore(peers: store)
         displayName = Self.deviceName()
         isEnabled = preferences.syncEnabled
+        fileSync = FileSyncPolicy(maximumBytes: preferences.maximumFileSyncBytes)
+        watchTransfers()
     }
 
 }

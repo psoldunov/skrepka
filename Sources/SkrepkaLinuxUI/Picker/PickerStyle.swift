@@ -106,6 +106,13 @@ enum PickerStyle {
         .skrepka-thumb { border-radius: 6px; border: 0.5px solid \(palette.hairline); }
         .skrepka-title { font-size: 13px; color: \(palette.primary); }
         .skrepka-subtitle { font-size: 11px; color: \(palette.secondary); }
+        .skrepka-transfer { min-height: 13px; }
+        .skrepka-transfer progressbar trough {
+          min-height: 4px; border-radius: 2px; background: \(palette.hairline);
+        }
+        .skrepka-transfer progressbar progress {
+          min-height: 4px; border-radius: 2px; background: \(accent);
+        }
         .skrepka-pin { color: \(palette.secondary); -gtk-icon-size: 12px; }
         .skrepka-badge {
           font-size: 10px; font-weight: 500; color: \(palette.tertiary);
@@ -115,6 +122,10 @@ enum PickerStyle {
         .skrepka-list > row:selected .skrepka-tile image,
         .skrepka-list > row:selected .skrepka-pin { color: #ffffff; }
         .skrepka-list > row:selected .skrepka-subtitle { color: rgba(255,255,255,0.75); }
+        .skrepka-list > row:selected .skrepka-transfer progressbar trough {
+          background: rgba(255,255,255,0.25);
+        }
+        .skrepka-list > row:selected .skrepka-transfer progressbar progress { background: #ffffff; }
         .skrepka-list > row:selected .skrepka-badge {
           color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.16);
         }

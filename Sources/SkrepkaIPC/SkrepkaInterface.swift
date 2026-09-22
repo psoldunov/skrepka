@@ -73,7 +73,11 @@ public enum SkrepkaInterface {
     ///   draws its subtitle from.
     /// - 4: ``Member/settings`` and ``Member/setSettings`` — retention and the
     ///   sync switch, settable from the Settings window and `skrepka config`.
-    public static let version: UInt32 = 4
+    /// - 5: the file-size limit and the automatic-paste switch in
+    ///   ``SettingsDocument`` and ``SettingsPatch``, and ``Member/transfers``
+    ///   with ``Signal/transfersChanged`` — the progress of an entry whose
+    ///   bytes are arriving from a peer.
+    public static let version: UInt32 = 5
 
     /// Every member this build exports, spelled once.
     public enum Member {
@@ -188,6 +192,12 @@ public enum SkrepkaInterface {
         /// JSON that is not a patch is an invalid-argument error. Since
         /// version 4.
         public static let setSettings = "SetSettings"
+
+        /// `() -> s`. ``TransfersDocument`` as JSON: every entry whose bytes
+        /// are arriving from a peer right now, for a picker that opens midway
+        /// through one. ``Signal/transfersChanged`` carries every change after
+        /// that. Since version 5.
+        public static let transfers = "Transfers"
     }
 
     /// Signals a client may subscribe to.
@@ -208,5 +218,11 @@ public enum SkrepkaInterface {
         /// waiting for a CLI nobody ran is a suspended task on a machine with
         /// nobody watching.
         public static let pairingRequested = "PairingRequested"
+
+        /// `(s json)`. The transfers in flight changed: one started, moved on,
+        /// or finished. Carries the whole ``TransfersDocument``, so a client
+        /// never has to add up deltas. Spaced out while bytes arrive — see
+        /// that document. Since version 5.
+        public static let transfersChanged = "TransfersChanged"
     }
 }

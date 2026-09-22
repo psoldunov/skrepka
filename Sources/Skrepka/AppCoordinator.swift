@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Observation
 import SkrepkaCore
+import SkrepkaSync
 import SwiftUI
 import os
 
@@ -78,7 +79,13 @@ final class AppCoordinator {
                 NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             }
         )
-        pickerModel = PickerModel(store: store, captureHealth: captureHealth)
+        let transferProgress = TransferProgress()
+        pickerModel = PickerModel(
+            store: store,
+            captureHealth: captureHealth,
+            transfers: transferProgress,
+            fileLimit: { [preferences] in preferences.maximumFileSyncBytes }
+        )
         let panelController = PickerPanelController(model: pickerModel)
         self.panelController = panelController
         sync = SyncCoordinator(
@@ -91,7 +98,8 @@ final class AppCoordinator {
                 // receiver's one rule about the picker is "not while it is
                 // open", and that needs a boolean rather than a panel.
                 isPickerVisible: { panelController.isVisible }
-            )
+            ),
+            transferProgress: transferProgress
         )
     }
 
@@ -160,7 +168,8 @@ final class AppCoordinator {
                 }
                 // Once per copy, read off the main actor, and the same result
                 // to the store and to peers: a file copy reaches them as files.
-                let item = await FileBundleReader.attachingBundle(to: copied)
+                let limit = self?.preferences.maximumFileSyncBytes ?? FileSyncLimit.defaultBytes
+                let item = await FileBundleReader.attachingBundle(to: copied, limit: limit)
                 // The same stream, not a second watcher. Offered once stored, so
                 // a peer never learns of a clipping this machine failed to keep.
                 guard await store.capture(item) else {

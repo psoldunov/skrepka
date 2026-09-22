@@ -16,6 +16,10 @@ import SkrepkaSync
 #if canImport(CoreFoundation)
     import CoreFoundation
 #endif
+// And a cold debug build can name CDispatch — see `OpenedFile.swift`.
+#if canImport(CDispatch)
+    import CDispatch
+#endif
 
 extension Daemon {
     /// What `skrepka doctor` prints, and what the Phase 7 status pane will

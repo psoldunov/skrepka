@@ -36,22 +36,33 @@
         }
 
         /// Whether a file row from another device carries its files, or nil for
-        /// any other row — see ``SyncedFilesStatus/of(kind:isForeign:offeredTypes:heldTypes:)``.
+        /// any other row — see
+        /// ``SyncedFilesStatus/of(kind:isForeign:offeredTypes:heldTypes:offeredBundleBytes:fileLimit:)``.
         ///
         /// The payload is read only when the peer offered a bundle, which is the
         /// one case where what is held decides the answer.
-        public func syncedFilesStatus(for id: UUID) -> SyncedFilesStatus? {
+        public func syncedFilesStatus(
+            for id: UUID,
+            fileLimit: Int = FileSyncLimit.ceiling
+        ) -> SyncedFilesStatus? {
             do {
                 guard let record = try record(withID: id) else { return nil }
                 let kind = ClipKind(rawValue: record.kindRaw) ?? .text
                 guard kind.isFileSystemEntry, isForeign(record) else { return nil }
-                let offered = Set(try RepresentationIndex.decode(record.representationIndex ?? Data()).keys)
+                let index = try RepresentationIndex.decode(record.representationIndex ?? Data())
+                let offered = Set(index.keys)
                 let held: Set<String> =
                     offered.contains(FileBundle.storageType)
                     ? Set(try ClipRecordMapping.decodePayload(record.payloadData).representations.keys)
                     : []
                 return SyncedFilesStatus.of(
-                    kind: kind, isForeign: true, offeredTypes: offered, heldTypes: held)
+                    kind: kind,
+                    isForeign: true,
+                    offeredTypes: offered,
+                    heldTypes: held,
+                    offeredBundleBytes: index[FileBundle.storageType],
+                    fileLimit: fileLimit
+                )
             } catch {
                 SkrepkaLog.store.error("Failed to read an entry's files: \(error.localizedDescription)")
                 return nil

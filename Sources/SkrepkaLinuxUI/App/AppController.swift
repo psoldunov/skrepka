@@ -22,7 +22,8 @@ final class AppController {
     let settings: SettingsHost
     let picker: PickerController?
     let tray: TrayIcon?
-    let shortcuts = GlobalShortcuts(applicationID: SkrepkaApplication.applicationID)
+    let shortcuts: GlobalShortcuts
+    let paste: PasteCoordinator
     let appearance = AppearanceMonitor()
     let inbox: MainLoopInbox<AppEvent>?
     private var watch: MainLoopWatch<AppEvent>?
@@ -43,8 +44,19 @@ final class AppController {
         let connect: @Sendable () async throws -> DaemonProxy = {
             try await SkrepkaBus.proxy(on: session)
         }
-        settings = SettingsHost(application: application) { try await connect() }
-        picker = Self.makePicker { try await connect() }
+        let shortcuts = GlobalShortcuts(applicationID: SkrepkaApplication.applicationID)
+        let paste = PasteCoordinator(portalConnection: { [weak shortcuts] in
+            shortcuts?.desktopConnection
+        })
+        self.shortcuts = shortcuts
+        self.paste = paste
+        settings = SettingsHost(
+            application: application,
+            pasteMechanism: paste.mechanism,
+            pasteAutomaticallyChanged: { [weak paste] in paste?.setAutomaticPasteEnabled($0) },
+            connect: { try await connect() }
+        )
+        picker = Self.makePicker(paster: paste) { try await connect() }
         tray = Self.makeTray()
         // An inbox is an eventfd; failing to make one means the process is out
         // of descriptors. The app still opens its windows without it — it only
@@ -159,10 +171,13 @@ final class AppController {
     }
 
     private static func makePicker(
+        paster: any PasteHandling,
         connect: @escaping @Sendable () async throws -> any PickerDaemon
     ) -> PickerController? {
         do {
-            return try PickerController(connect: connect)
+            let picker = try PickerController(connect: connect)
+            picker.paster = paster
+            return picker
         } catch {
             let message = "skrepka-gui: the picker could not be built: \(error)\n"
             FileHandle.standardError.write(Data(message.utf8))

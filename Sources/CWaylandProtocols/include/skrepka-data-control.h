@@ -19,7 +19,11 @@
 #define SKREPKA_DATA_CONTROL_H
 
 #include "ext-data-control-v1-client-protocol.h"
+#include "virtual-keyboard-unstable-v1-client-protocol.h"
 #include "wlr-data-control-unstable-v1-client-protocol.h"
+#include <linux/memfd.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 static inline const struct wl_interface *skrepka_ext_data_control_manager_interface(void) {
 	return &ext_data_control_manager_v1_interface;
@@ -27,6 +31,28 @@ static inline const struct wl_interface *skrepka_ext_data_control_manager_interf
 
 static inline const struct wl_interface *skrepka_wlr_data_control_manager_interface(void) {
 	return &zwlr_data_control_manager_v1_interface;
+}
+
+static inline const struct wl_interface *skrepka_virtual_keyboard_manager_interface(void) {
+	return &zwp_virtual_keyboard_manager_v1_interface;
+}
+
+static inline int skrepka_keymap_memfd(const char *bytes, unsigned int size) {
+	int fd = (int)syscall(SYS_memfd_create, "skrepka-keymap", MFD_CLOEXEC);
+	if (fd < 0 || ftruncate(fd, size) < 0) {
+		if (fd >= 0) close(fd);
+		return -1;
+	}
+	unsigned int written = 0;
+	while (written < size) {
+		ssize_t count = write(fd, bytes + written, size - written);
+		if (count <= 0) {
+			close(fd);
+			return -1;
+		}
+		written += (unsigned int)count;
+	}
+	return fd;
 }
 
 // Core protocol, not generated here, and needed for the same reason: a data

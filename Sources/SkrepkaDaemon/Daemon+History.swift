@@ -17,7 +17,10 @@ extension Daemon {
         let byID = Dictionary(listing.map { ($0.summary.id, $0) }) { first, _ in first }
         let matched = Matcher().filter(listing.map(\.summary), query: query)
         let local = await localDeviceHex(ifAnyOf: listing)
-        let clips = matched.compactMap { byID[$0.id] }.map { Self.clipDocument($0, localDeviceHex: local) }
+        let fileLimit = settings.fileSync.maximumBytes
+        let clips = matched.compactMap { byID[$0.id] }.map {
+            Self.clipDocument($0, localDeviceHex: local, fileLimit: fileLimit)
+        }
         let limited = limit == 0 ? clips : Array(clips.prefix(Int(limit)))
         return HistoryDocument(clips: limited, total: clips.count)
     }

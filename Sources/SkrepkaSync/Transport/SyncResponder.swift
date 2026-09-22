@@ -38,11 +38,11 @@ public actor SyncResponder {
     /// attacker-driven buffer of exactly the kind ``Mailbox``'s ceiling exists
     /// to stop. Past the ceiling the set is replaced by the newest offer, which
     /// is the one a peer that is genuinely fetching is working from.
-    private static let offeredHashLimit = 4096
+    static let offeredHashLimit = 4096
 
-    // Internal rather than private: `SyncResponder+Pairing.swift` is the other
-    // half of this actor, and Swift scopes `private` to the file it is written
-    // in.
+    // Internal rather than private: `SyncResponder+Pairing.swift` and
+    // `SyncResponder+Offers.swift` are the rest of this actor, and Swift scopes
+    // `private` to the file it is written in.
     let connection: SyncConnection
     let session: PairingSession
     let trust: any TrustStore
@@ -50,6 +50,9 @@ public actor SyncResponder {
     let confirmPairing: PairingConfirmation
     private let onLivePush: LivePushSink
     private let onPushWithoutBytes: PushFetchRequest
+    /// This device's file-size limit, read at every offer — see
+    /// ``FileSyncLimit``.
+    let fileSync: FileSyncPolicy
     let now: @Sendable () -> Date
 
     var proposal: PairingProposal?
@@ -61,7 +64,7 @@ public actor SyncResponder {
     /// question a peer is entitled to ask, and answering `payload(for:key:)` for
     /// any hash turns the responder into an oracle a peer can walk hash by hash
     /// — nil and non-nil answer it just as well as the bytes would.
-    private var offeredHashes: Set<String> = []
+    var offeredHashes: Set<String> = []
 
     /// What this connection's peer said it takes, set by `hello`. See ``CapabilityFilter``.
     var peerFilter = CapabilityFilter.none
@@ -72,6 +75,8 @@ public actor SyncResponder {
     ///   no clipboard to put it on.
     /// - Parameter onPushWithoutBytes: told about a stored live push that came
     ///   without its bytes. Defaults to nothing: the next exchange fetches them.
+    /// - Parameter fileSync: this device's file-size limit. Defaults to the
+    ///   ceiling, which is what every build before the setting offered.
     public init(
         connection: SyncConnection,
         session: PairingSession,
@@ -80,6 +85,7 @@ public actor SyncResponder {
         confirmPairing: @escaping PairingConfirmation,
         onLivePush: @escaping LivePushSink = { _, _ in },
         onPushWithoutBytes: @escaping PushFetchRequest = { _, _ in },
+        fileSync: FileSyncPolicy = FileSyncPolicy(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.connection = connection
@@ -89,6 +95,7 @@ public actor SyncResponder {
         self.confirmPairing = confirmPairing
         self.onLivePush = onLivePush
         self.onPushWithoutBytes = onPushWithoutBytes
+        self.fileSync = fileSync
         self.now = now
     }
 
@@ -191,83 +198,17 @@ public actor SyncResponder {
             try await store.discardRelay(meta, by: session.localIdentity.deviceID, at: now())
             return []
         }
-        try await store.capture(meta, payloads: inline)
-        await onLivePush(meta, inline)
-        if inline.isEmpty, !meta.isConcealed, !meta.representations.isEmpty {
+        // A bundle small enough to ride inline is still a bundle: over this
+        // device's own file-size limit it is dropped here, as a fetch would not
+        // have asked for it. The metadata keeps naming it, which is what lets the
+        // row say it is over the limit.
+        let kept = FileSyncLimit.admitted(inline, under: await fileSync.maximumBytes)
+        try await store.capture(meta, payloads: kept)
+        await onLivePush(meta, kept)
+        if kept.isEmpty, !meta.isConcealed, !meta.representations.isEmpty {
             await onPushWithoutBytes(connection.peerDeviceID, meta)
         }
         return []
-    }
-
-    private func answerIndexRequest(since cursor: Date?) async throws -> [SyncMessage] {
-        // Filtered before it is recorded: what is withheld may not be asked for.
-        let items = peerFilter.items(try await store.syncIndex(since: cursor))
-        recordOffer(items)
-        return [
-            .indexOffer(
-                items: items,
-                tombstones: try await store.tombstones(since: cursor),
-                isFinal: true
-            )
-        ]
-    }
-
-    /// Remembers what this connection may go on to ask for the bytes of.
-    private func recordOffer(_ items: [SyncClipMeta]) {
-        let hashes = items.map(\.contentHash)
-        if offeredHashes.count + hashes.count > Self.offeredHashLimit {
-            offeredHashes = Set(hashes)
-        } else {
-            offeredHashes.formUnion(hashes)
-        }
-    }
-
-    /// One slice, so the asking side controls the pace and can resume.
-    ///
-    /// A hash this connection was never offered is refused rather than answered,
-    /// and the two outcomes are deliberately different. A representation this
-    /// store cannot serve answers with an empty final chunk at offset zero — the
-    /// peer asked whether these bytes are available here, and "no" is an
-    /// ordinary answer rather than a fault, which the asking side detects by
-    /// comparing what it got against the descriptor's byte count. Giving that
-    /// same answer for an *unoffered* hash would let a peer walk arbitrary
-    /// hashes and read this device's contents out of which ones come back
-    /// non-empty, so the connection goes instead.
-    private func answerPayloadRequest(
-        contentHash: String,
-        key: RepresentationKey,
-        offset: Int64
-    ) async throws -> SyncMessage {
-        guard offeredHashes.contains(contentHash) else {
-            await connection.close()
-            throw SyncTransportError.payloadNotOffered(contentHash: contentHash)
-        }
-        guard
-            let payload = try await store.payload(for: contentHash, key: key),
-            offset >= 0, offset < Int64(payload.count)
-        else {
-            return .payloadChunk(
-                PayloadChunk(
-                    contentHash: contentHash,
-                    key: key,
-                    offset: offset,
-                    bytes: Data(),
-                    isFinal: true
-                )
-            )
-        }
-
-        let start = payload.startIndex + Int(offset)
-        let end = min(start + SyncLimits.payloadChunkBytes, payload.endIndex)
-        return .payloadChunk(
-            PayloadChunk(
-                contentHash: contentHash,
-                key: key,
-                offset: offset,
-                bytes: Data(payload[start..<end]),
-                isFinal: end == payload.endIndex
-            )
-        )
     }
 
     /// Folds a peer's offer into the local store and answers nothing: a merge

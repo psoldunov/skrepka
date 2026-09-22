@@ -9,6 +9,10 @@ import Foundation
 #if canImport(CoreFoundation)
     import CoreFoundation
 #endif
+// And in a cold debug build — see `OpenedFile.swift`.
+#if canImport(CDispatch)
+    import CDispatch
+#endif
 
 /// A directory this user made and nobody can redirect: created `0700` if it
 /// is missing, and refused if what stands at the path is a symlink, anything

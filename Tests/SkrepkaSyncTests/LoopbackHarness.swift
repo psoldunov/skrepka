@@ -138,11 +138,13 @@ struct LoopbackHarness {
     ///   wants.
     ///   - onPushWithoutBytes: told about a push that arrived without its bytes.
     ///   - capabilities: what the server says it can take in its `hello`.
+    ///   - fileSync: the server's file-size limit; the ceiling by default.
     func responder(
         for connection: SyncConnection,
         onLivePush: @escaping LivePushSink = { _, _ in },
         onPushWithoutBytes: @escaping PushFetchRequest = { _, _ in },
-        capabilities: [String] = []
+        capabilities: [String] = [],
+        fileSync: FileSyncPolicy = FileSyncPolicy()
     ) -> SyncResponder {
         SyncResponder(
             connection: connection,
@@ -156,6 +158,7 @@ struct LoopbackHarness {
             confirmPairing: { _ in true },
             onLivePush: onLivePush,
             onPushWithoutBytes: onPushWithoutBytes,
+            fileSync: fileSync,
             now: { now }
         )
     }

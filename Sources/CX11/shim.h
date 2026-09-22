@@ -21,4 +21,54 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <X11/keysym.h>
 #include <X11/extensions/Xfixes.h>
+
+#if defined(linux)
+#include <dlfcn.h>
+
+typedef Bool (*SkrepkaXTestQueryExtension)(Display *, int *, int *, int *, int *);
+typedef int (*SkrepkaXTestFakeKeyEvent)(Display *, unsigned int, Bool, unsigned long);
+
+// Returns zero on success. libXtst is loaded at runtime so a desktop without it
+// can still launch Skrepka and use copy-only mode.
+static inline int skrepka_xtest_paste(const char *display_name) {
+	void *library = dlopen("libXtst.so.6", RTLD_LAZY | RTLD_LOCAL);
+	if (library == NULL) return 1;
+	SkrepkaXTestQueryExtension query = (SkrepkaXTestQueryExtension)dlsym(library, "XTestQueryExtension");
+	SkrepkaXTestFakeKeyEvent fake = (SkrepkaXTestFakeKeyEvent)dlsym(library, "XTestFakeKeyEvent");
+	if (query == NULL || fake == NULL) {
+		dlclose(library);
+		return 2;
+	}
+	Display *display = XOpenDisplay(display_name);
+	if (display == NULL) {
+		dlclose(library);
+		return 3;
+	}
+	int event_base = 0, error_base = 0, major = 0, minor = 0;
+	if (!query(display, &event_base, &error_base, &major, &minor)) {
+		XCloseDisplay(display);
+		dlclose(library);
+		return 4;
+	}
+	KeyCode control = XKeysymToKeycode(display, XK_Control_L);
+	KeyCode v = XKeysymToKeycode(display, XK_v);
+	if (control == 0 || v == 0) {
+		XCloseDisplay(display);
+		dlclose(library);
+		return 5;
+	}
+	// Every event is sent whatever happened to the one before it: a press that
+	// went through followed by a release that was never sent would leave Ctrl
+	// held down in the X server for everything the user types next.
+	int sent = fake(display, control, True, 0);
+	sent = fake(display, v, True, 0) && sent;
+	sent = fake(display, v, False, 0) && sent;
+	sent = fake(display, control, False, 0) && sent;
+	XFlush(display);
+	XCloseDisplay(display);
+	dlclose(library);
+	return sent ? 0 : 5;
+}
+#endif

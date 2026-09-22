@@ -10,6 +10,7 @@ import CGtk4
 final class PickerFooter {
     let root: UnsafeMutablePointer<GtkWidget>
     private let hints: UnsafeMutablePointer<GtkWidget>
+    private let action: UnsafeMutablePointer<GtkWidget>
     private let error: UnsafeMutablePointer<GtkWidget>
 
     /// Fires when the gear is clicked; the controller closes the picker and
@@ -20,20 +21,25 @@ final class PickerFooter {
 
     private static let hintData: [Hint] = [
         (["↑", "↓"], "Navigate"),
-        (["↩"], "Copy"),
+        (["↩"], actionLabel(isAutomatic: true)),
         (["Alt", "⇧", "↩"], "Plain text"),
         (["Alt", "P"], "Pin"),
         (["Esc"], "Close"),
     ]
 
+    static func actionLabel(isAutomatic: Bool) -> String {
+        isAutomatic ? "Paste" : "Copy"
+    }
+
     init?() {
         guard let root = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 0, "skrepka-footer"),
-            let hints = Self.buildHints(),
+            let builtHints = Self.buildHints(),
             let error = Build.leadingLabel("", "skrepka-error"),
             let gear = gtk_button_new(),
             let gearIcon = Build.icon(["preferences-system-symbolic", "emblem-system-symbolic"])
         else { return nil }
 
+        let hints = builtHints.row
         gtk_widget_set_hexpand(hints, 1)
         gtk_widget_set_halign(hints, GTK_ALIGN_START)
         gtk_widget_set_hexpand(error, 1)
@@ -51,11 +57,17 @@ final class PickerFooter {
 
         self.root = root
         self.hints = hints
+        self.action = builtHints.action
         self.error = error
         showError(nil)
         GtkSignal.connect(UnsafeMutableRawPointer(gear), "clicked") { [weak self] in
             self?.onOpenSettings?()
         }
+    }
+
+    func showPasteAutomatically(_ isAutomatic: Bool) {
+        guard let action = skrepka_as_label(action) else { return }
+        gtk_label_set_text(action, Self.actionLabel(isAutomatic: isAutomatic))
     }
 
     /// Shows `message` in place of the hints, or the hints again when nil.
@@ -67,16 +79,21 @@ final class PickerFooter {
         gtk_widget_set_visible(hints, message == nil ? 1 : 0)
     }
 
-    private static func buildHints() -> UnsafeMutablePointer<GtkWidget>? {
+    private static func buildHints() -> (row: GtkWidgetPointer, action: GtkWidgetPointer)? {
         guard let row = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 14) else { return nil }
-        for hint in hintData {
-            guard let group = buildHint(hint) else { return nil }
-            Build.append(row, group)
+        var action: GtkWidgetPointer?
+        for (index, hint) in hintData.enumerated() {
+            guard let built = buildHint(hint) else { return nil }
+            if index == 1 { action = built.label }
+            Build.append(row, built.group)
         }
-        return row
+        guard let action else { return nil }
+        return (row, action)
     }
 
-    private static func buildHint(_ hint: Hint) -> UnsafeMutablePointer<GtkWidget>? {
+    private static func buildHint(
+        _ hint: Hint
+    ) -> (group: GtkWidgetPointer, label: GtkWidgetPointer)? {
         guard let group = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 5),
             let caps = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 3),
             let label = Build.label(hint.label, "skrepka-hint")
@@ -90,6 +107,6 @@ final class PickerFooter {
         gtk_widget_set_valign(label, GTK_ALIGN_CENTER)
         Build.append(group, caps)
         Build.append(group, label)
-        return group
+        return (group, label)
     }
 }

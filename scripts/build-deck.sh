@@ -8,8 +8,8 @@
 #                                                 autostart entries, the icons,
 #                                                 the D-Bus activation file,
 #                                                 install.sh
-#   build/deck/skrepka-linux-x86_64-tools.tar.gz  the probes and the palette
-#                                                 demo, for hardware bring-up
+#   build/deck/skrepka-linux-x86_64-tools.tar.gz  the probes, picker demo, and
+#                                                 Settings demo for bring-up
 #   a .sha256 beside each                         what install.sh checks
 #
 # The Steam Deck is the machine they are built for. Runs in the amd64 variant of
@@ -127,6 +127,7 @@ TOOL_PRODUCTS=(
 	skrepka-clip-probe
 	skrepka-sync-probe
 	skrepka-palette-demo
+	skrepka-settings-demo
 )
 PRODUCTS=("${INSTALLED_PRODUCTS[@]}" "${TOOL_PRODUCTS[@]}")
 
@@ -344,6 +345,7 @@ docs/linux-sync/steam-deck-session.md does.
   bin/skrepka-sync-probe      a headless sync peer (Phase 6 smoke test)
   bin/skrepka-palette-demo    a hand-driven picker smoke test
                               (Phase 7 step 1 validation)
+  bin/skrepka-settings-demo   Settings against a fake daemon for screenshots
   lib/libgtk4-layer-shell.so* what the palette demo needs, if the host lacks it
 
 Untar it next to skrepka-linux-x86_64.tar.gz: both unpack into

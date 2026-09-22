@@ -21,6 +21,12 @@ final class PickerListView {
     /// key without threading the hash back out of the widget.
     private var rowHashes: [String] = []
     private var pinnedByHash: [String: Bool] = [:]
+    /// Each row's subtitle line, by hash, for a transfer to switch in place.
+    /// Replaced whole by ``setRows(_:text:texture:)``, which is what removes
+    /// the rows these point into.
+    private var transferSlots: [String: PickerTransferSlot] = [:]
+    /// The fractions last shown, so rows built afterwards start in step.
+    private var transferFractions: [String: Double] = [:]
 
     /// A single click chooses the row.
     var onActivate: ((String) -> Void)?
@@ -78,15 +84,30 @@ final class PickerListView {
         texture: (ClipDocument) -> OpaquePointer?
     ) {
         gtk_list_box_remove_all(list)
+        transferSlots = [:]
         rowHashes = documents.map(\.contentHash)
         pinnedByHash = Dictionary(documents.map { ($0.contentHash, $0.isPinned) }) { first, _ in first }
         for (index, document) in documents.enumerated() {
             guard
-                let row = PickerRowView.make(
+                let built = PickerRowView.make(
                     document, text: text(document), index: index, texture: texture(document))
             else { continue }
-            attach(row, hash: document.contentHash)
-            gtk_list_box_append(list, row)
+            let hash = document.contentHash
+            attach(built.row, hash: hash)
+            gtk_list_box_append(list, built.row)
+            transferSlots[hash] = built.transfer
+            built.transfer.show(transferFractions[hash])
+        }
+    }
+
+    /// Switches each row between its subtitle and a progress bar, in place.
+    /// `fractions` names every entry whose bytes are arriving; a row not in it
+    /// shows its subtitle.
+    func showTransfers(_ fractions: [String: Double]) {
+        let changed = Set(transferFractions.keys).union(fractions.keys)
+        transferFractions = fractions
+        for hash in changed {
+            transferSlots[hash]?.show(fractions[hash])
         }
     }
 

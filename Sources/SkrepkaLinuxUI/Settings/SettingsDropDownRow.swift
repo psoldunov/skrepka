@@ -1,7 +1,7 @@
 import CGtk4
 
 /// A ``SettingsRow`` whose control is a drop-down — the History pane's "Keep
-/// at most" and "Discard after".
+/// at most" and "Discard after", and the Sync pane's "Sync files up to".
 ///
 /// Reports only the user's choices, for ``SettingsSwitchRow``'s reason:
 /// ``render(_:isEnabled:)`` moving the selection causes the same
@@ -15,9 +15,9 @@ final class SettingsDropDownRow {
     private var labels: [String] = []
     private var isRendering = false
 
-    init(title: String, icon: [String] = []) throws {
+    init(title: String, subtitle: String? = nil, icon: [String] = []) throws {
         guard let control = skrepka_drop_down_new() else { throw SettingsError.widgetCreationFailed }
-        let row = try SettingsRow(title: title, subtitle: nil, icon: icon)
+        let row = try SettingsRow(title: title, subtitle: subtitle, icon: icon)
         gtk_widget_set_valign(control, GTK_ALIGN_CENTER)
         skrepka_set_accessible_label(control, title)
         row.addTrailing(control)

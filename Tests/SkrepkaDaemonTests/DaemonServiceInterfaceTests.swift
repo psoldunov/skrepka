@@ -41,6 +41,7 @@ struct DaemonServiceInterfaceTests {
         SkrepkaInterface.Member.preview: (["s", "u"], ["s"]),
         SkrepkaInterface.Member.settings: ([], ["s"]),
         SkrepkaInterface.Member.setSettings: (["s"], ["s"]),
+        SkrepkaInterface.Member.transfers: ([], ["s"]),
     ]
 
     static func service() throws -> DaemonService {
@@ -86,17 +87,19 @@ struct DaemonServiceInterfaceTests {
         }
     }
 
-    @Test("both signals are exported, with the payloads they document")
-    func exportsBothSignals() async throws {
+    @Test("every signal is exported, with the payload it documents")
+    func exportsEverySignal() async throws {
         let signals = try await Self.interface().signals
         let byName = Dictionary(signals.map { ($0.name, $0) }) { first, _ in first }
         #expect(
             Set(byName.keys) == [
                 SkrepkaInterface.Signal.historyChanged,
                 SkrepkaInterface.Signal.pairingRequested,
+                SkrepkaInterface.Signal.transfersChanged,
             ])
         #expect(byName[SkrepkaInterface.Signal.historyChanged]?.args.isEmpty == true)
         #expect(byName[SkrepkaInterface.Signal.pairingRequested]?.args.map(\.type) == ["s"])
+        #expect(byName[SkrepkaInterface.Signal.transfersChanged]?.args.map(\.type) == ["s"])
     }
 }
 

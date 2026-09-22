@@ -237,9 +237,8 @@ extension SyncCoordinator {
     /// The responder is built with the live-push sink even on a
     /// ``PinPolicy/pairing`` connection, which cannot carry one —
     /// ``SyncConnection/receive()`` refuses every message outside the pairing
-    /// pair — so the branch is unreachable there rather than guarded here. One
-    /// construction site, and the rule stays in the transport where it is
-    /// enforced.
+    /// pair — so the branch is unreachable there rather than guarded here: one
+    /// construction site, and the rule stays in the transport enforcing it.
     func serve(_ connection: SyncConnection) {
         guard let runtime else { return }
         let responder = SyncResponder(
@@ -253,7 +252,8 @@ extension SyncCoordinator {
             onLivePush: { [weak self] meta, inline in
                 await self?.receiveLivePush(meta, inline: inline)
             },
-            onPushWithoutBytes: { [weak self] in await self?.fetchPushedBytes(of: $1, from: $0) }
+            onPushWithoutBytes: { [weak self] in await self?.fetchPushedBytes(of: $1, from: $0) },
+            fileSync: runtime.fileSync
         )
         Task { [weak self] in
             do {
