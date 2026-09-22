@@ -11,6 +11,9 @@
 #                                                 install.sh
 #   build/deck/skrepka-linux-x86_64-tools.tar.gz  the probes, picker demo, and
 #                                                 Settings demo for bring-up
+#   build/deck/skrepka-linux-x86_64.deb           the same payload as a .deb and
+#   build/deck/skrepka-linux-x86_64.rpm           an .rpm, laid out under /usr by
+#                                                 scripts/build-packages.sh
 #   a .sha256 beside each                         what install.sh checks
 #
 # The Steam Deck is the machine they are built for. Runs in the amd64 variant of
@@ -399,11 +402,21 @@ write_checksum "${TOOLS_TARBALL}"
 green "✓ ${TARBALL} ($(du -h "${TARBALL}" | awk '{print $1}'))"
 green "✓ ${TOOLS_TARBALL} ($(du -h "${TOOLS_TARBALL}" | awk '{print $1}'))"
 green "✓ a .sha256 beside each"
+
+# --------------------------------------------------------------------------
+# The .deb and the .rpm, from the stage just packed
+# --------------------------------------------------------------------------
+
+# Its own script, because it builds nothing: it lays the stage out under /usr
+# and hands that tree to nFPM, and re-running it alone is how a change to
+# packaging/nfpm.yaml is tried without another twenty-minute build.
+scripts/build-packages.sh
+
 echo
 echo "Runtime report:  ${REPORT}"
 echo "Stage:           ${STAGE}"
 echo
-echo "Attach all four files to the GitHub release. Then, on the Deck, in Konsole:"
+echo "Attach all eight files to the GitHub release. Then, on the Deck, in Konsole:"
 echo "  curl -fsSL https://raw.githubusercontent.com/psoldunov/skrepka/master/install.sh | bash"
 echo
 echo "Before the release is published, copy the tarball over any way you like and"
