@@ -26,8 +26,9 @@ built phase by phase to the plan in
 anything in that area, so the research is not repeated — and start with
 [`open-questions.md`](docs/linux-sync/open-questions.md), which holds the
 decisions already taken and the questions still open. One of those decisions
-is why Linux ships as a user-scope installer rather than a `.deb`, an `.rpm` or
-a Flatpak; [`packaging/README.md`](packaging/README.md) has the short version.
+is why SteamOS gets a user-scope installer, other distributions a `.deb` or an
+`.rpm` as well, and nothing gets a Flatpak;
+[`packaging/README.md`](packaging/README.md) has the short version.
 
 ## What you need
 

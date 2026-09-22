@@ -1,0 +1,146 @@
+# The .deb and .rpm a GitHub release carries, built by nFPM from the tree
+# scripts/build-packages.sh stages under build/deck/pkgroot. Every `src:` below
+# is relative to the repository root, which is where that script runs nFPM.
+#
+# The payload is the release tarball's, file for file: the same binaries, the
+# same private libgtk4-layer-shell, the same unit, entries, icons and GNOME
+# extension. What differs is where they go — /usr and /etc/xdg rather than
+# ~/.local — and the absolute paths build-packages.sh writes into the unit and
+# the D-Bus activation file to match. packaging/README.md explains the layout.
+#
+# No maintainer scripts. Nothing runs as root at install time and nothing is
+# enabled for every user: at login the autostart entry starts skrepka-gui, whose
+# first call on the session bus starts skrepkad through the D-Bus activation
+# file and the user unit, exactly as it does after install.sh.
+
+name: skrepka
+arch: amd64
+platform: linux
+version: ${SKREPKA_VERSION}
+release: 1
+section: utils
+priority: optional
+maintainer: Philipp Soldunov <69530789+psoldunov@users.noreply.github.com>
+vendor: Philipp Soldunov
+homepage: https://github.com/psoldunov/skrepka
+license: MIT
+description: |
+  Clipboard history for the Linux desktop, synced with your other machines.
+  Skrepka records what you copy, opens a searchable picker on a global
+  shortcut, and syncs history with paired Linux machines and Macs over the
+  local network. It installs skrepkad (the daemon, as a systemd user service),
+  skrepka (the CLI) and skrepka-gui (tray icon, picker and Settings), plus a
+  GNOME Shell extension that captures copies on GNOME Wayland.
+
+# Soname dependencies on the rpm side, so the same package resolves on Fedora
+# and on openSUSE, whose library package names differ. libc.so.6(GLIBC_2.38)
+# is the glibc floor scripts/build-deck.sh's runtime report records.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.38)
+      - libgcc-s1
+      - libstdc++6
+      - libgtk-4-1 (>= 4.12)
+      - libglib2.0-0t64 | libglib2.0-0
+      - libcairo2
+      - libpango-1.0-0
+      - libgdk-pixbuf-2.0-0
+      - libwayland-client0
+      - libx11-6
+      - libxfixes3
+      - libsqlite3-0
+    recommends:
+      # Loaded with dlopen for automatic paste on X11 only.
+      - libxtst6
+    suggests:
+      - avahi-daemon
+  rpm:
+    depends:
+      - libc.so.6(GLIBC_2.38)(64bit)
+      - libgtk-4.so.1()(64bit)
+      - libglib-2.0.so.0()(64bit)
+      - libgobject-2.0.so.0()(64bit)
+      - libgio-2.0.so.0()(64bit)
+      - libcairo.so.2()(64bit)
+      - libpango-1.0.so.0()(64bit)
+      - libgdk_pixbuf-2.0.so.0()(64bit)
+      - libwayland-client.so.0()(64bit)
+      - libX11.so.6()(64bit)
+      - libXfixes.so.3()(64bit)
+      - libsqlite3.so.0()(64bit)
+      - libstdc++.so.6()(64bit)
+    recommends:
+      - libXtst.so.6()(64bit)
+
+contents:
+  - src: build/deck/pkgroot/usr/bin/skrepkad
+    dst: /usr/bin/skrepkad
+    file_info:
+      mode: 0755
+  - src: build/deck/pkgroot/usr/bin/skrepka
+    dst: /usr/bin/skrepka
+    file_info:
+      mode: 0755
+  - src: build/deck/pkgroot/usr/bin/skrepka-gui
+    dst: /usr/bin/skrepka-gui
+    file_info:
+      mode: 0755
+
+  # skrepka-gui's rpath already names $ORIGIN/../lib/skrepka, which from
+  # /usr/bin is this directory — the same private copy install.sh puts in
+  # ~/.local/lib/skrepka, because Ubuntu 24.04 and SteamOS do not ship it.
+  - dst: /usr/lib/skrepka
+    type: dir
+    file_info:
+      mode: 0755
+  - src: build/deck/pkgroot/usr/lib/skrepka/libgtk4-layer-shell.so.0
+    dst: /usr/lib/skrepka/libgtk4-layer-shell.so.0
+    file_info:
+      mode: 0644
+
+  - src: build/deck/pkgroot/usr/lib/systemd/user/skrepkad.service
+    dst: /usr/lib/systemd/user/skrepkad.service
+    file_info:
+      mode: 0644
+  - src: build/deck/pkgroot/usr/share/dbus-1/services/dev.soldunov.Skrepka.service
+    dst: /usr/share/dbus-1/services/dev.soldunov.Skrepka.service
+    file_info:
+      mode: 0644
+  - src: build/deck/pkgroot/usr/share/applications/dev.soldunov.Skrepka.App.desktop
+    dst: /usr/share/applications/dev.soldunov.Skrepka.App.desktop
+    file_info:
+      mode: 0644
+  # A conffile: a user who edits it keeps the edit across upgrades. Turning
+  # launch at login off in Settings does not edit it — it hides it from
+  # ~/.config/autostart, which the Autostart spec lets override this one.
+  - src: build/deck/pkgroot/etc/xdg/autostart/dev.soldunov.Skrepka.App.desktop
+    dst: /etc/xdg/autostart/dev.soldunov.Skrepka.App.desktop
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
+  # No trailing slash on dst: the icon theme's directories are the theme's,
+  # not this package's, so the files go in without claiming them.
+  - src: build/deck/pkgroot/usr/share/icons/hicolor/
+    dst: /usr/share/icons/hicolor
+
+  # The extension's own directory is this package's, so it is claimed and
+  # removed with the package.
+  - dst: /usr/share/gnome-shell/extensions/skrepka@dev.soldunov
+    type: dir
+    file_info:
+      mode: 0755
+  - src: build/deck/pkgroot/usr/share/gnome-shell/extensions/skrepka@dev.soldunov/
+    dst: /usr/share/gnome-shell/extensions/skrepka@dev.soldunov
+
+  - src: build/deck/pkgroot/usr/share/doc/skrepka/copyright
+    dst: /usr/share/doc/skrepka/copyright
+    packager: deb
+    file_info:
+      mode: 0644
+  - src: build/deck/pkgroot/usr/share/licenses/skrepka/LICENSE
+    dst: /usr/share/licenses/skrepka/LICENSE
+    packager: rpm
+    file_info:
+      mode: 0644

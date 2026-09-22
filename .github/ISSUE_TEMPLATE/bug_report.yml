@@ -32,7 +32,7 @@ body:
       description: |
         On a Mac: menu bar icon → **About Skrepka**. On Linux: `skrepkad --version`. If you
         built it yourself, give the commit instead.
-      placeholder: "0.2.1"
+      placeholder: "0.3.0"
     validations:
       required: true
 

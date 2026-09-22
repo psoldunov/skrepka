@@ -8,13 +8,14 @@ what is in scope rather than leaving you to guess.
 
 | Version | Supported |
 | --- | --- |
-| Latest release ([0.2.1](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
+| Latest release ([0.3.0](https://github.com/psoldunov/skrepka/releases/latest)) | ✅ |
 | Any earlier release | ❌ |
 | `master` | Best effort — fixes land here first |
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` (or a fresh
-download) is the whole patch path on a Mac, and re-running `install.sh` is the
-whole patch path on Linux. There are no backports to older tags.
+download) is the whole patch path on a Mac. On Linux it is re-running
+`install.sh`, installing the latest `.deb` or `.rpm`, or updating the Nix flake.
+There are no backports to older tags.
 
 ## Reporting a vulnerability
 
@@ -113,6 +114,9 @@ exactly as on a Mac.
 - `install.sh` writing anywhere but the paths it documents, touching
   `~/.local/share/skrepka`, installing a tarball whose checksum does not match,
   or `--uninstall` removing anything but the files it names
+- The `.deb` or `.rpm` installing anything outside the paths
+  `packaging/README.md` lists, or running anything as root: they carry no
+  maintainer scripts, and one appearing is a bug
 - Path traversal, injection or memory-safety issues in decoding pasteboard
   payloads — a malicious app controls exactly what it puts on the pasteboard
 
@@ -154,8 +158,9 @@ will be closed with a pointer to this section:
   replace the release's files could replace both. The tarball is not signed.
   The one-line install also runs `install.sh` straight from `master`; the
   README's install-from-the-release route runs the copy inside the tarball
-  instead. Build from source with `scripts/setup-linux.sh` if that is your
-  threat model.
+  instead. The `.deb` and `.rpm` are unsigned too, and the Nix flake trusts the
+  tarball by the hash committed in `nix/package.nix`. Build from source with
+  `scripts/setup-linux.sh` if that is your threat model.
 - **A password manager that sets no `org.nspasteboard.*` marker gets recorded.**
   Skrepka honours the markers that exist and offers a per-app exclusion list as
   the backstop. Tell the password manager's authors too.
