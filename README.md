@@ -137,6 +137,23 @@ Ubuntu enables it by default, many other distributions do not install it — so
 without it there is no tray icon, and the shortcut and the launcher entry are
 the way in.
 
+#### On Fedora, from COPR
+
+On Fedora 43 or newer, the same build installs from a COPR repository, and
+`dnf upgrade` keeps it current:
+
+```sh
+sudo dnf copr enable psoldunov/skrepka
+sudo dnf install skrepka
+```
+
+Log out and back in once, or start "Skrepka" from the launcher. On GNOME, after
+that login, run `gnome-extensions enable skrepka@dev.soldunov`: the package
+installs the Shell extension for every user but cannot enable it for you. It
+replaces the GitHub release's `.rpm`, below, if that is installed; if you used
+`install.sh` before, run it with `--uninstall` first — its copy in `~/.local`
+would shadow the package's.
+
 #### As a `.deb` or an `.rpm`
 
 On Ubuntu 24.04 or newer, Debian 13 or newer, or Fedora 39 or newer, the same
@@ -158,9 +175,10 @@ sudo dnf install ./skrepka-linux-x86_64.rpm
 
 Log out and back in once, or start "Skrepka" from the launcher. On GNOME, after
 that login, run `gnome-extensions enable skrepka@dev.soldunov`: a package
-installs the Shell extension for every user but cannot enable it for you. There
-is no package repository yet, so updating is installing the next release's
-package over this one. If you used `install.sh` before, run it with
+installs the Shell extension for every user but cannot enable it for you. These
+come from no package repository — on Fedora 43 and newer, COPR above is one —
+so updating is installing the next release's package over this one. If you
+used `install.sh` before, run it with
 `--uninstall` first — its copy in `~/.local` would shadow the package's. The
 packages leave SteamOS and other read-only systems to `install.sh`;
 [packaging/README.md](packaging/README.md) says why, and why there is no
