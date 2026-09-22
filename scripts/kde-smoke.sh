@@ -3,8 +3,8 @@
 # Runs the Steam Deck checks against a Linux release tarball, inside a fresh
 # headless KDE Plasma 6.4.3 session built from SteamOS 3.8's packages.
 #
-#   scripts/kde-smoke.sh                                   the v0.2.1 release
-#   SKREPKA_KDE_RELEASE=v0.2.2 scripts/kde-smoke.sh        another release
+#   scripts/kde-smoke.sh                                   the v0.3.0 release
+#   SKREPKA_KDE_RELEASE=v0.3.1 scripts/kde-smoke.sh        another release
 #   SKREPKA_TARBALL=build/deck/skrepka-linux-x86_64.tar.gz scripts/kde-smoke.sh
 #
 # SKREPKA_TARBALL installs a tarball already on disk — what scripts/build-deck.sh
@@ -49,7 +49,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$(pwd)"
 
-RELEASE="${SKREPKA_KDE_RELEASE:-v0.2.1}"
+RELEASE="${SKREPKA_KDE_RELEASE:-v0.3.0}"
 ASSET=skrepka-linux-x86_64.tar.gz
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR="${REPO}/build/kde/smoke/${RUN_ID}"

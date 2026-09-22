@@ -4,13 +4,14 @@ Every released version, newest first. Dates are the day the release was
 published. Each heading links to the tag it was cut from; the
 [releases page](https://github.com/psoldunov/skrepka/releases) carries the same
 notes alongside the notarized `Skrepka.zip` for that version and, from 0.2.0,
-the Linux tarballs with their checksums.
+the Linux tarballs with their checksums — from 0.3.0 also a `.deb` and an
+`.rpm`.
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
-download — is the whole update path on a Mac. On Linux, re-running `install.sh`
-is.
+download — is the whole update path on a Mac. On Linux it is re-running
+`install.sh`, installing the next release's package, or `nix flake update`.
 
-## Unreleased
+## [0.3.0](https://github.com/psoldunov/skrepka/releases/tag/v0.3.0) — 2026-09-22
 
 **Linux is a supported platform, no longer a preview.** KDE Plasma has run on a
 real Steam Deck. GNOME is implemented but has so far run only in a headless
@@ -31,6 +32,17 @@ but not files.
 
 ### Added
 
+- **`.deb` and `.rpm` packages** for Ubuntu 24.04 and newer, Debian 13 and
+  newer, and Fedora 39 and newer, attached to the release beside the tarball.
+  They install the same build system-wide: the binaries in `/usr/bin`, the
+  daemon's user unit and D-Bus activation file, the launcher, autostart entry,
+  icons and GNOME extension. Nothing runs as root at install time. Settings'
+  Launch at login switch now reads a system-wide autostart entry and turns it
+  off for you alone. `install.sh` stays the way onto SteamOS and other
+  read-only systems.
+- **A Nix flake,** for x86_64-linux, with a NixOS module and a Home Manager
+  module — `programs.skrepka.enable` in either. It repackages the release
+  tarball, so it installs the same build as every other route.
 - **GNOME on Wayland records what you copy.** GNOME does not let an ordinary
   program watch the clipboard, so the installer adds a small GNOME Shell
   extension, `skrepka@dev.soldunov`, that hands each copy to `skrepkad` over the
@@ -144,6 +156,12 @@ but not files.
 
 ### Known limitations
 
+- **A `.deb` or an `.rpm` cannot enable the GNOME extension for you.** After
+  the first log out and back in, run `gnome-extensions enable
+  skrepka@dev.soldunov`. There is no package repository yet, so a package
+  updates only when you install the next one.
+- **The Nix flake is x86_64-linux only** and repackages the release binaries
+  rather than building them.
 - **Copied files are kept in history,** up to the file-size limit — 32 MB per
   copy unless you lower it — until retention removes the entry, so history
   takes more disk than it did when a file copy was only a path. Keep at most,

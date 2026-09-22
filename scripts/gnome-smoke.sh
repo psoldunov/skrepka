@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO=$(pwd)
-RELEASE=${SKREPKA_GNOME_RELEASE:-v0.2.1}
+RELEASE=${SKREPKA_GNOME_RELEASE:-v0.3.0}
 ASSET=skrepka-linux-x86_64.tar.gz
 RUN_ID=$(date +%Y%m%d-%H%M%S)
 RUN_DIR=${REPO}/build/gnome/smoke/${RUN_ID}
