@@ -25,7 +25,7 @@ public final class PickerController {
     private var historyRows: [ClipDocument] = []
     /// The rows currently on screen, by hash, for the context menu's pin state.
     private var documents: [String: ClipDocument] = [:]
-    private var requestedPreviews: Set<String> = []
+    private var previewRequests = PreviewRequests()
     private var appearance = AppearancePreference.unknown
     private var isDark = true
     /// Whether the pointer has moved since the picker opened. Hover selects only
@@ -77,6 +77,7 @@ public final class PickerController {
 
     public func show() {
         opening += 1
+        previewRequests = previewRequests.reopened()
         link.refreshSettings()
         hoverArmed = false
         model = PickerModel(rows: historyRows).reset()
@@ -253,8 +254,8 @@ extension PickerController {
     }
 
     private func store(preview document: PreviewDocument, for hash: String) {
-        guard let bytes = document.bytes else { return }
-        guard thumbnails.store(hash: hash, data: bytes) != nil else { return }
+        previewRequests = previewRequests.answered(hash, withPicture: document.bytes != nil)
+        guard let bytes = document.bytes, thumbnails.store(hash: hash, data: bytes) != nil else { return }
         render(rebuild: true)
     }
 
@@ -291,8 +292,8 @@ extension PickerController {
     private func requestPreviews(_ rows: [ClipDocument]) {
         for document in rows.prefix(20) where document.hasPreview && !document.isConcealed {
             let hash = document.contentHash
-            guard !thumbnails.contains(hash), !requestedPreviews.contains(hash) else { continue }
-            requestedPreviews.insert(hash)
+            guard !thumbnails.contains(hash), previewRequests.needsAsking(hash) else { continue }
+            previewRequests = previewRequests.asking(hash)
             link.preview(hash: hash)
         }
     }
