@@ -1,5 +1,16 @@
 # Linux Skrepka and LAN sync — implementation plan
 
+**Amended 2026-09-22: Linux is a supported platform, not a preview.** The
+project README's [Where it runs](../../README.md#where-it-runs) table is the
+current account of what was tested where, and supersedes the status notes
+below wherever they disagree. In short: KDE Plasma has run on the Steam Deck
+(first session 2026-09-21, findings in
+[phase 7](phase-7-linux-gui.md#first-steam-deck-session-2026-09-21)) and passes
+`scripts/kde-smoke.sh`; GNOME is implemented but has only run in the headless
+GNOME 50 container, where on 2026-09-22 the global shortcut passed one run in
+three and automatic paste none; sway and X11 have only run headless. What
+follows is the plan as it was written and amended along the way.
+
 **Status, 2026-09-18: Phases 1, 2, 3, 4, 5 and 6 built, ten of the fourteen
 research questions answered.** All eight phases are in scope
 ([D-6](open-questions.md#d-6)). Eleven decisions are settled. The four

@@ -7,9 +7,21 @@ body:
     attributes:
       value: |
         Skrepka has a deliberately narrow scope: a clipboard history that opens fast, stays out
-        of the way, and keeps your data on your Mac. That makes an issue the cheapest place to
-        find out an idea is out of scope — cheaper than a finished branch, which is why this
-        form exists before the pull request.
+        of the way, and keeps your data on your own machines — a Mac, a Linux box, or both. That
+        makes an issue the cheapest place to find out an idea is out of scope — cheaper than a
+        finished branch, which is why this form exists before the pull request.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Which platform is it for?
+      description: Something only one of them can do is fine; it just needs saying.
+      options:
+        - macOS
+        - Linux
+        - Both
+    validations:
+      required: true
 
   - type: checkboxes
     id: prerequisites

@@ -1,8 +1,8 @@
 # Contributing to Skrepka
 
-Thanks for looking. Skrepka is a small, opinionated macOS app, and the shape of
-a contribution matters more here than its size — this file is what that shape
-is, so you do not find out in review.
+Thanks for looking. Skrepka is a small, opinionated clipboard manager for macOS
+and Linux, and the shape of a contribution matters more here than its size —
+this file is what that shape is, so you do not find out in review.
 
 ## Before you write code
 
@@ -15,20 +15,24 @@ Two things that will be declined regardless of how well they are written:
 
 - **Private API.** `_sourceSigningIdentifier` and friends are off limits
   however useful they look.
-- **Compatibility shims for older macOS.** Skrepka targets macOS 26 and
-  nothing else. Anything the macOS 26 SDK ships is fair game; anything it does
-  not is a finding, not a workaround opportunity.
+- **Compatibility shims for older macOS.** On the Mac, Skrepka targets macOS 26
+  and nothing else. Anything the macOS 26 SDK ships is fair game; anything it
+  does not is a finding, not a workaround opportunity.
 
-A Linux port and LAN sync between the two are designed in
+The Linux side and LAN sync were designed in
 [`docs/linux-sync-consideration.md`](docs/linux-sync-consideration.md) and
-planned phase by phase in [`docs/linux-sync/`](docs/linux-sync/README.md). The
-work is committed to but not started. Read both before proposing anything in
-that area, so the research is not repeated — and if you are picking up a piece
-of it, start with
-[`open-questions.md`](docs/linux-sync/open-questions.md), which holds the nine
-decisions already taken and the fourteen questions still open.
+built phase by phase to the plan in
+[`docs/linux-sync/`](docs/linux-sync/README.md). Read both before proposing
+anything in that area, so the research is not repeated — and start with
+[`open-questions.md`](docs/linux-sync/open-questions.md), which holds the
+decisions already taken and the questions still open. One of those decisions
+is why Linux ships as a user-scope installer rather than a `.deb`, an `.rpm` or
+a Flatpak; [`packaging/README.md`](packaging/README.md) has the short version.
 
 ## What you need
+
+On a Mac, for the Mac app — and for everything else, since the Linux side
+builds and tests in containers from here:
 
 - macOS 26.0 or later
 - **Xcode 26, a full install.** Not Command Line Tools. Its toolchain ships no
@@ -60,6 +64,19 @@ attributes permissions to the responsible process, so a shell-launched binary
 inherits your terminal's grants instead of exercising the real permission path
 — which means a permissions bug will not reproduce for you.
 
+For the Linux side, add [OrbStack](https://orbstack.dev) or Docker.
+`scripts/linux.sh <command>` runs anything inside the Linux build image, and
+the headless desktop images — `scripts/kde-image.sh` for SteamOS 3.8's Plasma,
+`scripts/gnome-image.sh` for Ubuntu 26.04's GNOME 50 — are where the tray, the
+shortcut, the picker and automatic paste get exercised. On a Linux machine
+itself, a Swift 6.3 toolchain and `scripts/setup-linux.sh` are enough; the
+desktop app also needs the development packages for GTK 4.12 or newer and
+gtk4-layer-shell.
+
+The containers are not a desktop anyone uses. Say which of your checks ran
+headless and which on real hardware — GNOME, for one, has so far only ever run
+headless.
+
 ## The quality gate
 
 ```sh
@@ -69,7 +86,16 @@ scripts/doctor.sh --fast   # format, lint, build only — the mid-edit loop
 
 **A green `scripts/doctor.sh` is the definition of done.** Run the full one
 before you open a pull request. Do not open one on a red doctor and describe
-the failure in the body.
+the failure in the body. A change that touches code compiled on Linux also
+needs a green `scripts/doctor-linux.sh` — same flags, same rule.
+
+One that touches the tray, the shortcut, the picker or pasting on Linux also
+runs `scripts/kde-smoke.sh` and `scripts/gnome-smoke.sh`, and reports what they
+printed. The KDE run must be green. The GNOME run is not green today — its
+shortcut check is intermittent and its automatic-paste check fails, as the
+README's [Where it runs](README.md#where-it-runs) says — so those two checks
+may fail and no others may. Once they are fixed, a green GNOME run is required
+as well.
 
 When the formatter disagrees with you, it wins:
 
@@ -83,14 +109,22 @@ entry in `disabled_rules` needs a reason in the pull request description.
 
 ## Where code goes
 
-The two-target split is load-bearing:
+The split between shared logic and platform glue is load-bearing:
 
 - **`Sources/SkrepkaCore/`** — models, storage, pasteboard reading, search,
-  settings. No SwiftUI views, no `NSWindow`, no hotkey registration. The tests
-  live here, so anything you want tested goes here. This is the default.
-- **`Sources/Skrepka/`** — SwiftUI scenes, `NSPanel` glue, `NSStatusItem`,
-  hotkey registration, paste synthesis. Only what cannot run without a live
-  window server.
+  settings. No SwiftUI views, no `NSWindow`, no hotkey registration. It compiles
+  on both platforms and the tests live here, so anything you want tested goes
+  here. This is the default.
+- **`Sources/SkrepkaSync/`** — the sync protocol, wire codec, merge engine and
+  TLS transport, on both platforms, with no dependency on `SkrepkaCore`.
+- **`Sources/Skrepka/`** — the Mac app: SwiftUI scenes, `NSPanel` glue,
+  `NSStatusItem`, hotkey registration, paste synthesis. Only what cannot run
+  without a live window server.
+- **The Linux targets** — `SkrepkaLinuxPlatform` (clipboard backends,
+  discovery, paste), `SkrepkaDaemon` (`skrepkad`), `SkrepkaIPC` (the D-Bus
+  interface), `SkrepkaCLI` (`skrepka`) and `SkrepkaLinuxUI` (`skrepka-gui`).
+  The same rule holds there: what can be decided without a compositor or a GTK
+  widget is decided in a type that can be tested without one.
 
 Group by feature, not by type — `MenuBar/`, `Picker/`, `Settings/`,
 `Platform/`. Do not add `Views/`, `Models/`, `Services/` directories that
@@ -161,7 +195,8 @@ For the pull request itself:
 - Say which claims you verified against documentation and which you could not,
   particularly for platform API behaviour.
 - Note anything the automated gate cannot catch: panel placement, focus
-  behaviour, how the mark renders in the menu bar at both appearances.
+  behaviour, how the mark renders in the menu bar at both appearances — and on
+  Linux, which desktops you ran it on, and whether they were real or headless.
 
 ## Reporting security issues
 

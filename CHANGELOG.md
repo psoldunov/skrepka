@@ -12,6 +12,12 @@ is.
 
 ## Unreleased
 
+**Linux is a supported platform, no longer a preview.** KDE Plasma has run on a
+real Steam Deck. GNOME is implemented but has so far run only in a headless
+container, never on a real machine — as have sway and X11; the README's
+[Where it runs](README.md#where-it-runs) table says exactly what was tested
+where.
+
 Fixes from the first run on a real Steam Deck, and a Linux Settings window with
 the Mac's settings in it. On the Deck the picker could only be closed with Esc,
 the global shortcut did nothing, a Mac that opened pairing could not be paired
@@ -25,6 +31,13 @@ but not files.
 
 ### Added
 
+- **GNOME on Wayland records what you copy.** GNOME does not let an ordinary
+  program watch the clipboard, so the installer adds a small GNOME Shell
+  extension, `skrepka@dev.soldunov`, that hands each copy to `skrepkad` over the
+  session bus. It has no settings, storage or network access of its own; the
+  daemon still decides what is kept. A first install needs one log out and back
+  in, and `skrepka doctor` says whether the extension is running. GNOME Shell 46
+  to 50.
 - **Choosing a Linux history entry now pastes it automatically by default.**
   Skrepka uses XTest on X11, a Wayland virtual keyboard on sway and Hyprland,
   and the Remote Desktop portal on KDE and GNOME. The portal may ask once for
@@ -141,6 +154,14 @@ but not files.
   two devices claim the same name at the same instant.
 - **Plasma 6.4 cannot open a shortcut editor for an app,** so Settings shows the
   keys and points at System Settings → Shortcuts.
+- **GNOME has never run on a real machine,** only in the headless GNOME 50
+  container `scripts/gnome-smoke.sh` starts. There, installing, capture, the
+  tray icon and the picker pass; the global shortcut passed one run in three,
+  and automatic paste none — Skrepka leaves the entry copied and asks for
+  Ctrl+V instead. Bind `skrepka-gui --picker` as a custom shortcut in GNOME's
+  keyboard settings if Meta+Shift+V does nothing.
+- **sway, other wlroots compositors and X11 have only run headless,** in the
+  Linux build image. Hyprland has not been tried at all.
 
 ## [0.2.1](https://github.com/psoldunov/skrepka/releases/tag/v0.2.1) — 2026-09-21
 
