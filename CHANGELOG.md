@@ -37,6 +37,12 @@ Fedora, or `nix flake update`.
   BMP or WebP file from a paired device now previews too, where only a PNG, JPEG
   or TIFF did.
 
+### Fixed
+
+- **`skrepka list` keeps its columns lined up.** A `richText` or `imageFile`
+  entry pushed its date and preview out of line with every other row; the kind
+  column now widens to the longest kind in the listing.
+
 ## [0.3.0](https://github.com/psoldunov/skrepka/releases/tag/v0.3.0) — 2026-09-22
 
 **Linux is a supported platform, no longer a preview.** KDE Plasma has run on a

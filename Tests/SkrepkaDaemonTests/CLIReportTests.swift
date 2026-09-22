@@ -210,3 +210,29 @@ struct CLIReportTests {
         )
     }
 }
+
+// MARK: - Column widths
+
+extension CLIReportTests {
+    @Test("`list` widens its kind column to the longest kind it prints, so every row still lines up")
+    func kindColumnFitsTheLongestKind() throws {
+        let picture = ClipDocument(
+            contentHash: "0123456789ab",
+            preview: "shot.png",
+            kind: "imageFile",
+            isPinned: false,
+            createdAt: try stamp(),
+            byteCount: nil,
+            representations: ["text/uri-list"]
+        )
+        let text = HistoryReport.text(
+            HistoryDocument(clips: [try #require(history(try stamp()).clips.first), picture], total: 2),
+            timeZone: .gmt)
+        #expect(
+            text == """
+                  1 * a1b2c3d4  text       01-02 03:04  hello world (11 B)
+                  2   01234567  imageFile  01-02 03:04  shot.png
+                """
+        )
+    }
+}

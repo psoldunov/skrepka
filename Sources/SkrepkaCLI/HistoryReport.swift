@@ -15,8 +15,9 @@ public enum HistoryReport {
         guard !document.clips.isEmpty else {
             return "No clipboard history yet."
         }
+        let kindWidth = document.clips.map(\.kind.count).reduce(minimumKindWidth, max)
         var lines = document.clips.enumerated().map { index, clip in
-            line(index: index + 1, clip: clip, timeZone: timeZone)
+            line(index: index + 1, clip: clip, kindWidth: kindWidth, timeZone: timeZone)
         }
         if document.clips.count < document.total {
             lines.append("")
@@ -25,11 +26,22 @@ public enum HistoryReport {
         return lines.joined(separator: "\n")
     }
 
-    private static func line(index: Int, clip: ClipDocument, timeZone: TimeZone) -> String {
+    /// The kind column's width when nothing wider is listed: that of `folder`,
+    /// the widest kind the fixed column this replaces could hold.
+    ///
+    /// Wider when the listing holds a wider kind — `richText`, `imageFile` —
+    /// so the columns after it stay aligned. Measured from the document rather
+    /// than fixed at the longest kind there is: this target does not link
+    /// SkrepkaCore's list of kinds, a newer daemon may send one this build has
+    /// never heard of, and a listing of text alone keeps the width it has
+    /// always had.
+    static let minimumKindWidth = 6
+
+    private static func line(index: Int, clip: ClipDocument, kindWidth: Int, timeZone: TimeZone) -> String {
         let number = String(index).leftPadded(to: 3)
         let pin = clip.isPinned ? "*" : " "
         let hash = String(clip.contentHash.prefix(8)).rightPadded(to: 8)
-        let kind = clip.kind.rightPadded(to: 6)
+        let kind = clip.kind.rightPadded(to: kindWidth)
         let when = Self.stamp(clip.createdAt, in: timeZone)
         let size = clip.byteCount.map(Self.humanSize).map { " (\($0))" } ?? ""
         let files = Self.filesNote(clip.filesStatus)
