@@ -7,12 +7,12 @@ their history over the local network — a Mac and a Linux box included — with
 account, no server and no relay.
 
 ![The Skrepka picker on macOS: a Liquid Glass panel over the macOS 26 desktop,
-listing an image, a link, code, a colour and a masked password, each with the
+listing a photo, a link, code, a colour and a masked password, each with the
 app it was copied from and a ⌘N shortcut](docs/images/picker.png)
 
 ![The Skrepka picker on KDE Plasma: the same kind of list over a Dolphin window,
-with an image entry selected, an Alt+N shortcut on each row and the Skrepka
-paperclip in the system tray](docs/images/kde-picker.png)
+with a photo selected, an Alt+N shortcut on each row and the Skrepka paperclip
+in the system tray](docs/images/kde-picker.png)
 
 - **On a Mac** it lives in the menu bar with no Dock icon, and ⌘⇧V opens a
   Liquid Glass picker.
@@ -63,7 +63,9 @@ Skrepka treats like sway, has not been tried at all.
 About the screenshots: the Mac ones are the app on macOS 26 at 2× on a real
 display. The KDE ones come from the headless Plasma session, also drawn at 2×;
 KWin composites there without a GPU, so blur and other OpenGL-only effects are
-missing from them. The history in both was copied for the picture.
+missing from them. The history in both was copied for the picture; the photo
+in it is by [Evgenii Zolotarev](https://unsplash.com/@qester) on
+[Unsplash](https://unsplash.com/photos/a-bridge-over-a-frozen-river-with-a-building-in-the-background-yESKxiijQ3w).
 
 ## Install
 
