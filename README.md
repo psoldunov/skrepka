@@ -222,6 +222,21 @@ replaces the GitHub release's `.rpm`, below, if that is installed; if you used
 `install.sh` before, run it with `--uninstall` first — its copy in `~/.local`
 would shadow the package's.
 
+#### On Ubuntu or Debian, with Pacstall
+
+On Ubuntu 24.04 or newer, or Debian 13 or newer, with
+[Pacstall](https://pacstall.dev) installed, the release's `.deb` installs from
+Pacstall's repository, and `pacstall -Up` keeps it current:
+
+```sh
+pacstall -I skrepka-deb
+```
+
+It is the same package as the `.deb` below, so the same notes apply: log out and
+back in once, or start "Skrepka" from the launcher; on GNOME, after that login,
+run `gnome-extensions enable skrepka@dev.soldunov`; and if you used
+`install.sh` before, run it with `--uninstall` first.
+
 #### As a `.deb` or an `.rpm`
 
 On Ubuntu 24.04 or newer, Debian 13 or newer, or Fedora 39 or newer, the same

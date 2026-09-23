@@ -5,17 +5,21 @@
 #   nix/package.nix              `version` and the tarball's SRI `hash`
 #   packaging/copr/skrepka.spec  Version, Release back to 1, and its one
 #                                %changelog entry
+#   packaging/pacstall/skrepka-deb.pacscript
+#                                pkgver, the .deb's sha256sums, and no pkgrel
 #
 #   scripts/pin-release.sh 0.3.0 build/deck/skrepka-linux-x86_64.tar.gz
-#   scripts/pin-release.sh 0.3.0     download the published tarball
+#   scripts/pin-release.sh 0.3.0     download the published tarball and .deb
 #
 # Run it after scripts/build-deck.sh and commit what it changes. The tarball
-# carries nothing from nix/ or packaging/copr/, so that commit changes no byte
-# of the release and is the one to tag; hashing the local file is the same as
-# hashing the asset uploaded from it.
+# carries nothing from nix/ or packaging/, so that commit changes no byte of
+# the release and is the one to tag; hashing the local files is the same as
+# hashing the assets uploaded from them. Given a tarball, the .deb is the one
+# build-deck.sh left beside it.
 #
 # The Nix hash is the SRI form fetchurl checks: sha256 of the tarball's bytes,
-# base64. It is computed with openssl so neither Nix nor a Linux host is
+# base64. The pacscript's is the .deb's sha256 in hex, the form Pacstall
+# checks. Both are computed with openssl so neither Nix nor a Linux host is
 # needed to run this. The spec needs no hash: scripts/publish-copr.sh checks
 # the tarball against the release's own .sha256 before it builds the source
 # package COPR receives.
@@ -29,7 +33,9 @@ cd "$(dirname "$0")/.."
 
 NIX_PACKAGE="nix/package.nix"
 SPEC="packaging/copr/skrepka.spec"
+PACSCRIPT="packaging/pacstall/skrepka-deb.pacscript"
 ASSET="skrepka-linux-x86_64.tar.gz"
+DEB_ASSET="skrepka-linux-x86_64.deb"
 MAINTAINER="Philipp Soldunov <69530789+psoldunov@users.noreply.github.com>"
 
 fail() {
@@ -44,15 +50,22 @@ TARBALL="${2:-}"
 
 if [[ -z "${TARBALL}" ]]; then
 	DOWNLOAD="$(mktemp -d)"
-	trap 'rm -f "${DOWNLOAD}/${ASSET}"; rmdir "${DOWNLOAD}"' EXIT
+	trap 'rm -f "${DOWNLOAD}/${ASSET}" "${DOWNLOAD}/${DEB_ASSET}"; rmdir "${DOWNLOAD}"' EXIT
 	TARBALL="${DOWNLOAD}/${ASSET}"
-	curl -fsSL -o "${TARBALL}" \
-		"https://github.com/psoldunov/skrepka/releases/download/v${VERSION}/${ASSET}" \
-		|| fail "could not download v${VERSION}/${ASSET}; is the release published?"
+	DEB="${DOWNLOAD}/${DEB_ASSET}"
+	for asset in "${ASSET}" "${DEB_ASSET}"; do
+		curl -fsSL -o "${DOWNLOAD}/${asset}" \
+			"https://github.com/psoldunov/skrepka/releases/download/v${VERSION}/${asset}" \
+			|| fail "could not download v${VERSION}/${asset}; is the release published?"
+	done
+else
+	DEB="${TARBALL%.tar.gz}.deb"
 fi
 [[ -s "${TARBALL}" ]] || fail "${TARBALL} is missing or empty."
+[[ -s "${DEB}" ]] || fail "${DEB} is missing or empty; scripts/build-deck.sh writes it beside the tarball."
 
 HASH="sha256-$(openssl dgst -sha256 -binary "${TARBALL}" | openssl base64 -A)"
+DEB_SHA256="$(openssl dgst -sha256 -r "${DEB}" | awk '{ print $1 }')"
 
 # rewrite FILE PATTERN LINE — replaces the one line of FILE matching the
 # extended regex PATTERN with LINE. Exactly one: a second match would be a
@@ -72,6 +85,19 @@ rewrite() {
 rewrite "${NIX_PACKAGE}" '^  version = "[^"]*";$' "  version = \"${VERSION}\";"
 rewrite "${NIX_PACKAGE}" '^    hash = "sha256-[^"]*";$' "    hash = \"${HASH}\";"
 echo "✓ ${NIX_PACKAGE}: version ${VERSION}, ${HASH}"
+
+# pkgrel counts pacscript-only fixes to one pkgver, so a new pkgver drops it:
+# Pacstall's default is 1.
+if ! grep -Fxq "pkgver=\"${VERSION}\"" "${PACSCRIPT}"; then
+	NEXT="$(mktemp)"
+	# grep -v exits 1 only when it keeps no line at all.
+	grep -v '^pkgrel=' "${PACSCRIPT}" > "${NEXT}" || [[ $? == 1 ]]
+	cat "${NEXT}" > "${PACSCRIPT}"
+	rm -f "${NEXT}"
+fi
+rewrite "${PACSCRIPT}" '^pkgver="[^"]*"$' "pkgver=\"${VERSION}\""
+rewrite "${PACSCRIPT}" '^sha256sums=\("[0-9a-f]{64}"\)$' "sha256sums=(\"${DEB_SHA256}\")"
+echo "✓ ${PACSCRIPT}: pkgver ${VERSION}, .deb ${DEB_SHA256}"
 
 PINNED="$(awk '$1 == "Version:" { print $2 }' "${SPEC}")"
 if [[ "${PINNED}" == "${VERSION}" ]]; then

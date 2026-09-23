@@ -33,9 +33,11 @@ scripts/linux.sh <command>   # run anything inside the Linux build image
 scripts/doctor-linux.sh      # the Linux quality gate
 scripts/build-deck.sh        # the x86_64 release tarballs, .deb and .rpm, each with a .sha256
 scripts/build-packages.sh    # just the .deb and .rpm, from the stage build-deck.sh leaves
-scripts/pin-release.sh <version> <tarball>  # point the Nix flake and the COPR spec at a release
+scripts/pin-release.sh <version> <tarball>  # point the Nix flake, the COPR spec and the pacscript at a release
 scripts/test-copr.sh         # build the COPR package and install it in every Fedora it targets
 scripts/publish-copr.sh <version>  # upload it to COPR and wait for the builds
+scripts/test-pacstall.sh     # install the pacscript with Pacstall in clean Ubuntu and Debian
+scripts/publish-pacstall.sh <version>  # open its pull request in pacstall-programs
 scripts/screenshot-settings.sh  # the Settings window and the picker under headless sway
 scripts/kde-image.sh         # a headless Plasma 6.4.3 image built from SteamOS 3.8's packages
 scripts/kde.sh <command>     # run, screenshot, type or click inside that Plasma session
@@ -81,18 +83,21 @@ leaves the history database and the device key alone — deleting the key
 un-pairs the machine from every peer, which is not something an uninstall
 should do silently.
 
-The same tarball ships three more ways. `scripts/build-packages.sh` lays its
+The same tarball ships four more ways. `scripts/build-packages.sh` lays its
 files out under `/usr` for the `.deb` and `.rpm` (`packaging/nfpm.yaml`), with
 no maintainer scripts — change a package's file placement there, not in
 `install.sh`. `packaging/copr/skrepka.spec` lays out the same files for
 Fedora's COPR, with Fedora's own `gtk4-layer-shell` in place of the bundled
 one; a change to one layout wants the same change in the other.
 `scripts/publish-copr.sh` uploads it as `psoldunov/skrepka`, with the API token
-in `~/.config/copr`. `flake.nix` and `nix/` repackage it for Nix, with a NixOS
-module and a Home Manager module, each `programs.skrepka`. Every release ends
-with `scripts/pin-release.sh` and a commit, which pins both the flake and the
-spec. `packaging/README.md` has the release checklist, and why SteamOS stays on
-`install.sh` and nothing ships as a Flatpak.
+in `~/.config/copr`. `packaging/pacstall/skrepka-deb.pacscript` hands the
+`.deb` itself to Pacstall, with no layout of its own, and
+`scripts/publish-pacstall.sh` opens each release's pull request in
+`pacstall/pacstall-programs`. `flake.nix` and `nix/` repackage it for Nix, with
+a NixOS module and a Home Manager module, each `programs.skrepka`. Every
+release ends with `scripts/pin-release.sh` and a commit, which pins the flake,
+the spec and the pacscript. `packaging/README.md` has the release checklist,
+and why SteamOS stays on `install.sh` and nothing ships as a Flatpak.
 
 `scripts/bundle.sh` signs without a secure timestamp, which is fine locally and
 fatal for distribution: the notary service rejects it, and the signature dies
