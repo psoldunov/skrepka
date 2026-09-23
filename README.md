@@ -1,4 +1,4 @@
-# Skrepka (SKRYEP-kuh)
+# 📎 Skrepka (SKRYEP-kuh)
 
 A clipboard-history manager for macOS and Linux. Press one shortcut anywhere and
 a picker opens over whatever app you are in, without taking focus away from it;
