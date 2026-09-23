@@ -368,6 +368,76 @@ without that problem.
 Nothing is installed on the Mac: `copr-cli` runs in a Fedora container with the
 token file mounted read-only.
 
+## Pacstall: `pacstall/skrepka-deb.pacscript`
+
+A pacscript for [Pacstall](https://pacstall.dev), the AUR-style package helper
+for Ubuntu and Debian, published in its repository,
+[`pacstall/pacstall-programs`](https://github.com/pacstall/pacstall-programs):
+
+```
+pacstall -I skrepka-deb
+pacstall -Up                upgrade it, with everything else Pacstall installed
+```
+
+It is a `-deb` pacscript: it names the release's own `.deb`, pinned by version
+and SHA-256, and Pacstall installs that file with apt, unchanged. Pacstall
+repacks a `.deb` only when the pacscript adds dependencies, and this one adds
+none. So the layout, the dependencies and the private `libgtk4-layer-shell` are
+the `.deb` table's above, and there is no third copy of the layout to keep in
+step with `nfpm.yaml` and the spec. A `-bin` pacscript, one that laid out the
+tarball itself, would have been that third copy. The package it installs is
+`skrepka`, the same name as the GitHub `.deb`, so either replaces the other.
+
+`incompatible` refuses Ubuntu 22.04 and Debian 12, the two releases Pacstall
+still supports whose glibc is older than the build's 2.38, before anything is
+downloaded; apt would otherwise refuse with a dependency error. Pacstall also
+matches a derivative by the `UBUNTU_CODENAME` or `DEBIAN_CODENAME` its
+`/etc/os-release` names, so one built on jammy or bookworm is refused too.
+
+Pacstall's own updater, Pacup, finds new versions through Repology, and no
+repository Repology reads carries Skrepka, so each release opens its own
+update. The pacscript here is the source of truth, and the copy in
+pacstall-programs follows it. Three scripts, sharing `scripts/lib/pacstall.sh`:
+
+- **`scripts/pin-release.sh`** sets `pkgver` and the `.deb`'s `sha256sums`,
+  from the `.deb` beside the tarball it is given, and drops any `pkgrel`.
+- **`scripts/test-pacstall.sh`**, which publishes nothing:
+  - runs shfmt and shellcheck on the pacscript with pacstall-programs' options;
+  - installs Pacstall with its own installer in clean Ubuntu 26.04 and Debian
+    13 containers, as a sudo user, the way pacstall-programs' CI does;
+  - installs the pacscript with `pacstall -PI`, checks that the binaries run,
+    that every library resolves — `libgtk4-layer-shell` from `/usr/lib/skrepka`
+    — and that the unit and the D-Bus file point at `/usr/bin`, then removes it
+    with `pacstall -PR`;
+  - checks that Ubuntu 22.04 refuses it.
+
+  `SKREPKA_DEB=build/deck/skrepka-linux-x86_64.deb` tests an unreleased build
+  through a `file://` source. Pacstall sources a pacscript inside bubblewrap,
+  and under OrbStack's Rosetta translation of amd64 Debian 13's bubblewrap
+  0.12 cannot mount anything — "Function not implemented", like Fedora 44's
+  `tar` above — where Ubuntu's 0.11 can. Only where a probe of bwrap fails that
+  way does the test install with `--nosandbox`, and its result line says so.
+- **`scripts/publish-pacstall.sh <version> [--dry-run]`** checks that the
+  pacscript pins that version, is committed, and names the published `.deb`'s
+  hash. Then it:
+  - branches from pacstall-programs' master in its own clone under
+    `build/pacstall`;
+  - copies the pacscript in and runs what their pre-commit hook runs — shfmt,
+    shellcheck, and their `scripts/srcinfo.sh` for the `.SRCINFO`, `packagelist`
+    and `srclist` — in a Debian container;
+  - commits, pushes to your fork of pacstall-programs, created on the first
+    run, and opens the pull request: ``add: `skrepka-deb` `` the first time,
+    ``upd(skrepka-deb): `old` -> `new` `` after that, the titles their wiki
+    asks for.
+
+  A second run for the same version replaces its branch and updates its pull
+  request. It needs `gh` logged in; nothing else is set up.
+
+Their CI then installs the pull request's pacscript on Ubuntu's latest LTS,
+devel and rolling releases and Debian stable, testing and unstable, and a
+Pacstall maintainer merges it. Until then `pacstall -I skrepka-deb` installs the
+previous version.
+
 ## Nix: `flake.nix` and `nix/`
 
 A flake for x86_64-linux that repackages the release tarball rather than
@@ -431,10 +501,12 @@ release, and it is the one to tag.
 2. **Build:** `scripts/notarize.sh` for the macOS zip and disk image in
    `build/`, then `scripts/build-deck.sh`, on a Mac with OrbStack or Docker, for
    the Linux assets in `build/deck/`.
-3. **Pin Nix and COPR:** `scripts/pin-release.sh`, as above, and commit.
+3. **Pin Nix, COPR and Pacstall:** `scripts/pin-release.sh`, as above, and
+   commit.
 4. **Smoke-test:** `SKREPKA_TARBALL=build/deck/skrepka-linux-x86_64.tar.gz
-   scripts/kde-smoke.sh`, `SKREPKA_TARBALL=… scripts/test-copr.sh`, and the
-   `.deb` installed in a clean container.
+   scripts/kde-smoke.sh`, `SKREPKA_TARBALL=… scripts/test-copr.sh`, and
+   `SKREPKA_DEB=build/deck/skrepka-linux-x86_64.deb scripts/test-pacstall.sh`,
+   which installs the `.deb` in clean containers too.
 5. **Publish:** tag the commit, create the GitHub release with the twelve
    assets below and `scripts/release-notes.sh <version>` as its notes — the
    changelog section, unwrapped, because a release renders every newline as a
@@ -446,6 +518,9 @@ release, and it is the one to tag.
    built — a few minutes. To check the repository itself afterwards, in a
    container: `dnf -y install dnf5-plugins && dnf -y copr enable
    psoldunov/skrepka && dnf -y install skrepka`.
+7. **Pacstall:** once the release is public, `scripts/publish-pacstall.sh
+   <version>`. It opens the update's pull request in pacstall-programs; their
+   CI and a maintainer take it from there.
 
 Attach the release's assets under exactly these names:
 

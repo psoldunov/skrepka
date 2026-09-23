@@ -11,7 +11,7 @@ the Linux tarballs with their checksums, from 0.3.0 also a `.deb` and an
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` — or a fresh
 download — is the whole update path on a Mac. On Linux it is re-running
 `install.sh`, installing the next release's package, `dnf upgrade` from COPR on
-Fedora, or `nix flake update`.
+Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
 
 ## Unreleased
 
@@ -23,6 +23,10 @@ Fedora, or `nix flake update`.
   release's `.rpm`, except the private `libgtk4-layer-shell`: it uses Fedora's
   own. It upgrades the GitHub `.rpm` in place. 0.3.0 is the first version
   published there.
+- **A Pacstall package for Ubuntu 24.04+ and Debian 13+.** `pacstall -I
+  skrepka-deb` installs the release's own `.deb`, and `pacstall -Up` upgrades
+  it. The pacscript lives in `packaging/pacstall/`; each release pins it and
+  opens the update in Pacstall's repository.
 - **A picture copied in a file manager previews in the Linux picker.** Copy a
   PNG, JPEG, GIF, BMP, TIFF or WebP file in Dolphin or Files and its row shows
   the picture, says Image rather than File, and gives its size — as the same
