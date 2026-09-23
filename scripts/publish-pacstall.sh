@@ -111,8 +111,11 @@ fi
 programs fetch --quiet origin master
 BRANCH="${PACSTALL_PKG}-${VERSION}"
 # The clone is this script's alone, so whatever an interrupted run left in it
-# is discarded with the old branch.
+# is discarded with the old branch. checkout resets only tracked files; clean
+# takes the untracked ones, such as a first run's copy of the pacscript, which
+# would otherwise read below as the one upstream already carries.
 programs checkout --quiet --force -B "${BRANCH}" origin/master
+programs clean --quiet -fdx
 
 PUBLISHED="${CHECKOUT}/${PACKAGE_DIR}/${PACSTALL_PKG}.pacscript"
 if [[ -f "${PUBLISHED}" ]]; then
