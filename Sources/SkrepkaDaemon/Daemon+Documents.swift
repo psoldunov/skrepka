@@ -65,19 +65,25 @@ extension Daemon {
             imageHeight: summary.imageSize?.height,
             fileCount: summary.fileCount > 0 ? summary.fileCount : nil,
             isConcealed: summary.isConcealed,
-            hasPreview: !summary.isConcealed && Self.hasPicture(listing),
+            hasPreview: !summary.isConcealed
+                && Self.hasPicture(
+                    listing, isForeign: isForeign(origin: listing.originDeviceID, local: localDeviceHex)),
             filesStatus: Self.filesStatus(listing, localDeviceHex: localDeviceHex, fileLimit: fileLimit)
         )
     }
 
     /// Whether ``Daemon/preview(_:maxBytes:)`` has a picture for the row: one
-    /// held as itself, or the one file of an image-file row's bundle — the
-    /// store marks a row `imageFile` when the bundle that arrived holds one
-    /// picture and nothing else.
-    static func hasPicture(_ listing: SQLiteHistoryStore.ClipListing) -> Bool {
+    /// held as itself, the one file of an image-file row's bundle, or — for a
+    /// row copied on this device — the file on disk the row names.
+    ///
+    /// The store marks a row `imageFile` only when a picture's header was
+    /// seen, in the bundle or at the head of the file, so the kind is the
+    /// evidence. A foreign row without its bundle has nothing: its path names
+    /// a file on the other machine.
+    static func hasPicture(_ listing: SQLiteHistoryStore.ClipListing, isForeign: Bool) -> Bool {
         if pictureMediaType(in: listing.localRepresentationTypes) != nil { return true }
-        return listing.summary.kind == .imageFile
-            && listing.localRepresentationTypes.contains(FileBundle.storageType)
+        guard listing.summary.kind == .imageFile else { return false }
+        return !isForeign || listing.localRepresentationTypes.contains(FileBundle.storageType)
     }
 
     /// Whether a file row from another device brought its files, as the
@@ -107,9 +113,7 @@ extension Daemon {
     /// The image kinds a GTK client can display directly, in the preference
     /// order its preview request follows. The map keeps this boundary in media
     /// types rather than leaking the store's UTI keys onto D-Bus.
-    static let previewMediaTypes = [
-        "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/webp",
-    ]
+    static let previewMediaTypes = PictureFormat.allCases.map(\.mediaType)
 
     static func pictureMediaType(in representationTypes: [String]) -> String? {
         let canonical = Set(representationTypes.compactMap(RepresentationKeyMap.canonical(forUTI:)))

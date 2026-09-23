@@ -1,5 +1,3 @@
-import SkrepkaIPC
-
 /// A size in pixels.
 struct PixelSize: Equatable {
     let width: Int
@@ -34,16 +32,6 @@ enum ThumbnailSizing {
         guard scale < 1 else { return source }
         let width = max(box.width, Int((Double(source.width) * scale).rounded(.up)))
         let height = max(box.height, Int((Double(source.height) * scale).rounded(.up)))
-        return PixelSize(width: width, height: height)
-    }
-}
-
-// MARK: - A row's picture size
-
-extension ClipDocument {
-    /// The picture's pixel size, when the document states both sides.
-    var pixelSize: PixelSize? {
-        guard let width = imageWidth, let height = imageHeight else { return nil }
         return PixelSize(width: width, height: height)
     }
 }

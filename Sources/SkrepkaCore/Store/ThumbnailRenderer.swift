@@ -1,7 +1,8 @@
 // AppKit-only by way of ThumbnailMaker. Excluded rather than hidden behind a
 // ThumbnailProducing protocol: per D-9 that protocol would give macOS one real
-// conformance and one nil-returning stub — a cost with no macOS benefit. Phase 7
-// introduces it, when GdkPixbuf makes the second conformance real.
+// conformance and one nil-returning stub — a cost with no macOS benefit. It
+// still has no second conformance: the Linux store keeps no thumbnail, and
+// skrepka-gui decodes each picture as it draws the row (ImageFileProbe).
 #if canImport(AppKit)
 
     import Foundation

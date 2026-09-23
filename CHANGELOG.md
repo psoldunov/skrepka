@@ -15,15 +15,6 @@ Fedora, or `nix flake update`.
 
 ## Unreleased
 
-### Planned
-
-- **Row previews for copied image files on Linux.** A picture copied in a file
-  manager shows as a generic file icon in the Linux picker, where the same copy
-  on a Mac shows the picture; image data copied out of an app previews on both.
-  `Sources/SkrepkaCore/Store/ImageFileThumbnail.swift` is the macOS decoder, and
-  the Linux one is to be built on GdkPixbuf and shared-mime-info rather than
-  shimmed over it. The README's demo animation shows the difference.
-
 ### Added
 
 - **A COPR repository for Fedora 43 and newer.** `sudo dnf copr enable
@@ -32,6 +23,25 @@ Fedora, or `nix flake update`.
   release's `.rpm`, except the private `libgtk4-layer-shell`: it uses Fedora's
   own. It upgrades the GitHub `.rpm` in place. 0.3.0 is the first version
   published there.
+- **A picture copied in a file manager previews in the Linux picker.** Copy a
+  PNG, JPEG, GIF, BMP, TIFF or WebP file in Dolphin or Files and its row shows
+  the picture, says Image rather than File, and gives its size — as the same
+  copy always has on a Mac. A photo taken on its side is shown the right way up.
+  The picture is decoded when the row is drawn: from the copy of the file
+  Skrepka kept for sync when it was within the file-size limit, so it looks as
+  it did when you copied it, and otherwise from the file itself. A picture over
+  16 MB is not previewed, and a copy of several pictures is still Files. WebP
+  needs GdkPixbuf's WebP loader, `webp-pixbuf-loader`, which SteamOS does not
+  ship; without it the row says Image and shows the picture symbol. A picture
+  copied before this update is relabelled the next time you copy it, and a GIF,
+  BMP or WebP file from a paired device now previews too, where only a PNG, JPEG
+  or TIFF did.
+
+### Fixed
+
+- **`skrepka list` keeps its columns lined up.** A `richText` or `imageFile`
+  entry pushed its date and preview out of line with every other row; the kind
+  column now widens to the longest kind in the listing.
 
 ## [0.3.0](https://github.com/psoldunov/skrepka/releases/tag/v0.3.0) — 2026-09-22
 

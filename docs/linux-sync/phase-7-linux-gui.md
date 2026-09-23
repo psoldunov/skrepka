@@ -287,11 +287,8 @@ checks.
 
 **Still to build, in the order they unblock each other:**
 
-1. **Thumbnails of copied image files** (step 6). An image copied as pixels has
-   its thumbnail in the row. A file copied from a file manager still gets a kind
-   tile, because reading it to preview it — `ThumbnailProducing` and
-   `GdkPixbufThumbnailMaker` — is not built. [D-9](open-questions.md#d-9) is
-   why the protocol waited for a second conformance.
+1. ~~**Thumbnails of copied image files** (step 6).~~ Done, without
+   `ThumbnailProducing` — see the amendment to step 6 below for why.
 2. ~~**Retention and exclusions in Settings** (step 5).~~ Done after the first
    Deck session — see below. Exclusions are not possible on Wayland.
 3. **Verification on the Deck.** Everything in "What was not" above.
@@ -522,6 +519,43 @@ conformance to put behind it. `GdkPixbufThumbnailMaker` is that conformance;
 `ImageFileThumbnail` behaviour gets its Linux counterpart — reading a copied
 file to preview it, with the same rule the macOS one follows: a file that turns
 out not to be a picture simply gets no preview.
+
+**Amended 2026-09-23:** built, and not the way this step planned.
+`ThumbnailProducing` was never introduced, because there is still no second
+conformance to put behind it. By the time copied image files came up, the
+picker already drew pictures copied as pixels by asking the daemon for the
+bytes (`PreviewDocument`) and decoding them in `skrepka-gui`, and
+`PreviewDocument` records why: a decoder in the daemon means linking an image
+stack into a process that deliberately has none. A `GdkPixbufThumbnailMaker`
+would have had to live in `skrepkad` to sit beside the store the way
+`ThumbnailMaker` does on the Mac. So the work split along that existing line:
+
+- **At copy time, the daemon reads headers, not pixels.**
+  `Sources/SkrepkaCore/Store/ImageFileProbe.swift` calls a copy of one file an
+  `imageFile`, with its shown size, when the file begins like a PNG, JPEG, GIF,
+  BMP, TIFF or WebP (`PictureFormat`, `PictureHeader`, and `JPEGOrientation` for
+  EXIF). The evidence is the copy's `FileBundle` when file sync kept one, else
+  the first 256 KB of the file. The `contentHash` stays the one the `.file`
+  kind produced, as the Mac's relabelling keeps it. The same rule now labels a
+  peer's bundled file (`SQLiteHistoryStore+BundledPicture.swift`), which
+  used to recognise only the three formats `ImageSignature` knows.
+- **When a row is drawn, the daemon hands over the picture.** `Preview`
+  answers from the entry's own picture, then its bundle's one file, then, for
+  a row copied on this device only, the file on disk, read then and there. A
+  peer's path is never opened.
+- **`skrepka-gui` decodes it**, on GdkPixbuf, as it already did for pixels.
+  `ThumbnailCache` now sizes the decode from the loader's own
+  `size-prepared` rather than from the row's stated size, and applies
+  `gdk_pixbuf_apply_embedded_orientation`: the stated size is the size the
+  picture is shown at, which for a rotated photo is the transpose of the stored
+  pixels the loader scales.
+
+shared-mime-info, which the plan named, was not needed: it answers from the same
+magic numbers `PictureFormat` reads, and asking it would mean GIO in the daemon.
+The formats that decode are whatever the desktop's GdkPixbuf has loaders for.
+SteamOS 3.8's decodes PNG, JPEG, GIF, BMP and TIFF and has no WebP or HEIF
+loader, checked with `gdk-pixbuf-thumbnailer` in `scripts/kde-image.sh`'s
+image. Ubuntu 26.04's GNOME image has both.
 
 ## Tests
 

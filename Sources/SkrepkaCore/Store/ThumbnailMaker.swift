@@ -1,4 +1,5 @@
-// AppKit-only: NSImage decode and PNG re-encode. Phase 7, on GdkPixbuf.
+// AppKit-only: NSImage decode and PNG re-encode. Linux stores no thumbnail;
+// skrepka-gui decodes each picture on GdkPixbuf as it draws the row.
 #if canImport(AppKit)
 
     import AppKit

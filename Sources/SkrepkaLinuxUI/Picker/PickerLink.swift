@@ -154,10 +154,18 @@ public actor PickerLink {
 
     private func loadPreview(hash: String) async {
         // A preview that fails is not worth a footer error: the row keeps its
-        // kind tile, which is a fine second choice, and the next scroll asks
-        // again.
-        guard let document = try? await connect().preview(.hash(hash), maxBytes: 0) else { return }
-        report(.preview(hash: hash, document: document))
+        // placeholder, which is a fine second choice. It is still reported, as
+        // a preview with no picture, so the next opening asks again rather
+        // than the row waiting for an answer that is never coming.
+        do {
+            report(.preview(hash: hash, document: try await connect().preview(.hash(hash), maxBytes: 0)))
+        } catch {
+            report(
+                .preview(
+                    hash: hash,
+                    document: .unavailable(
+                        PickerEvent.unreachable(for: error).failureDetail, contentHash: hash)))
+        }
     }
 
     /// Runs a mutating call, reporting its refusal detail or running `onSuccess`.

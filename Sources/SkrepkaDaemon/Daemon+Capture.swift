@@ -191,7 +191,7 @@ extension Daemon {
     /// but the gate still hears of both, so a hand-over ends on them.
     ///
     /// A file copy's contents are read here, once, and the same item goes to
-    /// the store and to the push — see `FileBundleReader.attachingBundle(to:)`.
+    /// the store and to the push — see ``prepared(_:)``.
     func record(_ decision: CaptureDecision) async {
         guard let accepted = decision.item else {
             if decision.isRefusedCopy { livePushGate.noteUnrecordedCopy() }
@@ -200,8 +200,7 @@ extension Daemon {
             }
             return
         }
-        let item = await FileBundleReader.attachingBundle(
-            to: accepted, limit: settings.fileSync.maximumBytes)
+        let item = await prepared(accepted)
         guard await store.capture(item) else {
             livePushGate.noteUnrecordedCopy(item.contentHash)
             return
@@ -209,6 +208,20 @@ extension Daemon {
         lastCapturedAt = Date()
         notifyHistoryChanged()
         await offerLivePush(item)
+    }
+
+    /// What an accepted copy becomes before it is stored and offered: its
+    /// files' contents attached as a bundle, and a copied picture called one.
+    ///
+    /// Both read the disk, so both run off this actor, and in this order: the
+    /// bundle is the file as it was at the copy, and ``ImageFileProbe`` judges
+    /// the picture from it rather than opening the file a second time. Shared
+    /// by the copies the daemon watches and the ones the GNOME Shell extension
+    /// submits, which name files on this machine just the same.
+    func prepared(_ accepted: ClipItem) async -> ClipItem {
+        let bundled = await FileBundleReader.attachingBundle(
+            to: accepted, limit: settings.fileSync.maximumBytes)
+        return await ImageFileProbe.refining(bundled)
     }
 
     /// Hands what was just copied to every peer live push is on for.
