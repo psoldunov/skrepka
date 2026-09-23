@@ -889,7 +889,7 @@ Mac is already the useful thing, and Phase 7 is the expensive one.
 ## 14. Unverified claims
 
 Collected so nothing here reads as settled when it is not. Per
-`.claude/rules/verify-against-docs.md`, these must be confirmed against the
+`.agents/rules/verify-against-docs.md`, these must be confirmed against the
 installed interface before any code depends on them.
 
 **Tracked live in [`docs/linux-sync/open-questions.md`](linux-sync/open-questions.md)**,

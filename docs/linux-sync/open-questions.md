@@ -157,7 +157,7 @@ honest-degradation path is what covers users in the meantime.
 vote on it.**
 
 The repo already carries a rule in this shape, but only pointing backwards:
-`CONTRIBUTING.md:18` and `.claude/rules/swift-conventions.md:137` both say
+`CONTRIBUTING.md:18` and `.agents/rules/swift-conventions.md:137` both say
 Skrepka targets exactly one OS and that anything the macOS 26 SDK ships is fair
 game. That rule exists to refuse *compatibility shims for older macOS*. This
 plan is the first thing to create the opposite pressure — **shims for another
@@ -766,7 +766,7 @@ has to be re-paired; that is correct behaviour, but it has to be deliberate.
 standing in for the other. The earlier claim that only the `.tbd` ships was
 inconclusive rather than false at the time; it is false now, checked against
 Xcode 26.6 / SDK 26.5. That changes the source order: per
-[the verify-against-docs rule](../../.claude/rules/verify-against-docs.md) the
+[the verify-against-docs rule](../../.agents/rules/verify-against-docs.md) the
 installed interface is ground truth and outranks Apple's documentation, so every
 signature below is quoted from it rather than from a doc page. There is no
 `arm64-apple-macos` slice — read `arm64e-apple-macos`, whose declarations are

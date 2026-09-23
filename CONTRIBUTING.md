@@ -135,7 +135,7 @@ four-directory edit.
 The full conventions — Observation over `ObservableObject`, actors over
 `DispatchQueue.main.async`, no `@unchecked Sendable`, no force-unwrap, file and
 function size ceilings — live in
-[`.claude/rules/swift-conventions.md`](.claude/rules/swift-conventions.md).
+[`.agents/rules/swift-conventions.md`](.agents/rules/swift-conventions.md).
 Read it once; the linter enforces roughly half of it and review covers the
 rest.
 
@@ -147,7 +147,7 @@ starting with the SDK headers and `.swiftinterface` files, which outrank every
 other source. Availability annotations are the thing to check: Liquid Glass
 lives in `SwiftUICore` rather than `SwiftUI`, and `GlassButtonStyle.init(_:)`
 is macOS 26.1 while `.glass(_:)` is 26.0. The full rule is
-[`.claude/rules/verify-against-docs.md`](.claude/rules/verify-against-docs.md).
+[`.agents/rules/verify-against-docs.md`](.agents/rules/verify-against-docs.md).
 
 If something genuinely cannot be verified, label it as unverified where the
 claim lives rather than smoothing over it.
