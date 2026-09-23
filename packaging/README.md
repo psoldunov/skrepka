@@ -374,9 +374,9 @@ A pacscript for [Pacstall](https://pacstall.dev), the AUR-style package helper
 for Ubuntu and Debian, published in its repository,
 [`pacstall/pacstall-programs`](https://github.com/pacstall/pacstall-programs):
 
-```
+```sh
 pacstall -I skrepka-deb
-pacstall -Up                upgrade it, with everything else Pacstall installed
+pacstall -Up                # upgrade it, with everything else Pacstall installed
 ```
 
 It is a `-deb` pacscript: it names the release's own `.deb`, pinned by version
