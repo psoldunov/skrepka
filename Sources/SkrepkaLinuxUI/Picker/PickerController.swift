@@ -254,9 +254,9 @@ extension PickerController {
     }
 
     private func store(preview document: PreviewDocument, for hash: String) {
-        previewRequests = previewRequests.answered(hash, withPicture: document.bytes != nil)
-        guard let bytes = document.bytes, thumbnails.store(hash: hash, data: bytes) != nil else { return }
-        render(rebuild: true)
+        let texture = document.bytes.flatMap { thumbnails.store(hash: hash, data: $0) }
+        previewRequests = previewRequests.answered(hash, .init(document, decoded: texture != nil))
+        if texture != nil { render(rebuild: true) }
     }
 
     // MARK: - Rendering
