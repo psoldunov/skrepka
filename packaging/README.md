@@ -388,11 +388,17 @@ step with `nfpm.yaml` and the spec. A `-bin` pacscript, one that laid out the
 tarball itself, would have been that third copy. The package it installs is
 `skrepka`, the same name as the GitHub `.deb`, so either replaces the other.
 
-`incompatible` refuses Ubuntu 22.04 and Debian 12, the two releases Pacstall
-still supports whose glibc is older than the build's 2.38, before anything is
-downloaded; apt would otherwise refuse with a dependency error. Pacstall also
-matches a derivative by the `UBUNTU_CODENAME` or `DEBIAN_CODENAME` its
-`/etc/os-release` names, so one built on jammy or bookworm is refused too.
+The pacscript sets no `incompatible`. Ubuntu 22.04 and Debian 12, the two
+releases Pacstall still supports whose glibc is older than the build's 2.38,
+are refused by the `.deb`'s own `libc6 (>= 2.38)` and `libgtk-4-1 (>= 4.12)`,
+when apt cannot satisfy them. Pacstall's reviewers asked for it that way: an
+old glibc is a dependency the package states, not a property of the release,
+and a jammy or bookworm that backports both would install it.
+
+The same review dropped the pacscript's header comment, so the file says
+nothing about where it comes from; this section does. Its `url` is
+single-quoted, as the reviewers asked and as pacstall-programs' other `-deb`
+pacscripts write it.
 
 Pacstall's own updater, Pacup, finds new versions through Repology, and no
 repository Repology reads carries Skrepka, so each release opens its own
@@ -409,7 +415,8 @@ pacstall-programs follows it. Three scripts, sharing `scripts/lib/pacstall.sh`:
     that every library resolves — `libgtk4-layer-shell` from `/usr/lib/skrepka`
     — and that the unit and the D-Bus file point at `/usr/bin`, then removes it
     with `pacstall -PR`;
-  - checks that Ubuntu 22.04 refuses it.
+  - checks that apt refuses it on Ubuntu 22.04, on the `.deb`'s
+    `libc6 (>= 2.38)`.
 
   `SKREPKA_DEB=build/deck/skrepka-linux-x86_64.deb` tests an unreleased build
   through a `file://` source. Pacstall sources a pacscript inside bubblewrap,

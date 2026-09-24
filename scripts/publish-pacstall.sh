@@ -139,7 +139,7 @@ else
 
 [Skrepka](https://github.com/psoldunov/skrepka) is a clipboard history manager for the Linux desktop and macOS: it records what you copy, opens a searchable picker on a global shortcut, and syncs history with paired machines over the local network.
 
-\`${PACSTALL_PKG}\` installs the \`.deb\` each GitHub release carries, unchanged. It needs glibc 2.38 and GTK 4.12, so it is incompatible with jammy and bookworm. The pacscript is maintained in Skrepka's repository, in [\`packaging/pacstall/\`](https://github.com/psoldunov/skrepka/tree/master/packaging/pacstall), where each release pins it and a container test installs it with Pacstall."
+\`${PACSTALL_PKG}\` installs the \`.deb\` each GitHub release carries, unchanged. Its \`Depends\` require glibc 2.38 and GTK 4.12, so apt refuses it on jammy and bookworm. The pacscript is maintained in Skrepka's repository, in [\`packaging/pacstall/\`](https://github.com/psoldunov/skrepka/tree/master/packaging/pacstall), where each release pins it and a container test installs it with Pacstall."
 fi
 [[ -z "${SKREPKA_PACSTALL_PR_NOTE:-}" ]] || BODY="${BODY}
 
