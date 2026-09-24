@@ -15,7 +15,9 @@
 # library — libgtk4-layer-shell from the .deb's private copy — and that the
 # unit and the D-Bus file point at /usr/bin. `pacstall -PR` must then remove it
 # all. Last, Ubuntu 22.04, whose glibc is older than the build's, must be
-# refused by the pacscript's `incompatible` before anything is downloaded.
+# refused by apt on the .deb's own `libc6 (>= 2.38)`: the pacscript sets no
+# `incompatible`, because Pacstall's reviewers want a dependency floor stated
+# as a dependency.
 #
 # SKREPKA_DEB swaps the pacscript's source for a file:// one, and its hash for
 # that file's; everything else is the committed pacscript.
@@ -143,14 +145,14 @@ fi
 
 if [[ "${mode}" == refuse ]]; then
 	if as_tester "${install} /work/${pkg}.pacscript" > /tmp/pacstall.log 2>&1; then
-		fail "Pacstall installed ${pkg}, which should be incompatible here."
+		fail "Pacstall installed ${pkg}, whose libc6 (>= 2.38) this glibc cannot satisfy."
 	fi
-	grep -q 'This Pacscript does not work on' /tmp/pacstall.log || {
+	grep -Fq 'skrepka : Depends: libc6 (>= 2.38)' /tmp/pacstall.log || {
 		tail -30 /tmp/pacstall.log >&2
-		fail "Pacstall failed, but not because the pacscript is incompatible."
+		fail "Pacstall failed, but not because apt refused the .deb's libc6 (>= 2.38)."
 	}
 	! dpkg-query -W skrepka > /dev/null 2>&1 || fail "skrepka is installed after a refusal."
-	echo "✓ ${distro}: refused by incompatible (Pacstall ${pacstall_version}${sandbox})"
+	echo "✓ ${distro}: refused by apt on libc6 (>= 2.38) (Pacstall ${pacstall_version}${sandbox})"
 	exit 0
 fi
 
