@@ -4,7 +4,8 @@ import SkrepkaIPC
 import SkrepkaLinuxPlatform
 
 /// Joins the General, History, Privacy and Diagnostics panes and the Sync
-/// pane's sharing switch to the daemon, the autostart entry and the shortcut.
+/// pane's sharing switch to the daemon, the autostart entry, the shortcut and
+/// the interface size.
 ///
 /// ``SyncController``'s counterpart: it holds the one ``PreferencesModel``,
 /// sends what the widgets ask for as ``DaemonLink`` jobs, applies what comes
@@ -31,6 +32,8 @@ final class PreferencesController {
     private var autostart: AutostartStatus
     private let pasteMechanism: PasteMechanism
     private let pasteAutomaticallyChanged: (Bool) -> Void
+    private var interfaceScale: InterfaceScaleStatus
+    private let chooseInterfaceScale: (InterfaceScale) -> InterfaceScaleStatus
     private var watch: MainLoopWatch<PreferencesEvent>?
     private var ticker: LoopTimer?
     private var isClosed = false
@@ -46,6 +49,8 @@ final class PreferencesController {
         self.shortcut = services.shortcut
         self.pasteMechanism = services.pasteMechanism
         self.pasteAutomaticallyChanged = services.pasteAutomaticallyChanged
+        self.interfaceScale = services.interfaceScale
+        self.chooseInterfaceScale = services.chooseInterfaceScale
         self.watch = try MainLoopWatch(inbox: inbox) { [weak self] event in
             self?.handle(event)
         }
@@ -64,6 +69,7 @@ final class PreferencesController {
         panes.general.onPasteAutomatically = { [weak self] isOn in
             self?.setPasteAutomatically(isOn)
         }
+        panes.general.onInterfaceScale = { [weak self] scale in self?.setInterfaceScale(scale) }
         panes.history.onKeepAtMost = { [weak self] items in self?.send(SettingsPatch(maximumItems: items)) }
         panes.history.onDiscardAfter = { [weak self] days in self?.send(SettingsPatch(maximumAgeDays: days)) }
         panes.history.onClear = { [weak self] in self?.confirmClear() }
@@ -122,6 +128,12 @@ final class PreferencesController {
         render()
     }
 
+    private func setInterfaceScale(_ scale: InterfaceScale) {
+        guard !isClosed, scale != interfaceScale.scale else { return }
+        interfaceScale = chooseInterfaceScale(scale)
+        render()
+    }
+
     private func dismissNotice() {
         update(model.dismissingNotice())
     }
@@ -160,7 +172,8 @@ final class PreferencesController {
                 shortcut: shortcut,
                 autostart: autostart,
                 preferences: model,
-                pasteMechanism: pasteMechanism
+                pasteMechanism: pasteMechanism,
+                interfaceScale: interfaceScale
             )
         )
         panes.history.render(HistoryPaneState(model))

@@ -49,7 +49,9 @@ extension SettingsStyle {
           padding: 18px 12px; min-width: 212px;
         }
         .skrepka-identity { padding: 0 6px 18px 6px; }
-        .skrepka-identity-mark { background: alpha(\(accent), 0.16); border-radius: 11px; }
+        .skrepka-identity-mark {
+          background: alpha(\(accent), 0.16); border-radius: 11px; min-width: 40px; min-height: 40px;
+        }
         .skrepka-identity-name { font-size: 15px; font-weight: 600; color: \(palette.primary); }
         .skrepka-identity-version { font-size: 11px; color: \(palette.secondary); }
         .skrepka-nav { background: none; }
@@ -83,9 +85,12 @@ extension SettingsStyle {
         list.skrepka-devices > row { background: none; padding: 0; outline: none; border: none; box-shadow: none; }
         list.skrepka-devices > row:hover { background: none; }
         list.skrepka-devices > row + row { border-top: 1px solid \(palette.hairline); }
+        .skrepka-devices-empty { margin: 16px 12px; }
+        .skrepka-sync-row { margin-top: 5px; }
         .skrepka-card-footer { font-size: 11px; color: \(palette.tertiary); margin: 0 6px; }
         .skrepka-row { min-height: 36px; padding: 6px 14px; }
         .skrepka-row.skrepka-row-compact { min-height: 22px; padding: 9px 14px; }
+        .skrepka-row.skrepka-row-indented { margin-left: 36px; }
         .skrepka-row-title { font-size: 13px; color: \(palette.primary); }
         .skrepka-secondary { font-size: 11px; color: \(palette.secondary); }
         .skrepka-row-icon { -gtk-icon-size: 16px; color: \(palette.secondary); min-width: 20px; }

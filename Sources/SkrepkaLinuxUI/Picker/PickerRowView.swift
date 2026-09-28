@@ -12,37 +12,35 @@ import SkrepkaIPC
 /// decides nothing: ``PickerRowText`` has already built its strings and
 /// ``ThumbnailCache`` its picture.
 enum PickerRowView {
-    /// The 30pt kind tile and the 84×48 image preview, as the macOS row uses.
-    private static let symbolSide: Int32 = 30
-    private static let previewWidth: Int32 = 84
-    private static let previewHeight: Int32 = 48
-    private static let standardHeight: Int32 = 46
-    private static let imageHeight: Int32 = 64
-
     /// A built row, and the subtitle line a transfer's progress bar replaces.
     struct Built {
         let row: UnsafeMutablePointer<GtkWidget>
         let transfer: PickerTransferSlot
     }
 
-    /// - Parameter texture: the decoded thumbnail, or nil until one arrives —
-    ///   an image row shows a placeholder tile of the right height meanwhile, so
-    ///   the list does not jump when the picture lands.
+    /// - Parameters:
+    ///   - texture: the decoded thumbnail, or nil until one arrives — an image
+    ///     row shows a placeholder tile of the right height meanwhile, so the
+    ///     list does not jump when the picture lands.
+    ///   - metrics: the row height, the kind tile and the image preview, at the
+    ///     interface size in force — the macOS row's 30pt tile and 84×48
+    ///     preview at the design size.
     static func make(
         _ document: ClipDocument,
         text: PickerRowText,
         index: Int,
-        texture: OpaquePointer?
+        texture: OpaquePointer?,
+        metrics: PaletteMetrics
     ) -> Built? {
         guard let row = gtk_list_box_row_new(),
             let rowCast = skrepka_as_list_box_row(row),
             let body = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 11, "skrepka-rowbody"),
-            let tile = tile(document, texture: texture),
+            let tile = tile(document, texture: texture, metrics: metrics),
             let column = textColumn(text)
         else { return nil }
 
         let isImageRow = document.hasPreview && !document.isConcealed
-        gtk_widget_set_size_request(body, -1, isImageRow ? imageHeight : standardHeight)
+        gtk_widget_set_size_request(body, -1, metrics.rowHeight(isImage: isImageRow))
         gtk_widget_set_valign(tile, GTK_ALIGN_CENTER)
         Build.append(body, tile)
         Build.append(body, column.widget)
@@ -84,58 +82,63 @@ enum PickerRowView {
     /// decoded, a same-sized placeholder while it decodes, or the kind symbol.
     private static func tile(
         _ document: ClipDocument,
-        texture: OpaquePointer?
+        texture: OpaquePointer?,
+        metrics: PaletteMetrics
     ) -> UnsafeMutablePointer<GtkWidget>? {
         let names = PickerIconName.names(kind: document.kind, isConcealed: document.isConcealed)
         if document.hasPreview, !document.isConcealed {
-            if let texture { return preview(texture) }
-            return placeholder(names)
+            if let texture { return preview(texture, size: metrics.previewSize) }
+            return placeholder(names, size: metrics.previewSize)
         }
         if !document.isConcealed, ClipKind(rawValue: document.kind) == .file {
-            return fileTile(name: document.preview)
+            return fileTile(name: document.preview, side: metrics.tileSide)
         }
-        return symbolTile(names)
+        return symbolTile(names, side: metrics.tileSide)
     }
 
     /// A file row's tile, its icon guessed from the file name's type so a `.zip`
     /// and a `.png` look different — falling back to the generic document glyph,
     /// which is a GTK built-in and so always renders.
-    private static func fileTile(name: String) -> UnsafeMutablePointer<GtkWidget>? {
+    private static func fileTile(name: String, side: Int32) -> UnsafeMutablePointer<GtkWidget>? {
         guard let box = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 0, "skrepka-tile"),
             let widget = gtk_image_new(), let image = skrepka_as_image(widget)
         else { return nil }
         let first = name.split(separator: ",", maxSplits: 1).first.map(String.init) ?? name
         skrepka_image_set_file_icon(
             image, first.trimmingCharacters(in: .whitespaces), "text-x-generic-symbolic")
-        gtk_widget_set_size_request(box, symbolSide, symbolSide)
+        gtk_widget_set_size_request(box, side, side)
         centre(widget, in: box)
         return box
     }
 
-    private static func preview(_ texture: OpaquePointer) -> UnsafeMutablePointer<GtkWidget>? {
+    private static func preview(
+        _ texture: OpaquePointer, size: (width: Int32, height: Int32)
+    ) -> UnsafeMutablePointer<GtkWidget>? {
         guard let widget = gtk_picture_new(), let picture = skrepka_as_picture(widget) else { return nil }
         gtk_picture_set_paintable(picture, skrepka_texture_as_paintable(texture))
         gtk_picture_set_content_fit(picture, GTK_CONTENT_FIT_COVER)
-        gtk_widget_set_size_request(widget, previewWidth, previewHeight)
+        gtk_widget_set_size_request(widget, size.width, size.height)
         gtk_widget_set_overflow(widget, GTK_OVERFLOW_HIDDEN)
         gtk_widget_add_css_class(widget, "skrepka-thumb")
         return widget
     }
 
-    private static func placeholder(_ names: [String]) -> UnsafeMutablePointer<GtkWidget>? {
+    private static func placeholder(
+        _ names: [String], size: (width: Int32, height: Int32)
+    ) -> UnsafeMutablePointer<GtkWidget>? {
         guard let box = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 0, "skrepka-thumb"),
             let icon = Build.icon(names)
         else { return nil }
-        gtk_widget_set_size_request(box, previewWidth, previewHeight)
+        gtk_widget_set_size_request(box, size.width, size.height)
         centre(icon, in: box)
         return box
     }
 
-    private static func symbolTile(_ names: [String]) -> UnsafeMutablePointer<GtkWidget>? {
+    private static func symbolTile(_ names: [String], side: Int32) -> UnsafeMutablePointer<GtkWidget>? {
         guard let box = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 0, "skrepka-tile"),
             let icon = Build.icon(names)
         else { return nil }
-        gtk_widget_set_size_request(box, symbolSide, symbolSide)
+        gtk_widget_set_size_request(box, side, side)
         centre(icon, in: box)
         return box
     }

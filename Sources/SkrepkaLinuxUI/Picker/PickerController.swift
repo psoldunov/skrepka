@@ -27,7 +27,8 @@ public final class PickerController {
     private var documents: [String: ClipDocument] = [:]
     private var previewRequests = PreviewRequests()
     private var appearance = AppearancePreference.unknown
-    private var isDark = true
+    /// The panel's sizes, at the interface size in force.
+    private var metrics = PaletteMetrics.standard
     /// Whether the pointer has moved since the picker opened. Hover selects only
     /// once it has, so a pointer that the surface merely mapped under does not
     /// pull the selection off the top row.
@@ -117,18 +118,21 @@ public final class PickerController {
         restyle()
     }
 
-    private func restyle() {
-        isDark = Self.resolveDark(appearance)
-        PickerStyle.apply(appearance, isDark: isDark)
-        window.panel.apply(isDark: isDark)
+    /// Redraws the picker at `scale`: its stylesheet, window, rows and pictures.
+    public func apply(_ scale: InterfaceScale) {
+        let next = PaletteMetrics(scale: scale)
+        guard next != metrics else { return }
+        metrics = next
+        thumbnails.resize(for: next)
+        window.apply(next)
+        restyle()
+        render(rebuild: true)
     }
 
-    private static func resolveDark(_ appearance: AppearancePreference) -> Bool {
-        switch appearance.colorScheme {
-        case .dark: true
-        case .light: false
-        case .noPreference: skrepka_prefers_dark() != 0
-        }
+    private func restyle() {
+        let isDark = appearance.resolvesDark
+        PickerStyle.apply(appearance, isDark: isDark, scale: metrics.scale)
+        window.panel.apply(isDark: isDark)
     }
 
     // MARK: - Intent
@@ -269,21 +273,17 @@ extension PickerController {
         } else {
             window.panel.showList()
             if rebuild {
-                window.panel.list.setRows(rows, text: rowText, texture: texture)
+                let now = Date()
+                window.panel.list.setRows(
+                    rows,
+                    text: { PickerRowTextBuilder.make($0, now: now) },
+                    texture: { [thumbnails] in thumbnails.texture(for: $0.contentHash) })
                 requestPreviews(rows)
             }
             window.panel.list.select(index: model.selectedIndex)
         }
         window.panel.searchBar.showResults(count: rows.count, hasQuery: !model.query.isEmpty)
         window.resize(for: rows)
-    }
-
-    private func rowText(_ document: ClipDocument) -> PickerRowText {
-        PickerRowTextBuilder.make(document, now: Date())
-    }
-
-    private func texture(_ document: ClipDocument) -> OpaquePointer? {
-        thumbnails.texture(for: document.contentHash)
     }
 
     /// Asks for the pictures of the first rows that have one and are not cached,

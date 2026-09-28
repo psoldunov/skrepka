@@ -81,6 +81,16 @@ struct PickerLRUCacheTests {
         #expect(cache.contains("a"))
         #expect(!cache.contains("b"))
     }
+
+    @Test func removingAllReportsEveryValue() {
+        var cache = LRUCache<Int>(capacity: 3)
+        _ = cache.insert("a", 1)
+        _ = cache.insert("b", 2)
+        #expect(cache.removeAll() == [1, 2])
+        #expect(!cache.contains("a"))
+        #expect(cache.keysByAge.isEmpty)
+        #expect(cache.insert("c", 3).isEmpty)
+    }
 }
 
 struct PickerIconNameTests {

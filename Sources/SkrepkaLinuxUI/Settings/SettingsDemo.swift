@@ -16,17 +16,22 @@ public enum SettingsDemo {
         /// Where the demo's launch-at-login switch writes, so it never
         /// touches the real `~/.config/autostart`.
         public let autostartFile: URL
+        /// The size the window opens at. A size chosen in the General pane
+        /// redraws the window and is not saved anywhere.
+        public let interfaceScale: InterfaceScale
 
         public init(
             section: SettingsSection,
             appearance: AppearancePreference,
             shortcut: GlobalShortcutsState,
-            autostartFile: URL
+            autostartFile: URL,
+            interfaceScale: InterfaceScale = .standard
         ) {
             self.section = section
             self.appearance = appearance
             self.shortcut = shortcut
             self.autostartFile = autostartFile
+            self.interfaceScale = interfaceScale
         }
     }
 
@@ -42,6 +47,7 @@ public enum SettingsDemo {
         let entry = AutostartEntry(file: options.autostartFile, executable: "/usr/bin/skrepka-gui")
         let host = SettingsHost(application: application, autostart: entry, connect: connect)
         GtkSignal.connect(UnsafeMutableRawPointer(application), "activate") {
+            host.apply(options.interfaceScale)
             host.apply(options.appearance)
             host.setShortcut(options.shortcut)
             host.present()

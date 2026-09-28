@@ -10,7 +10,9 @@
 # Output lands in build/settings-shots/<section>-<appearance>.png, plus
 # history-old-dark.png (a daemon too old to change settings),
 # diagnostics-problems-dark.png, and the picker beside them for comparison —
-# picker-{list,empty}-{dark,light}.png. build/ is ignored by git.
+# picker-{list,empty}-{dark,light}.png — plus general-dark-150.png and
+# picker-{list,empty}-dark-150.png at a 150% interface size. build/ is ignored
+# by git.
 #
 # The recipe is prototypes/palette-bakeoff/harness.sh's: sway with the
 # headless wlroots backend, WAYLAND_DISPLAY found by hand, grim for the shot.
@@ -103,6 +105,7 @@ for appearance in dark light; do
 done
 shoot history-old-dark history dark SKREPKA_DEMO_DAEMON=old
 shoot diagnostics-problems-dark diagnostics dark SKREPKA_DEMO_PROBLEMS=1
+shoot general-dark-150 general dark SKREPKA_DEMO_SCALE=150
 
 # The picker, from skrepka-palette-demo: a layer-shell overlay over the output.
 BIN="$(pwd)/${SCRATCH}/debug/skrepka-palette-demo"
@@ -110,6 +113,9 @@ for appearance in dark light; do
 	for state in list empty; do
 		shoot "picker-${state}-${appearance}" general "${appearance}" SKREPKA_DEMO_STATE="${state}"
 	done
+done
+for state in list empty; do
+	shoot "picker-${state}-dark-150" general dark SKREPKA_DEMO_STATE="${state}" SKREPKA_DEMO_SCALE=150
 done
 
 swaymsg exit > /dev/null 2>&1

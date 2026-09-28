@@ -37,7 +37,10 @@ final class SettingsSidebar {
             self.onSelect?(SettingsSection.allCases[index])
         }
         PickerRowSignals.setDrawFunc(mark) { [weak self] cairo, width, height in
-            let frame = MarkRenderer.Frame(x: 5, y: 5, width: Double(width) - 10, height: Double(height) - 10)
+            // An eighth of the tile on each side: 5 pixels at the design's 40.
+            let inset = Double(min(width, height)) / 8
+            let frame = MarkRenderer.Frame(
+                x: inset, y: inset, width: Double(width) - inset * 2, height: Double(height) - inset * 2)
             MarkRenderer.fillMark(
                 cairo, in: frame, color: self?.accent ?? RGBColor(red: 0, green: 0, blue: 1))
         }
@@ -63,8 +66,8 @@ final class SettingsSidebar {
             let name = GtkBuild.label("Skrepka", classes: [SettingsStyle.identityName]),
             let tagline = GtkBuild.label("Clipboard history", classes: [SettingsStyle.identityVersion])
         else { throw SettingsError.widgetCreationFailed }
-        gtk_widget_add_css_class(mark, "skrepka-identity-mark")
-        gtk_widget_set_size_request(mark, 40, 40)
+        // Sized by the stylesheet, so it grows with the interface.
+        gtk_widget_add_css_class(mark, SettingsStyle.identityMark)
         gtk_widget_set_valign(mark, GTK_ALIGN_CENTER)
         gtk_widget_set_valign(text, GTK_ALIGN_CENTER)
         GtkBuild.append(name, to: text)

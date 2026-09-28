@@ -28,11 +28,12 @@ extension PaletteWindow {
     /// shortest monitor — a plain toplevel is placed after it is sized, so the
     /// output it lands on is not known yet.
     func resizePlainWindow() {
-        let frame = PaletteMetrics.frame(
+        let frame = metrics.frame(
             wantedHeight: wantedHeight,
             outputWidth: 0,
             outputHeight: skrepka_smallest_monitor_height())
-        let inset = PickerStyle.plainInset
+        // The stylesheet scales the margin it draws the shadow in; so must this.
+        let inset = metrics.scale.length(PickerStyle.plainInset)
         let size = (frame.width + inset * 2, frame.height + inset * 2)
         if let lastPlainSize, lastPlainSize == size { return }
         lastPlainSize = size

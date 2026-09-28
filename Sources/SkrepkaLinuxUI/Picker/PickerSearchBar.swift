@@ -32,7 +32,6 @@ final class PickerSearchBar {
         gtk_entry_set_has_frame(gtkEntry, 0)
         gtk_widget_add_css_class(entryWidget, "skrepka-search-entry")
         gtk_widget_set_hexpand(entryWidget, 1)
-        gtk_widget_set_size_request(root, -1, 50)
 
         gtk_button_set_child(skrepka_as_button(clearButton), clearImage)
         gtk_widget_add_css_class(clearButton, "skrepka-search-clear")

@@ -8,6 +8,9 @@
 /// only inside the Settings window, because the Steam Deck's theme is
 /// Breeze-GTK and a settings window drawn half in Breeze and half in the
 /// picker's colours reads as two products.
+///
+/// Sizes live here rather than in code, so the interface size reaches them the
+/// moment the stylesheet is installed again — see ``InterfaceScale``.
 enum SettingsStyle {
     // MARK: Classes
 
@@ -15,6 +18,7 @@ enum SettingsStyle {
     static let titlebar = "skrepka-titlebar"
     static let sidebar = "skrepka-sidebar"
     static let identity = "skrepka-identity"
+    static let identityMark = "skrepka-identity-mark"
     static let identityName = "skrepka-identity-name"
     static let identityVersion = "skrepka-identity-version"
     static let nav = "skrepka-nav"
@@ -26,7 +30,12 @@ enum SettingsStyle {
     static let row = "skrepka-row"
     /// A read-only fact, which needs no finger-sized target.
     static let compactRow = "skrepka-row-compact"
+    /// A row that belongs to the one above it, such as a device's live
+    /// clipboard switch.
+    static let indentedRow = "skrepka-row-indented"
     static let deviceList = "skrepka-devices"
+    static let devicesEmpty = "skrepka-devices-empty"
+    static let syncRow = "skrepka-sync-row"
     static let rowTitle = "skrepka-row-title"
     static let secondary = "skrepka-secondary"
     static let rowIcon = "skrepka-row-icon"
@@ -67,18 +76,18 @@ enum SettingsStyle {
 
     // MARK: Installing
 
-    /// Installs the stylesheet for `appearance` on the default display,
-    /// replacing the one installed before.
-    static func apply(_ appearance: AppearancePreference) {
+    /// Installs the stylesheet for `appearance` at `scale` on the default
+    /// display, replacing the one installed before.
+    static func apply(_ appearance: AppearancePreference, scale: InterfaceScale) {
         CssInstaller.install(
-            css(isDark: appearance.resolvesDark, accent: appearance.accentCSS), slot: .settings)
+            css(isDark: appearance.resolvesDark, accent: appearance.accentCSS, scale: scale), slot: .settings)
     }
 
-    /// The whole stylesheet, as one string.
-    static func css(isDark: Bool, accent: String) -> String {
+    /// The whole stylesheet, as one string, with every length at `scale`.
+    static func css(isDark: Bool, accent: String, scale: InterfaceScale = .standard) -> String {
         let palette = SkrepkaPalette.forMode(isDark: isDark)
         let tones = Tones(isDark: isDark)
-        return [
+        let design = [
             chrome(palette, accent: accent),
             sidebar(palette, accent: accent),
             content(palette),
@@ -86,6 +95,9 @@ enum SettingsStyle {
             controls(palette, accent: accent, tones: tones),
             popovers(palette, accent: accent, isDark: isDark),
         ].joined(separator: "\n")
+        return [scale.stylesheet(design), scale.gapStylesheet(scope: "window.\(window)")]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 
     /// The status colours: Apple's system red, orange and green, in

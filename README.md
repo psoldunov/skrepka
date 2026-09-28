@@ -367,7 +367,10 @@ The desktop app is one program with three parts:
 - **Settings.** Open it from the tray, from the gear in the picker, or from the
   launcher's Settings action. General, History, Privacy, Sync and Status panes:
   among them automatic paste, retention, pairing, which devices push live, and
-  how large a copy of files may be and still sync.
+  how large a copy of files may be and still sync. Settings → General →
+  Interface size draws the picker and Settings larger, from 100% to 200%, on
+  top of the desktop's own scaling — for a desktop whose apps run larger than
+  the picker's Mac-sized text.
 
 ![Skrepka's Settings window on KDE Plasma, General pane: the Meta+Shift+V
 shortcut, Paste automatically and Launch at login](docs/images/kde-settings.png)
@@ -492,7 +495,8 @@ on the Mac that created it.
 On Linux, history is SQLite at `~/.local/share/skrepka/skrepka.sqlite3`, and this
 device's sync identity is the file `device.key` beside it — the directory
 `0700`, the key `0600`, both created by the daemon itself. Settings live in
-`~/.config/skrepka/config.json`. Uninstalling leaves the history and the key in
+`~/.config/skrepka/config.json`, and the interface size, which only the desktop
+app reads, in `app.json` beside it. Uninstalling leaves the history and the key in
 place: deleting `device.key` un-pairs the machine from every peer, which is not
 something an uninstall should do silently.
 

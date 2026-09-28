@@ -49,7 +49,6 @@ final class PickerFooter {
         gtk_widget_set_valign(gear, GTK_ALIGN_CENTER)
         gtk_widget_set_tooltip_text(gear, "Settings")
         skrepka_set_accessible_label(gear, "Settings")
-        gtk_widget_set_size_request(root, -1, 34)
 
         Build.append(root, hints)
         Build.append(root, error)

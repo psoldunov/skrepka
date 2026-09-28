@@ -33,9 +33,7 @@ final class PickerEmptyState {
             let detail = Build.label("", "skrepka-empty-detail")
         else { return nil }
 
-        gtk_widget_set_size_request(mark, 34, 34)
         gtk_widget_set_halign(mark, GTK_ALIGN_CENTER)
-        gtk_image_set_pixel_size(skrepka_as_image(icon), 30)
         Self.centre(root)
         for child in [mark, icon, title, detail] {
             gtk_widget_set_halign(child, GTK_ALIGN_CENTER)
@@ -55,6 +53,7 @@ final class PickerEmptyState {
         self.title = title
         self.detail = detail
         installMarkDraw()
+        apply(.standard)
     }
 
     private static func centre(_ root: UnsafeMutablePointer<GtkWidget>) {
@@ -62,8 +61,17 @@ final class PickerEmptyState {
         gtk_widget_set_halign(root, GTK_ALIGN_CENTER)
         gtk_widget_set_vexpand(root, 1)
         gtk_widget_set_hexpand(root, 1)
-        gtk_widget_set_margin_top(root, 30)
-        gtk_widget_set_margin_bottom(root, 30)
+    }
+
+    /// Sizes the mark, the icon and the space around them for an interface
+    /// size: a 34-pixel mark and a 30-pixel icon, 30 pixels clear above and
+    /// below, at the design size.
+    func apply(_ scale: InterfaceScale) {
+        let side = scale.length(34)
+        gtk_widget_set_size_request(mark, side, side)
+        gtk_image_set_pixel_size(skrepka_as_image(icon), scale.length(30))
+        gtk_widget_set_margin_top(root, scale.length(30))
+        gtk_widget_set_margin_bottom(root, scale.length(30))
     }
 
     /// Redraws the mark for a dark or light desktop.

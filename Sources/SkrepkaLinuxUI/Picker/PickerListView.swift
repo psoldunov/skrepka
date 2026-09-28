@@ -27,6 +27,8 @@ final class PickerListView {
     private var transferSlots: [String: PickerTransferSlot] = [:]
     /// The fractions last shown, so rows built afterwards start in step.
     private var transferFractions: [String: Double] = [:]
+    /// The sizes rows are built at — the interface size in force.
+    var metrics = PaletteMetrics.standard
 
     /// A single click chooses the row.
     var onActivate: ((String) -> Void)?
@@ -90,7 +92,8 @@ final class PickerListView {
         for (index, document) in documents.enumerated() {
             guard
                 let built = PickerRowView.make(
-                    document, text: text(document), index: index, texture: texture(document))
+                    document, text: text(document), index: index, texture: texture(document), metrics: metrics
+                )
             else { continue }
             let hash = document.contentHash
             attach(built.row, hash: hash)
