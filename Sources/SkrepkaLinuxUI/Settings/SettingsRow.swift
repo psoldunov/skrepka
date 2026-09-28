@@ -12,10 +12,12 @@ final class SettingsRow {
     private let subtitleLabel: GtkWidgetPointer
     private let trailing: GtkWidgetPointer
 
-    init(title: String, subtitle: String?, icon: [String] = []) throws {
+    /// `titleWraps: false` keeps a short title on one line whatever the value
+    /// beside it needs — a fact row's label, which reads as nonsense broken.
+    init(title: String, subtitle: String?, icon: [String] = [], titleWraps: Bool = true) throws {
         guard let line = GtkBuild.box(vertical: false, spacing: 12, classes: [SettingsStyle.row]),
             let text = GtkBuild.box(vertical: true, spacing: 2),
-            let titleLabel = GtkBuild.label(title, classes: [SettingsStyle.rowTitle], wraps: true),
+            let titleLabel = GtkBuild.label(title, classes: [SettingsStyle.rowTitle], wraps: titleWraps),
             let subtitleLabel = GtkBuild.label(
                 subtitle ?? "", classes: [SettingsStyle.secondary], wraps: true),
             let trailing = GtkBuild.box(vertical: false, spacing: 8)

@@ -64,6 +64,11 @@ Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
   Skrepka's own styling, leaving black sidebars, broken switches and a search
   field boxed apart from its icon. Skrepka's styling now wins over it, as it
   already did over a theme chosen the usual way.
+- **Long values on the Linux Status page wrap instead of crushing their
+  label.** Where avahi's publishing is disabled, the Discovery line is long
+  enough that its label broke into one syllable per line. The value now wraps
+  between words, right-aligned, and the labels on the Status page stay on one
+  line.
 
 ## [0.3.0](https://github.com/psoldunov/skrepka/releases/tag/v0.3.0) — 2026-09-22
 

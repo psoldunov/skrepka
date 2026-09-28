@@ -96,7 +96,7 @@ final class DiagnosticsPane {
     private static func card(_ card: DiagnosticsPaneState.Card) throws -> GtkWidgetPointer {
         let widget = try SettingsCard(title: card.title)
         for fact in card.rows {
-            let row = try SettingsRow(title: fact.title, subtitle: nil)
+            let row = try SettingsRow(title: fact.title, subtitle: nil, titleWraps: false)
             gtk_widget_add_css_class(row.widget, SettingsStyle.compactRow)
             if let value = SettingsWidgets.value(fact.value, isLiteral: fact.isLiteral) {
                 row.addTrailing(value)
