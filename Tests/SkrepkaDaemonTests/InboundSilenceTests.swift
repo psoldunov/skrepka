@@ -56,4 +56,23 @@ struct InboundSilenceTests {
             progress: progress(syncedSecondsAgo: nil), sighted: [peer], dialledIn: [], now: now)
         #expect(neverReached.isEmpty)
     }
+
+    /// A Mac that slept before its own link dialled in, and woke hours later:
+    /// measured from the exchange before it slept, it would be flagged the
+    /// moment it was sighted again, before its link had a chance to dial.
+    @Test("A link that fails starts the peer's grace over")
+    func failureRestartsTheGrace() async throws {
+        let daemon = try PairingRefusalTests.daemon(answering: .seconds(60))
+        let before = now.addingTimeInterval(-3600)
+
+        await daemon.apply(.synced(learned: 0, at: before), to: peer)
+        await daemon.apply(.synced(learned: 0, at: before.addingTimeInterval(30)), to: peer)
+        #expect(await daemon.progress[peer]?.firstSyncedAt == before)
+
+        await daemon.apply(.failed(reason: "no answer"), to: peer)
+        #expect(await daemon.progress[peer]?.firstSyncedAt == nil)
+
+        await daemon.apply(.synced(learned: 0, at: now), to: peer)
+        #expect(await daemon.progress[peer]?.firstSyncedAt == now)
+    }
 }

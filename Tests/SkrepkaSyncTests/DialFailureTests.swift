@@ -21,12 +21,25 @@ struct DialFailureTests {
         #expect(DialFailure(ChannelError.connectTimeout(.seconds(10))) == .noAnswer)
     }
 
-    @Test("Socket errors are classified by errno")
+    /// The errno each address attempt inside a `NIOConnectionError` carries.
+    @Test("A failed attempt is classified by errno")
     func classifiesSocketErrors() {
-        #expect(DialFailure(IOError(errnoCode: ECONNREFUSED, reason: "connect")) == .refused)
-        #expect(DialFailure(IOError(errnoCode: ETIMEDOUT, reason: "connect")) == .noAnswer)
+        #expect(DialFailure(errno: ECONNREFUSED) == .refused)
+        #expect(DialFailure(errno: ETIMEDOUT) == .noAnswer)
         for code in [EHOSTUNREACH, ENETUNREACH, EHOSTDOWN, ENETDOWN, EADDRNOTAVAIL] {
-            #expect(DialFailure(IOError(errnoCode: code, reason: "connect")) == .unreachable)
+            #expect(DialFailure(errno: code) == .unreachable)
+        }
+    }
+
+    /// `SyncClient.connect` dials through Happy Eyeballs, which fails only as
+    /// `NIOConnectionError` or `ChannelError.connectTimeout`. A bare `IOError`
+    /// is a TLS handshake or an exchange that lost its connection after the
+    /// connect worked — by then the pair request may already have gone out, so
+    /// "did not answer" would be wrong and would send the user to a firewall.
+    @Test("A socket error after the connect is not a dial failure")
+    func ignoresSocketErrorsAfterTheConnect() {
+        for code in [ECONNREFUSED, ETIMEDOUT, EHOSTUNREACH, ENETUNREACH] {
+            #expect(DialFailure(IOError(errnoCode: code, reason: "read")) == nil)
         }
     }
 

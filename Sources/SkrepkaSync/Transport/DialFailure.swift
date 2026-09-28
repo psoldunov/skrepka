@@ -41,6 +41,12 @@ public enum DialFailure: Sendable, Hashable {
 
     /// The failure `error` describes, or nil when it is not a dial failure at
     /// all — a TLS refusal, a protocol error, a closed channel.
+    ///
+    /// Only the two shapes Happy Eyeballs fails a connect with. A bare
+    /// `IOError` is left alone: `SyncClient.connect` never fails with one
+    /// before the TCP connect completes, so it comes from the TLS handshake or
+    /// the exchange after it — a connection that worked, and a pair request
+    /// that may already be on the other screen.
     public init?(_ error: any Error) {
         switch error {
         case let error as ChannelError:
@@ -48,9 +54,6 @@ public enum DialFailure: Sendable, Hashable {
             self = .noAnswer
         case let error as NIOConnectionError:
             guard let failure = Self(connectionError: error) else { return nil }
-            self = failure
-        case let error as IOError:
-            guard let failure = Self(errno: error.errnoCode) else { return nil }
             self = failure
         default:
             return nil
@@ -78,7 +81,9 @@ public enum DialFailure: Sendable, Hashable {
         }
     }
 
-    private init?(errno code: CInt) {
+    /// One address attempt's failure. Internal rather than private so the
+    /// mapping can be tested: `NIOConnectionError` has no public initialiser.
+    init?(errno code: CInt) {
         switch code {
         case ECONNREFUSED: self = .refused
         case ETIMEDOUT: self = .noAnswer

@@ -18,8 +18,9 @@ import SkrepkaSync
 /// how a NixOS machine behind its default firewall looked healthy from every
 /// angle it could check while a paired Mac's copies never arrived.
 enum InboundSilence {
-    /// How long after this device's first exchange with a peer the peer gets
-    /// to dial in before its silence counts.
+    /// How long after this device's first exchange with a peer — the first
+    /// since its link last failed — the peer gets to dial in before its
+    /// silence counts.
     ///
     /// A peer whose link had been failing waits out its longest retry delay,
     /// sixty seconds, before a ten-second connect timeout; three minutes is two

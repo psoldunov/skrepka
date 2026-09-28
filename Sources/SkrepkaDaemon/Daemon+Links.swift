@@ -103,6 +103,11 @@ extension Daemon {
             // column as `PeerDocument.name`, which is sanitised for the same
             // reason, so it is bounded and stripped the same way.
             entry.state = "failed: " + SafeText.oneLine(reason, limit: SafeText.nameLimit)
+            // The peer went away — asleep, or off this network — so its link
+            // has to be given the grace again once this device reaches it.
+            // Behind a firewall here this device's own link never fails, so
+            // the silence ``InboundSilence`` looks for still accrues.
+            entry.firstSyncedAt = nil
         }
         progress[deviceID] = entry
     }
