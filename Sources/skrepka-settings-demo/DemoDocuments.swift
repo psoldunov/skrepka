@@ -81,7 +81,11 @@ enum DemoDocuments {
                 restarts: withProblems ? 2 : 0
             ),
             network: DiagnosticsDocument.Network(
-                responder: "avahi",
+                // The longest line the daemon writes here, so the Status
+                // pane's screenshot shows a value that has to wrap.
+                responder: withProblems
+                    ? "avahi"
+                    : "avahi for browsing, skrepkad for publishing (avahi's publishing is disabled on this system)",
                 responderProblem: withProblems ? "avahi-daemon is not running" : nil,
                 isPublished: !withProblems,
                 syncPort: 52_871,

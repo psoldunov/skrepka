@@ -20,6 +20,10 @@ enum SettingsWidgets {
     /// A value on the right of a row: secondary text, right-aligned. Literal
     /// values — a path, a fingerprint — are monospaced, selectable and
     /// middle-ellipsised rather than wrapped.
+    ///
+    /// Any other value wraps between words, right-justified. Unwrapped, its
+    /// whole width is its minimum, and a long one — avahi's discovery line —
+    /// squeezes the row's title down to a letter per line.
     static func value(_ text: String, isLiteral: Bool = false) -> GtkWidgetPointer? {
         let classes = isLiteral ? [SettingsStyle.value, SettingsStyle.monospace] : [SettingsStyle.value]
         guard let label = GtkBuild.label(text, classes: classes) else { return nil }
@@ -28,6 +32,12 @@ enum SettingsWidgets {
             GtkBuild.makeCopyable(label)
             gtk_label_set_ellipsize(skrepka_as_label(label), PANGO_ELLIPSIZE_MIDDLE)
             gtk_label_set_max_width_chars(skrepka_as_label(label), 46)
+        } else {
+            // Whole words only, so a value never breaks inside one: the
+            // longest word is the least room it asks for.
+            gtk_label_set_wrap(skrepka_as_label(label), 1)
+            gtk_label_set_wrap_mode(skrepka_as_label(label), PANGO_WRAP_WORD)
+            gtk_label_set_justify(skrepka_as_label(label), GTK_JUSTIFY_RIGHT)
         }
         return label
     }
