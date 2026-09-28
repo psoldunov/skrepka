@@ -77,8 +77,15 @@ extension Daemon {
                     "error": .string(String(describing: error)),
                 ]
             )
-            scheduleSessionRestart(attempt: 0)
+            scheduleSessionRestart(attempt: 0, isTransient: Self.isTransient(error))
         }
+    }
+
+    /// Whether a backend start ran out of time rather than failed — see
+    /// ``scheduleSessionRestart(attempt:isTransient:)``.
+    static func isTransient(_ error: any Error) -> Bool {
+        if case ClipboardBackend.StartError.backendFailed(_, let inner) = error { return isTransient(inner) }
+        return (error as? LinuxSessionStartError) == .timedOut
     }
 
     /// Reads decisions until the backend stops, then rebuilds the session.
@@ -134,10 +141,16 @@ extension Daemon {
     /// leaves the daemon running for the sync and the history it can still
     /// serve. A session naming no display at all never reaches here: that one
     /// is waited out by ``waitForDisplay(attempt:)``.
-    func scheduleSessionRestart(attempt: Int) {
+    ///
+    /// A backend that *timed out* is retried like a lost session: it did not
+    /// refuse, it only had no first read within
+    /// `LinuxSessionTiming.startupTimeout` — likeliest at login, just after the
+    /// display appeared — and that says nothing about the next attempt. Only
+    /// the latest failure counts, so a later refusal still gives up.
+    func scheduleSessionRestart(attempt: Int, isTransient: Bool = false) {
         guard !isStopping else { return }
         let last = Self.sessionRetryDelays.count - 1
-        guard attempt <= last || hasEverCaptured else {
+        guard attempt <= last || hasEverCaptured || isTransient else {
             logger.error(
                 """
                 Gave up rebuilding the clipboard session. Nothing is being captured on this \
@@ -183,7 +196,7 @@ extension Daemon {
             )
             startCaptureLoop(over: running)
         } catch {
-            scheduleSessionRestart(attempt: attempt + 1)
+            scheduleSessionRestart(attempt: attempt + 1, isTransient: Self.isTransient(error))
         }
     }
 
