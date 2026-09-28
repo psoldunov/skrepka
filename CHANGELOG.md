@@ -13,7 +13,18 @@ download — is the whole update path on a Mac. On Linux it is re-running
 `install.sh`, installing the next release's package, `dnf upgrade` from COPR on
 Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
 
-## Unreleased
+## [0.3.1](https://github.com/psoldunov/skrepka/releases/tag/v0.3.1) — 2026-09-28
+
+Sync through a firewall, and two more ways to install on Linux. `skrepkad` now
+listens on fixed ports, so a firewall can let paired devices in, and a Mac that
+cannot reach a Linux machine says which ports to open rather than "Could not
+connect." Fedora 43 and newer can install from COPR, Ubuntu 24.04+ and Debian
+13+ through Pacstall. On KDE the shortcut works on every login, not only the
+first, and copies are recorded from the moment the session starts.
+
+**A Linux machine behind a firewall needs its ports opened once.** TCP 27182
+and 27183, and mDNS on UDP 5353; [Sync](README.md#sync) has the NixOS,
+firewalld and ufw lines.
 
 ### Added
 
