@@ -70,6 +70,16 @@ if ((BUS_STATUS == 2)); then
 	fail "cannot ask the session bus anything: none of busctl, gdbus or dbus-send is on PATH, or there is no session bus."
 fi
 
+# name_owned <name> — session_bus_name_owned, with a failed query fatal rather
+# than read as "not owned": every gate below decides whether it is safe to
+# start the dev build beside whatever holds the name.
+name_owned() {
+	local status=0
+	session_bus_name_owned "$1" || status=$?
+	((status != 2)) || fail "cannot ask the session bus whether $1 is owned."
+	return "${status}"
+}
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
@@ -108,17 +118,17 @@ trap 'exit 129' HUP
 
 # The app first: while it runs, a daemon stopped under it can be re-activated
 # by its next call.
-if session_bus_name_owned "${APP_ID}"; then
+if name_owned "${APP_ID}"; then
 	command -v skrepka-gui > /dev/null 2>&1 \
 		|| fail "an installed skrepka-gui is running but is not on PATH to ask it to quit. Quit it from its tray menu and run this again."
 	bold "Quitting the installed skrepka-gui"
 	GUI_WAS_RUNNING=1
 	skrepka-gui --quit || true
 	for _ in $(seq 1 50); do
-		session_bus_name_owned "${APP_ID}" || break
+		name_owned "${APP_ID}" || break
 		sleep 0.1
 	done
-	if session_bus_name_owned "${APP_ID}"; then
+	if name_owned "${APP_ID}"; then
 		fail "the installed skrepka-gui did not quit within 5 seconds. Quit it from its tray menu and run this again."
 	fi
 fi
@@ -129,7 +139,7 @@ if command -v systemctl > /dev/null 2>&1 && systemctl --user is-active --quiet "
 	systemctl --user stop "${UNIT}"
 fi
 
-if session_bus_name_owned "${BUS_NAME}"; then
+if name_owned "${BUS_NAME}"; then
 	fail "something still owns ${BUS_NAME} on the session bus — a skrepkad started by hand, or by another unit. Stop it and run this again."
 fi
 
