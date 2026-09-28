@@ -61,6 +61,7 @@ extension Daemon {
             report: { [weak self] deviceID, event in
                 await self?.apply(event, to: deviceID, generation: generation)
             },
+            describeFailure: DialFailure.linkReason(for:),
             onPushFetched: { [weak self] meta, payloads in
                 await self?.receiveFetchedPush(meta, payloads: payloads, generation: generation)
             }
@@ -93,6 +94,7 @@ extension Daemon {
         case .synced(let learned, let at):
             entry.state = learned > 0 ? "synced, learned \(learned)" : "synced"
             entry.lastSyncedAt = at
+            entry.firstSyncedAt = entry.firstSyncedAt ?? at
         case .pushed:
             entry.state = "pushed"
         case .failed(let reason):
@@ -101,6 +103,11 @@ extension Daemon {
             // column as `PeerDocument.name`, which is sanitised for the same
             // reason, so it is bounded and stripped the same way.
             entry.state = "failed: " + SafeText.oneLine(reason, limit: SafeText.nameLimit)
+            // The peer went away — asleep, or off this network — so its link
+            // has to be given the grace again once this device reaches it.
+            // Behind a firewall here this device's own link never fails, so
+            // the silence ``InboundSilence`` looks for still accrues.
+            entry.firstSyncedAt = nil
         }
         progress[deviceID] = entry
     }

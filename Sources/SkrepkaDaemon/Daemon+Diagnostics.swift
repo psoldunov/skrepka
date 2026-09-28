@@ -180,6 +180,7 @@ extension Daemon {
             )
         }
         found.append(contentsOf: await pairingProblems())
+        found.append(contentsOf: listenerPortProblems())
         return found
     }
 
@@ -204,6 +205,7 @@ extension Daemon {
         // Asked of this machine rather than measured against a peer, because
         // the wire carries no timestamp to measure against. See ``ClockCheck``.
         if let clock = clockFinding?.problem { found.append(clock) }
+        found.append(contentsOf: silentPeerProblems(now: Date()))
         return found.sorted()
     }
 }

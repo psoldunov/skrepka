@@ -58,6 +58,7 @@ extension Daemon {
         links = [:]
         progress = [:]
         sighted = [:]
+        peersThatDialledIn = []
 
         await syncServer?.stop()
         await pairingServer?.stop()

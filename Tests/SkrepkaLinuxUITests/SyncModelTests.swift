@@ -36,6 +36,19 @@ struct SyncModelTests {
         #expect(after.subtitle.hasPrefix("Open until 08:05"))
     }
 
+    /// A firewall here drops the other device's dial without this side ever
+    /// hearing of it, so the switch names what it has to allow while it is on.
+    @Test("an open window names the ports a firewall here has to allow")
+    func openWindowNamesItsPorts() {
+        func subtitle(_ pairingPort: UInt16?) -> String {
+            let model = Fixture.model(Fixture.document(pairingPort: pairingPort))
+            return SyncPaneState(model, now: Fixture.now, timeZone: .gmt).pairingSwitch.subtitle
+        }
+        #expect(subtitle(UInt16(SkrepkaPorts.pairing)).contains("TCP ports 27182–27183"))
+        #expect(subtitle(5555).contains("TCP port 5555,"))
+        #expect(!subtitle(nil).contains("TCP"))
+    }
+
     @Test("a poll that says the window is closed clears the expiry it had")
     func expiredWindowIsForgotten() {
         let window = PairingWindowDocument(port: 5555, expiresAt: Fixture.now + 300)

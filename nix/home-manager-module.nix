@@ -14,6 +14,10 @@
 # when there is none — the way install.sh keeps a hidden entry hidden. With
 # `autostart` off nothing is written, and nothing else starts the app: the
 # package keeps its entry out of the profile's etc/xdg (see nix/package.nix).
+#
+# Home Manager cannot open a firewall port. On NixOS, whose firewall drops the
+# ports other devices dial skrepkad on, import nixosModules.default as well and
+# set `programs.skrepka.openFirewall = true` there.
 self:
 {
   config,

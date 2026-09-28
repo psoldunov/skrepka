@@ -21,13 +21,7 @@ extension Daemon {
     /// recoverable, a listener that pins nothing is not.
     func startSyncListener(runtime: SyncRuntime, port: Int) async throws {
         let pinned = try await trust.pinnedDeviceIDs()
-        let server = try await SyncServer.start(
-            identity: runtime.certificate,
-            policy: .pinned(pinned),
-            host: Self.listenHost,
-            port: port,
-            group: runtime.group
-        )
+        let server = try await bindPinnedListener(runtime: runtime, port: port, pinned: pinned)
         syncServer = server
         syncAcceptTask = acceptLoop(on: server)
     }
@@ -49,7 +43,7 @@ extension Daemon {
         guard !isStopping, let runtime else { return }
         syncAcceptTask?.cancel()
         syncAcceptTask = nil
-        let port = syncServer?.port ?? options.port
+        let port = syncServer?.port ?? listenerPorts.sync
         await syncServer?.stop()
         syncServer = nil
         do {
@@ -67,9 +61,16 @@ extension Daemon {
         Task { [weak self] in
             while let connection = await server.nextConnection() {
                 guard !Task.isCancelled else { return }
-                await self?.serve(connection)
+                await self?.serveDialledIn(connection)
             }
         }
+    }
+
+    /// Answers a peer that reached the pinned listener, and remembers that it
+    /// could — see ``InboundSilence`` for what its absence means.
+    private func serveDialledIn(_ connection: SyncConnection) {
+        peersThatDialledIn.insert(connection.peerDeviceID)
+        serve(connection)
     }
 
     /// Answers one verified connection.

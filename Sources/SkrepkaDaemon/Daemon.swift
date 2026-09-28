@@ -177,6 +177,10 @@ public actor Daemon {
     var links: [SyncDeviceID: PeerLink] = [:]
     var progress: [SyncDeviceID: PeerProgress] = [:]
     var sighted: [SyncDeviceID: Sighting] = [:]
+    /// Peers that have completed a handshake with the pinned listener since
+    /// the daemon started — the only evidence it has that they can reach it.
+    /// See ``InboundSilence``.
+    var peersThatDialledIn: Set<SyncDeviceID> = []
 
     /// Pairings waiting for an answer, by device. One entry per peer, because
     /// a peer that dials twice while the first is unanswered is retrying.

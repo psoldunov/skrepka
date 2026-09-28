@@ -1,4 +1,5 @@
 import Foundation
+import SkrepkaSync
 
 /// Why a dial-to-pair could not be started.
 ///
@@ -10,6 +11,10 @@ public enum PairError: Error, Sendable, CustomStringConvertible {
     case notAcceptingPairing(String)
     /// The dial or the exchange did not finish within ``Daemon/pairDialTimeout``.
     case tookTooLong(String)
+    /// The TCP connect to the peer's pairing port failed, before anything was
+    /// exchanged — so, unlike ``tookTooLong(_:)``, nothing one-sided can have
+    /// been recorded on the far side.
+    case couldNotReach(String, DialFailure, port: UInt16)
     /// The caller passed an empty or whitespace-only fingerprint, which would
     /// otherwise prefix-match every device on the network.
     case noDeviceNamed
@@ -18,6 +23,8 @@ public enum PairError: Error, Sendable, CustomStringConvertible {
         switch self {
         case .noDeviceNamed:
             Daemon.blankSelectorDetail
+        case .couldNotReach(let fingerprint, let failure, let port):
+            failure.pairingSentence(peer: fingerprint, port: port)
         case .tookTooLong(let fingerprint):
             """
             "\(fingerprint)" did not finish pairing in time. \

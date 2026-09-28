@@ -41,8 +41,37 @@ Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
   BMP or WebP file from a paired device now previews too, where only a PNG, JPEG
   or TIFF did.
 
+### Changed
+
+- **`skrepkad` listens on fixed ports: TCP 27182 for sync and 27183 for
+  pairing.** It used to take whatever port the kernel handed out, a new one for
+  every start and every pairing window, so no firewall rule could let other
+  devices in. If another program holds one of them, the daemon takes a free port
+  instead and `skrepka doctor` says so. `--port N` moves the pair to N and N+1;
+  `--port 0` asks for free ports as before. See [Sync](README.md#sync) for the
+  firewalld and ufw commands.
+- **The NixOS module has `programs.skrepka.openFirewall`.** It opens those two
+  ports and UDP 5353 for discovery, and works without `enable`, so a NixOS
+  machine that installs Skrepka through Home Manager can import the NixOS module
+  for the firewall alone.
+
 ### Fixed
 
+- **A Mac can pair with a Linux machine behind a firewall, once its ports are
+  open, and says what is wrong when they are not.** Pairing started on a Mac
+  with a NixOS machine waited ten seconds and said only "Could not connect.",
+  while pairing the same two from the Linux side worked — NixOS drops incoming
+  connections to every port nobody opened. The Mac now says the device did not
+  answer and which ports to open on it; a refused, unreachable or unresolvable
+  device gets its own sentence, on the Mac and on Linux, in the pairing sheet
+  and in a paired device's row alike.
+- **Linux notices when a paired device cannot reach it.** With the firewall
+  closed, copies made on the Mac never reached the Linux clipboard, and nothing
+  said so: the Linux side kept pulling the Mac's history every half minute, so
+  the device showed as synced. `skrepka doctor` and Settings → Diagnostics now
+  name a paired device that has not connected for three minutes while this
+  machine reaches it, and say how to open the firewall on this distribution.
+  `skrepka pair` and Settings name the ports while a pairing window is open.
 - **`skrepka list` keeps its columns lined up.** A `richText` or `imageFile`
   entry pushed its date and preview out of line with every other row; the kind
   column now widens to the longest kind in the listing.
