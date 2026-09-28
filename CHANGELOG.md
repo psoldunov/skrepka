@@ -46,6 +46,24 @@ Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
 - **`skrepka list` keeps its columns lined up.** A `richText` or `imageFile`
   entry pushed its date and preview out of line with every other row; the kind
   column now widens to the longest kind in the listing.
+- **The shortcut works on every KDE login, not only the first.** From Plasma
+  6.7.4, KDE's portal reports a saved shortcut as bound but only hands it to
+  KWin when the app binds it again, and Skrepka stopped at the report — so from
+  the second login on, Meta+Shift+V did nothing. It now binds on every start.
+  No dialog appears for a shortcut KDE already knows, and a key you chose in
+  System Settings is kept. The Steam Deck's Plasma 6.4 was never affected.
+- **Copies are recorded from the start of a Plasma session.** `skrepkad` often
+  starts before KWin has told systemd where the display is, and then recorded
+  nothing until it was restarted by hand. It now asks the systemd user manager
+  until the display appears and starts watching then — usually within a second
+  or two of login. On X11 it also takes the session's authorization cookie
+  from wherever the display manager keeps it, so the display lets it in.
+- **The picker and Settings look right under a GTK theme set in `gtk.css`.**
+  Home Manager's `gtk.gtk4.theme`, and setups like it, import a whole theme
+  such as Breeze-Dark from `~/.config/gtk-4.0/gtk.css`. That theme outranked
+  Skrepka's own styling, leaving black sidebars, broken switches and a search
+  field boxed apart from its icon. Skrepka's styling now wins over it, as it
+  already did over a theme chosen the usual way.
 
 ## [0.3.0](https://github.com/psoldunov/skrepka/releases/tag/v0.3.0) — 2026-09-22
 

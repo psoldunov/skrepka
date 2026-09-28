@@ -64,6 +64,7 @@ extension Daemon {
         watcher = nil
         await clipboard?.stop()
         clipboard = nil
+        await userManager?.close()
 
         retentionSweepTask?.cancel()
         retentionSweepTask = nil

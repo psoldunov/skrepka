@@ -42,23 +42,29 @@ struct ShortcutStepTests {
         #expect(step == .unbound(PortalResponse.describe(code: 1)))
     }
 
-    @Test("a first listing without the shortcut binds it; a confirming one does not")
+    /// KDE's portal lists a saved trigger on a fresh session but hands it to
+    /// kglobalaccel only on a bind, so a session that listed first and saw it
+    /// bound left the shortcut dead on every login after the first.
+    @Test("a new session binds before it lists anything")
+    func sessionOpensWithABind() {
+        #expect(ShortcutStep.opening == .bind)
+    }
+
+    @Test("a confirming listing without the shortcut reports it unbound, not a second bind")
     func listingWithoutTheShortcut() {
         let other = Self.answer(shortcuts: [("something-else", "Ctrl+X")])
-        #expect(ShortcutStep.afterListing(other, mayBind: true) == .bind)
-        #expect(ShortcutStep.afterListing(other, mayBind: false) == .unbound(ShortcutStep.noKey))
+        #expect(ShortcutStep.afterListing(other) == .unbound(ShortcutStep.noKey))
     }
 
-    @Test("a failed listing binds while it may, and reports once it may not")
+    @Test("a failed confirming listing reports why")
     func failedListing() {
         let failure: Answer = .failure(DBusError(name: nil, message: "boom"))
-        #expect(ShortcutStep.afterListing(failure, mayBind: true) == .bind)
-        #expect(ShortcutStep.afterListing(failure, mayBind: false) == .unbound("boom"))
+        #expect(ShortcutStep.afterListing(failure) == .unbound("boom"))
     }
 
-    @Test("a listing with the shortcut is bound whatever it may do next")
+    @Test("a listing with the shortcut is bound")
     func listingWithTheShortcut() {
         let listed = Self.answer(shortcuts: [("show-picker", nil)])
-        #expect(ShortcutStep.afterListing(listed, mayBind: true) == .bound(GlobalShortcutTrigger.showPicker))
+        #expect(ShortcutStep.afterListing(listed) == .bound(GlobalShortcutTrigger.showPicker))
     }
 }

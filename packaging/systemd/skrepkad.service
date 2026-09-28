@@ -39,9 +39,11 @@ Documentation=https://github.com/psoldunov/skrepka
 # gamescope or bare-compositor session that never pulls it in would leave a
 # unit installed there enabled and never started, with no error anywhere. Hung
 # off default.target it always starts at login; After= still orders it behind
-# the compositor whenever both are in the same start transaction, and when the
-# compositor arrives later the daemon's own bounded re-probe below bridges
-# the gap.
+# the compositor whenever both are in the same start transaction. When the
+# compositor arrives later — Plasma's usual order, since default.target is
+# reached before KWin runs — the daemon bridges the gap itself: it reads the
+# display from the user manager's Environment property until one appears (see
+# Sources/SkrepkaDaemon/Daemon+DisplayWait.swift).
 #
 # The pair below reads as a mismatch — PartOf= naming a target that no
 # WantedBy= names — and it is deliberate rather than an oversight. PartOf=
@@ -99,10 +101,9 @@ Type=exec
 #
 # So the daemon starts, works out what it can watch, and says so — in the
 # journal on the way up, and in `skrepka doctor` whenever asked. That includes
-# the case this guard was written for: when neither variable is set but the
-# session is graphical, it names `systemctl --user import-environment` as the
-# fix, because a compositor that did not export its variables to the user
-# manager is the usual cause.
+# the case this guard was written for: when neither variable is set it keeps
+# asking the user manager, and names `systemctl --user import-environment` as
+# the fix for a compositor that never exports its variables there.
 
 ExecStart=%h/.local/bin/skrepkad
 

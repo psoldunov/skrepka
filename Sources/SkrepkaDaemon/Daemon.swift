@@ -200,6 +200,13 @@ public actor Daemon {
     /// where the two get different retry policies.
     var hasEverCaptured = false
     var lastCapturedAt: Date?
+    /// What capture probes: ``environment``, with the display filled in from
+    /// the systemd user manager when this process started before the desktop
+    /// exported one. See ``waitForDisplay(attempt:)``.
+    var sessionEnvironment: [String: String]
+    /// Where the user manager's environment is read from, or nil when
+    /// ``environment`` names no session bus — which is every test's empty one.
+    let userManager: UserManagerSource?
     /// The monotonic deadline through which the GNOME Shell extension's
     /// registration remains live. A deadline, rather than process-lifetime
     /// evidence of one submission, lets diagnostics recover when the extension
@@ -221,15 +228,21 @@ public actor Daemon {
     ///   `savePairedPeer` throws, which is the difference between
     ///   ``answerPairing(deviceID:accept:)`` reporting a pairing and lying
     ///   about one, and cannot be induced on a real database.
+    /// - Parameter userManager: where to ask for a display when `environment`
+    ///   names none. Nil means the systemd user manager on the session bus
+    ///   `environment` names — see ``waitForDisplay(attempt:)``.
     public init(
         options: DaemonOptions,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         logger: Logger = Logger(label: "skrepka.daemon"),
         pairingAnswerTimeout: Duration = Daemon.defaultPairingAnswerTimeout,
-        peers: (any PairedDeviceStoring)? = nil
+        peers: (any PairedDeviceStoring)? = nil,
+        userManager: UserManagerSource? = nil
     ) throws {
         self.options = options
         self.environment = environment
+        sessionEnvironment = environment
+        self.userManager = userManager ?? .sessionBus(in: environment)
         self.logger = logger
         self.pairingAnswerTimeout = pairingAnswerTimeout
         displayName =

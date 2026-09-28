@@ -22,6 +22,21 @@
 /// reference; it drops it when the display is finalised.
 ///
 /// `gtk_css_provider_load_from_string` is GTK 4.12, which is the floor.
+///
+/// Installed one step ABOVE `GTK_STYLE_PROVIDER_PRIORITY_USER`, against the
+/// header's advice to stay at or below it. GTK's cascade asks providers in
+/// priority order and the first one to set a property wins, whatever the
+/// selectors' specificity (gtkstylecascade.c, `_gtk_css_lookup_set`). At
+/// APPLICATION priority that is fine against a theme chosen the usual way —
+/// Breeze on the Steam Deck is loaded at THEME priority, below us. But Home
+/// Manager's `gtk.gtk4.theme` and similar setups put
+/// `@import url(".../Breeze-Dark/gtk-4.0/gtk.css")` in
+/// `~/.config/gtk-4.0/gtk.css`, which GTK loads at USER priority: the whole
+/// theme then outranks every rule here, and the picker and Settings come out
+/// half Breeze and half ours — switches with a negative-sized slider,
+/// black sidebars, a search field boxed apart from its icon. Above USER, the
+/// rules here win against that import exactly as they do against a theme,
+/// and everything they do not set still comes from the user's CSS.
 static inline void skrepka_css_load(const char *slot, const char *css) {
 	GdkDisplay *display = gdk_display_get_default();
 	if (display == NULL) { return; }
@@ -29,7 +44,7 @@ static inline void skrepka_css_load(const char *slot, const char *css) {
 	if (provider == NULL) {
 		provider = gtk_css_provider_new();
 		gtk_style_context_add_provider_for_display(display, GTK_STYLE_PROVIDER(provider),
-		                                           GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+		                                           GTK_STYLE_PROVIDER_PRIORITY_USER + 1);
 		g_object_set_data_full(G_OBJECT(display), slot, provider, g_object_unref);
 	}
 	gtk_css_provider_load_from_string(provider, css);

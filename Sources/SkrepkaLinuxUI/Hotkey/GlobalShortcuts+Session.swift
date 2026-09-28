@@ -1,7 +1,8 @@
 import Foundation
 
-// The portal session: create it, list what is bound, bind `show-picker` if
-// nothing is, and listen for the shortcut firing. Every request answers
+// The portal session: create it, bind `show-picker` — every session, see
+// `ShortcutStep.opening` — list what is bound when the bind's answer does not
+// say, and listen for the shortcut firing. Every request answers
 // through an `org.freedesktop.portal.Request` object — see ``PortalRequest``.
 extension GlobalShortcuts {
     static let pickerShortcutID = "show-picker"
@@ -26,7 +27,7 @@ extension GlobalShortcuts {
             }
             session = handle
             subscribeToSession(handle)
-            listShortcuts(handle, mayBind: true)
+            take(ShortcutStep.opening, handle: handle)
         }
     }
 
@@ -57,10 +58,10 @@ extension GlobalShortcuts {
         ]
     }
 
-    private func listShortcuts(_ handle: String, mayBind: Bool) {
+    private func listShortcuts(_ handle: String) {
         let options = requestOptions()
         request(method: "ListShortcuts", values: [.objectPath(handle), options]) { [weak self] result in
-            self?.take(ShortcutStep.afterListing(result, mayBind: mayBind), handle: handle)
+            self?.take(ShortcutStep.afterListing(result), handle: handle)
         }
     }
 
@@ -68,7 +69,7 @@ extension GlobalShortcuts {
         switch step {
         case .bound(let trigger): setState(.bound(trigger))
         case .bind: bindShortcut(handle)
-        case .list: listShortcuts(handle, mayBind: false)
+        case .list: listShortcuts(handle)
         case .unbound(let reason): setState(.unbound(reason))
         }
     }
