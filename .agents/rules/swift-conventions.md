@@ -3,8 +3,9 @@
 ## The Quality Gate
 
 Run `./scripts/doctor.sh` after every change that touches Swift source. It is
-the definition of "done" — format check, lint, build with warnings as errors,
-tests, dead-code scan. Do not report work complete on a red doctor.
+the definition of "done" — format check, the GNOME extension contract checks,
+lint, build with warnings as errors, tests, dead-code scan. Do not report work
+complete on a red doctor.
 
 Use `./scripts/doctor.sh --fast` (skips tests and the dead-code scan) mid-edit.
 Run the full one before you hand work back.
@@ -27,22 +28,31 @@ Linux.
 
 ## Project Layout
 
-Two targets, and the split is load-bearing:
+Shared logic in its own targets, platform glue in theirs, and the split is
+load-bearing:
 
 - `Sources/SkrepkaCore/` — models, storage, pasteboard reading, search,
-  settings. No SwiftUI views, no `NSWindow`, no hotkey registration. This
-  target is where the tests live, so anything you want tested goes here.
-- `Sources/Skrepka/` — the app. SwiftUI scenes, `NSPanel` glue, `NSStatusItem`,
-  hotkey registration, paste synthesis. Only what cannot run without a window
-  server.
+  settings. No SwiftUI views, no `NSWindow`, no hotkey registration. It compiles
+  on both platforms and most of the tests live here, so anything you want tested
+  goes here.
+- `Sources/SkrepkaSync/` — the sync protocol, wire codec, merge engine and TLS
+  transport. Both platforms, and deliberately no dependency on `SkrepkaCore`.
+- `Sources/Skrepka/` — the Mac app. SwiftUI scenes, `NSPanel` glue,
+  `NSStatusItem`, hotkey registration, paste synthesis. Only what cannot run
+  without a window server. `Package.swift` declares it on macOS alone.
+- `Sources/SkrepkaLinuxPlatform/`, `SkrepkaIPC/`, `SkrepkaDaemon/`,
+  `SkrepkaCLI/`, `SkrepkaLinuxUI/` — the Linux clipboard backends, the daemon's
+  D-Bus interface, `skrepkad`, `skrepka` and `skrepka-gui`, declared on Linux
+  alone. The same rule holds there: what can be decided without a compositor or
+  a GTK widget is decided in a type that can be tested without one.
 
 Group by feature, not by type. `MenuBar/`, `Picker/`, `Settings/`, `Platform/` —
 the AppKit glue for a surface sits next to the SwiftUI view it backs. Do not
 create `Views/`, `Models/`, `Services/` folders that collect one layer across
 every feature; they force four-directory edits for one change.
 
-Put new logic in `SkrepkaCore` by default. Move it to the app target only when
-it genuinely needs AppKit or a live window.
+Put new logic in `SkrepkaCore` by default. Move it to a platform target only
+when it genuinely needs AppKit, a live window, or GTK.
 
 `SkrepkaCore` must not `import SwiftUI` or `import AppKit` for view types. It
 may import AppKit for `NSPasteboard` and value types like `NSImage` — that is
@@ -67,12 +77,13 @@ lives in `SkrepkaCore`.
 
 ## Concurrency
 
-The app target is compiled with `.defaultIsolation(MainActor.self)`, so its
-declarations are `@MainActor` unless you say otherwise. Do not add redundant
-`@MainActor` there.
+The Mac app target is the one target compiled with
+`.defaultIsolation(MainActor.self)`, so its declarations are `@MainActor` unless
+you say otherwise. Do not add redundant `@MainActor` there.
 
-`SkrepkaCore` is `nonisolated` by default. Mark the few UI-facing types
-`@MainActor` explicitly; leave pure logic alone.
+`SkrepkaCore`, `SkrepkaSync` and every Linux target are `nonisolated` by
+default. Mark the few UI-facing types `@MainActor` explicitly; leave pure logic
+alone.
 
 Background work goes in an `actor`. Per SE-0466, declarations inside an `actor`
 are exempt from default isolation, so a poller actor stays off the main actor
@@ -107,7 +118,11 @@ Swift Testing only — `import Testing`, `@Test`, `#expect`, `#require`. It ship
 in the toolchain. Reach for XCTest only when an API exists nowhere else, and say
 why in a comment.
 
-Run with `swift test --parallel`, or one with `swift test --filter <regex>`.
+Run with `./scripts/test.sh`, which adds `--parallel`, and one suite with
+`./scripts/test.sh --filter <regex>`. It is the way in on both platforms: on
+Linux a bare `swift test` builds into `.build` with whatever toolchain is on
+PATH, where the script builds into `.build-linux` under the toolchain
+`scripts/linux-env.sh` finds.
 
 Test what is testable and do not fake the rest:
 
@@ -123,8 +138,10 @@ A bug fix starts with a failing test that reproduces it.
 ## Files and Naming
 
 - One primary type per file. The file is named after that type.
-- Aim for 200 lines per file; 300 warns, 400 fails the build. Split by
-  responsibility, not by line count.
+- Aim for 200 lines per file. SwiftLint warns over 300 lines and errors over
+  400, and the gate runs `swiftlint lint --strict`, which upgrades the warning to
+  an error — so 300 is the ceiling in practice. Split by responsibility, not by
+  line count.
 - Functions under 40 lines. Nesting under 4 levels.
 - Follow the Swift API Design Guidelines: clarity at the point of use,
   `UpperCamelCase` types, `lowerCamelCase` everything else, no Hungarian
@@ -143,8 +160,10 @@ Errors that reach the user get a message written for a user, not a
 
 ## Platform APIs
 
-This app targets exactly one OS. Anything the macOS 26 SDK ships is fair game;
-anything it does not is a finding, not a workaround opportunity.
+On the Mac this app targets exactly one OS version. Anything the macOS 26 SDK
+ships is fair game; anything it does not is a finding, not a workaround
+opportunity. The Linux side has floors of its own — glibc 2.38 and GTK 4.12 —
+and the same rule holds against them.
 
 - Liquid Glass lives in **`SwiftUICore`**, not `SwiftUI`. There is only one
   `glassEffect` overload and it has no `isEnabled:` parameter — branch on the

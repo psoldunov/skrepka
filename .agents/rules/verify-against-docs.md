@@ -46,7 +46,7 @@ Where dependencies land, by ecosystem:
 | Ecosystem | Resolved source | Version check |
 |---|---|---|
 | Node | `node_modules/<pkg>/` | `cat package.json`; `npm ls <pkg>` / `bun pm ls` |
-| Swift / SwiftPM | `.build/checkouts/`, `Package.resolved` | `swift package show-dependencies` |
+| Swift / SwiftPM | `.build/checkouts/` — `.build-linux/checkouts/` on Linux, where every script builds — and `Package.resolved` | `swift package show-dependencies` |
 | Apple SDK frameworks | Xcode SDK headers, `.swiftinterface` | `xcodebuild -version`, deployment target |
 | Python | `site-packages/<pkg>/`, `.pyi` stubs | `pip show <pkg>` / `uv pip list` |
 | Rust | `~/.cargo/registry/`, `Cargo.lock` | `cargo tree -p <crate>` |

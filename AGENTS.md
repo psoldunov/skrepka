@@ -27,12 +27,23 @@ scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols 
 scripts/setup-linux.sh  # build skrepkad, skrepka and skrepka-gui, install into ~/.local — Linux only
 ```
 
-Every script in that first block branches on the OS it runs on, so the same
-commands — and the same Ensemblr buttons, which are those scripts — work on a
-Linux machine without macOS or Xcode. There, `setup.sh`, `test.sh` and
+Almost every script in that first block branches on the OS it runs on, so the
+same commands — and the same Ensemblr buttons, which are those scripts — work on
+a Linux machine without macOS or Xcode. There, `setup.sh`, `test.sh` and
 `format.sh` drive the Linux targets through `scripts/linux-env.sh`, `doctor.sh`
 hands over to `doctor-linux.sh`, `run.sh` hands over to `run-linux.sh`, and
-`bundle.sh`, `notarize.sh` and `make-dmg.sh` refuse to run.
+`bundle.sh`, `notarize.sh` and `make-dmg.sh` refuse to run. Two do not branch:
+`release-notes.sh` only rewrites text and needs no toolchain on either platform,
+and `make-icon.sh` is macOS-only — it reaches for `xcrun` and `iconutil` without
+checking, so on Linux it fails rather than refusing.
+
+Three more run on the Mac alone and belong to no gate:
+
+```
+scripts/probe-runbook.sh      # two skrepka-sync-probe peers driven against each other over loopback
+scripts/record-demo-macos.sh  # film the Mac half of the README demo over a running Skrepka
+scripts/make-demo-gif.sh      # compose both halves into docs/images/demo.gif — needs ffmpeg and ImageMagick
+```
 
 The Linux side has its own gate and its own entry points; from a Mac they run
 in the container:
@@ -41,6 +52,7 @@ in the container:
 scripts/linux-env.sh <command>  # run anything with the Linux toolchain, wherever it is
 scripts/run-linux.sh         # debug skrepkad + skrepka-gui against this session
 scripts/linux.sh <command>   # run anything inside the Linux build image
+scripts/linux-image.sh       # build that image, which scripts/linux.sh requires
 scripts/doctor-linux.sh      # the Linux quality gate
 scripts/build-deck.sh        # the x86_64 release tarballs, .deb and .rpm, each with a .sha256
 scripts/build-packages.sh    # just the .deb and .rpm, from the stage build-deck.sh leaves
@@ -57,6 +69,7 @@ scripts/kde-smoke.sh         # tray, shortcut, picker and click-away checks agai
 scripts/gnome-image.sh       # an Ubuntu 26.04 / GNOME 50 headless test image
 scripts/gnome.sh <command>   # run, screenshot, type, click or eval inside GNOME
 scripts/gnome-smoke.sh       # install, capture, tray, shortcut, picker and paste checks
+scripts/record-demo-linux.sh # film the Linux half of the README demo in that Plasma session
 ```
 
 `scripts/linux-env.sh` picks the Linux toolchain in this order, unless
@@ -135,8 +148,9 @@ no maintainer scripts — change a package's file placement there, not in
 `install.sh`. `packaging/copr/skrepka.spec` lays out the same files for
 Fedora's COPR, with Fedora's own `gtk4-layer-shell` in place of the bundled
 one; a change to one layout wants the same change in the other.
-`scripts/publish-copr.sh` uploads it as `psoldunov/skrepka`, with the API token
-in `~/.config/copr`. `packaging/pacstall/skrepka-deb.pacscript` hands the
+`scripts/publish-copr.sh` uploads it to the `skrepka` project of the COPR
+account whose API token is in `~/.config/copr` — `psoldunov/skrepka` for this
+repository's releases. `packaging/pacstall/skrepka-deb.pacscript` hands the
 `.deb` itself to Pacstall, with no layout of its own, and
 `scripts/publish-pacstall.sh` opens each release's pull request in
 `pacstall/pacstall-programs`. `flake.nix` and `nix/` repackage it for Nix, with
@@ -229,9 +243,19 @@ the real permission path.
 - `Sources/SkrepkaLinuxPlatform/`, `SkrepkaDaemon/`, `SkrepkaIPC/`,
   `SkrepkaCLI/`, `SkrepkaLinuxUI/` — the Linux clipboard backends, `skrepkad`,
   its D-Bus interface, `skrepka`, and `skrepka-gui`.
+- `Sources/CSQLite/`, `CWaylandClient/`, `CWaylandProtocols/`, `CX11/`,
+  `CGtk4/` — the pkg-config shims the Linux targets import, and the Wayland
+  protocol bindings `scripts/regenerate-wayland-protocols.sh` generates.
+- `Sources/SkrepkaProbe/` and `Sources/skrepka-sync-probe/` — the headless
+  second peer sync is exercised against, on either platform.
+- `Sources/skrepkad/`, `skrepka-cli/`, `skrepka-gui/` — the Linux executables'
+  entry points, with the bring-up binaries `skrepka-clip-probe/`,
+  `skrepka-palette-demo/` and `skrepka-settings-demo/` beside them.
 - `gnome-extension/` — the GNOME Shell extension that forwards clipboard
   changes to `skrepkad`.
-- `Tests/` — Swift Testing, one suite directory per library.
+- `Tests/` — Swift Testing, one suite directory per library that has tests;
+  `SkrepkaDaemonTests` covers the daemon, its D-Bus interface and the CLI
+  together.
 
 ## Rules
 

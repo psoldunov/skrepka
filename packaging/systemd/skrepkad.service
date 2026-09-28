@@ -16,7 +16,7 @@
 # (freedesktop.org/software/systemd/man/255/ — systemd.unit(5),
 # systemd.service(5), systemd.exec(5), systemd.special(7)) on 2026-09-08.
 # 255 is what Ubuntu 24.04 ships and is the OLDEST of the three targets —
-# Fedora 42+ and SteamOS 3.8 are both newer — so nothing here is younger than
+# Fedora 43+ and SteamOS 3.8 are both newer — so nothing here is younger than
 # the floor. `systemd-analyze verify` was run against this file; see
 # packaging/README.md.
 

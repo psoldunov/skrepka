@@ -6,8 +6,8 @@ clipboard selection and sends supported representations to the local
 `skrepkad` process over the user's session D-Bus.
 
 It has no UI, settings, telemetry, direct network access, subprocesses or data
-store. Capture rules, privacy checks, exclusions, de-duplication and retention
-remain in the daemon. The extension reads only Skrepka's supported clipboard
+store. Capture rules, privacy checks, de-duplication and retention remain in
+the daemon. The extension reads only Skrepka's supported clipboard
 formats and only the normal clipboard, never the primary selection.
 
 The Skrepka release installer places these files in:

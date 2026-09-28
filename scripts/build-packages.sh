@@ -4,7 +4,7 @@
 # scripts/build-deck.sh leaves in build/deck/skrepka-linux-x86_64/:
 #
 #   build/deck/skrepka-linux-x86_64.deb   Ubuntu 24.04+, Debian 13+
-#   build/deck/skrepka-linux-x86_64.rpm   Fedora 39+, openSUSE Tumbleweed
+#   build/deck/skrepka-linux-x86_64.rpm   Fedora 43+, openSUSE Tumbleweed
 #   a .sha256 beside each
 #
 #   scripts/build-packages.sh     after scripts/build-deck.sh, which runs it

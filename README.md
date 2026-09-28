@@ -159,6 +159,30 @@ clipboard history with it.
 
 ### Linux
 
+The release builds are x86_64 only, and need systemd, glibc 2.38 or newer and,
+for the desktop app, GTK 4.12 or newer. Which way to install depends on the
+distribution:
+
+| Distribution | Install with | Updates |
+| --- | --- | --- |
+| **Fedora** 43 or newer | [COPR](#on-fedora-from-copr) | `dnf upgrade` |
+| **Ubuntu** 24.04 or newer, **Debian** 13 or newer | [Pacstall](#on-ubuntu-or-debian-with-pacstall), or else the [`.deb`](#as-a-deb-or-an-rpm) | `pacstall -Up`; for the `.deb`, the next release's package |
+| **SteamOS** 3.8, a Steam Deck in Desktop Mode | [`install.sh`](#with-installsh) | Re-running it |
+| **NixOS** | The flake's [NixOS module](#with-nix) | `nix flake update`, then a rebuild |
+| Any other distribution, with Nix installed | The flake's [Home Manager module](#with-nix) | `nix flake update`, then a rebuild |
+| Any other distribution — Arch, openSUSE and the rest | [`install.sh`](#with-installsh) | Re-running it |
+| Ubuntu 22.04, Debian 12, or anything else older than glibc 2.38 | Not supported by the release builds; both the installer and the `.deb` refuse it | — |
+| Anything that is not x86_64 | [Build from a checkout](#build-and-run) | — |
+
+Not every row has been tried. SteamOS runs on a real Steam Deck; COPR's
+package is installed in clean Fedora 43, 44, 45 and rawhide containers, the
+`.deb` through Pacstall in clean Ubuntu 26.04 and Debian 13 ones, and
+`install.sh` in the headless Plasma and GNOME images described under
+[Where it runs](#where-it-runs). The other rows follow from those floors and
+have not been run.
+
+#### With `install.sh`
+
 On an x86_64 machine with systemd and a Wayland or X11 session — a Steam Deck
 in Desktop Mode included — run this in a terminal on the machine itself:
 
@@ -239,7 +263,7 @@ run `gnome-extensions enable skrepka@dev.soldunov`; and if you used
 
 #### As a `.deb` or an `.rpm`
 
-On Ubuntu 24.04 or newer, Debian 13 or newer, or Fedora 39 or newer, the same
+On Ubuntu 24.04 or newer, Debian 13 or newer, or Fedora 43 or newer, the same
 build installs system-wide as a package:
 
 On Ubuntu or Debian:
@@ -349,9 +373,9 @@ The desktop app is one program with three parts:
 shortcut, Paste automatically and Launch at login](docs/images/kde-settings.png)
 
 The app starts `skrepkad` when it is not running, and so does any `skrepka`
-command, through a D-Bus activation file the installer adds. Quitting the app
-leaves the daemon recording. `skrepka list`, `pin`, `unpin`, `delete`, `clear`
-and `copy --plain` do from a terminal what the picker does, and
+command, through a D-Bus activation file every install route adds. Quitting
+the app leaves the daemon recording. `skrepka list`, `pin`, `unpin`, `delete`,
+`clear` and `copy --plain` do from a terminal what the picker does, and
 `skrepka config` reads and changes the settings.
 
 Wayland does not say which app copied something, so there is no per-app
@@ -413,7 +437,7 @@ minute. NixOS's firewall does this until told otherwise. Open the ports:
 - ufw: `sudo ufw allow proto tcp from any to any port 27182:27183` and
   `sudo ufw allow 5353/udp`.
 
-`skrepka doctor` and Settings → Diagnostics say so when a paired device has
+`skrepka doctor` and Settings → Status say so when a paired device has
 not managed to connect for a few minutes while this one reaches it. If another
 program already holds 27182 or 27183, `skrepkad` listens on a free port instead
 and says that too; `--port N` moves the pair to N and N+1.
@@ -435,7 +459,13 @@ and says that too; `--port N` moves the pair to N and N+1.
 
 ### Linux
 
-- **No root**, ever. Everything installs under `~/.local` and runs as you.
+- **No root to run**, ever. Whichever way Skrepka was installed, the daemon
+  runs as you, as a systemd user service, and the app as an ordinary program in
+  your session. Installing is where the routes differ: `install.sh` needs no
+  root and puts everything under `~/.local`; the `.deb`, the `.rpm`, COPR and
+  Pacstall install system-wide under `/usr`, which takes root; the Home
+  Manager module installs into your own profile; and the NixOS module is
+  system configuration.
 - **The global shortcut** goes through the desktop's GlobalShortcuts portal,
   which asks you to confirm Meta+Shift+V the first time the app starts.
 - **Automatic paste** goes through the Remote Desktop portal on KDE and GNOME,
@@ -570,7 +600,7 @@ From a Mac, with OrbStack or Docker, the Linux side runs in containers:
 ```sh
 scripts/linux.sh <command>   # run anything inside the Linux build image
 scripts/doctor-linux.sh      # the Linux quality gate
-scripts/build-deck.sh        # the x86_64 release tarball + .sha256 for a GitHub release
+scripts/build-deck.sh        # the x86_64 release tarballs, .deb and .rpm, each with a .sha256
 scripts/kde-smoke.sh         # tray, shortcut, picker and click-away in headless Plasma 6.4.3
 scripts/gnome-smoke.sh       # install, capture, tray, shortcut, picker and paste in headless GNOME 50
 ```

@@ -18,7 +18,7 @@ itself carries the reasoning for every directive, including the ones
 deliberately left out.
 
 Verified with `systemd-analyze --user verify` against systemd 255 — Ubuntu
-24.04, the oldest of the three targets; Fedora 42+ and SteamOS 3.8 are newer.
+24.04, the oldest of the three targets; Fedora 43+ and SteamOS 3.8 are newer.
 
 Useful commands once installed:
 
@@ -82,7 +82,7 @@ existing `icon-theme.cache` there, but never creates one.
 ## `gnome-extension/`
 
 The release tarball carries `gnome-extension/` at its root. `install.sh` copies
-its four reviewed source files into the user extension directory:
+its five reviewed files into the user extension directory:
 
 ```text
 $XDG_DATA_HOME/gnome-shell/extensions/skrepka@dev.soldunov/
@@ -93,7 +93,7 @@ client. The extension therefore runs inside Shell, listens to Mutter's
 server-side clipboard selection and submits supported representations to the
 local daemon through `dev.soldunov.Skrepka1.Submit`. It has no UI, store,
 subprocess, direct network access or capture policy; the daemon still owns
-privacy markers, exclusions, size validation, de-duplication and retention.
+privacy markers, size validation, de-duplication and retention.
 
 A running Wayland Shell does not discover a directory added after login. On a
 first install, the installer adds the UUID to GNOME's `enabled-extensions`
@@ -207,8 +207,11 @@ machine from every peer it has synced with.
 ## `.deb` and `.rpm`: `nfpm.yaml` and `scripts/build-packages.sh`
 
 The same build as the release tarball, as a system package for Ubuntu 24.04 and
-newer, Debian 13 and newer, and Fedora 39 and newer. Those floors are the
-tarball's own: glibc 2.38 and GTK 4.12. Debian 12, on glibc 2.36, refuses the
+newer, Debian 13 and newer, and Fedora 43 and newer. The Ubuntu and Debian
+floors are the tarball's own: glibc 2.38 and GTK 4.12. Fedora's is the oldest
+release COPR builds for and `scripts/test-copr.sh` installs on; the `.rpm`'s
+dependencies would also resolve on older releases, which are end-of-life and
+untested. Debian 12, on glibc 2.36, refuses the
 `.deb` rather than installing binaries that cannot start. The `.rpm` names its
 libraries by soname, so it should also resolve on openSUSE Tumbleweed — not
 tried.
@@ -454,8 +457,8 @@ other:
 - **`release`**, the default, repackages the release tarball.
 - **`master`** compiles the flake's own commit — `github:psoldunov/skrepka#master`
   is the latest commit on master. Its version names the commit's date,
-  `0.3.0-unstable-2026-09-28`, and the daemon reports the commit itself:
-  `skrepkad --version` and `skrepka doctor` say `0.3.0-master.20260928.gf326d9c`.
+  `0.3.1-unstable-2026-09-28`, and the daemon reports the commit itself:
+  `skrepkad --version` and `skrepka doctor` say `0.3.1-master.20260928.g5c67576`.
 
 `master` does not use nixpkgs' Swift, which carried 5.10 until 2026-09-16 and
 has no track record with a SwiftPM package of this size. `nix/master.nix` runs
@@ -521,7 +524,7 @@ for `master`:
 
 Each release, after `scripts/build-deck.sh`, run
 `scripts/pin-release.sh <version> build/deck/skrepka-linux-x86_64.tar.gz`
-and commit what it changes. It pins the COPR spec as well, below. The tarball
+and commit what it changes. It pins the COPR spec as well, above. The tarball
 carries nothing from `nix/` or `copr/`, so that commit changes no byte of the
 release, and it is the one to tag.
 
@@ -541,7 +544,10 @@ release, and it is the one to tag.
 4. **Smoke-test:** `SKREPKA_TARBALL=build/deck/skrepka-linux-x86_64.tar.gz
    scripts/kde-smoke.sh`, `SKREPKA_TARBALL=… scripts/test-copr.sh`, and
    `SKREPKA_DEB=build/deck/skrepka-linux-x86_64.deb scripts/test-pacstall.sh`,
-   which installs the `.deb` in clean containers too.
+   which installs the `.deb` in clean containers too. Optionally,
+   `SKREPKA_TARBALL=… scripts/gnome-smoke.sh` as well: GNOME has only ever run
+   headless, and its shortcut and paste checks do not pass reliably there, so
+   it does not gate a release.
 5. **Publish:** tag the commit, create the GitHub release with the twelve
    assets below and `scripts/release-notes.sh <version>` as its notes — the
    changelog section, unwrapped, because a release renders every newline as a
@@ -564,17 +570,18 @@ Attach the release's assets under exactly these names:
 - `skrepka-macos-universal.zip` — the same app, zipped; what the Homebrew cask
   installs. Up to 0.2.1 this was `Skrepka.zip`.
 - `skrepka-linux-x86_64.tar.gz` — what `install.sh` installs: the daemon, the
-  CLI, the desktop app, the GNOME extension, everything under `packaging/` and
-  `install.sh` itself.
-- `skrepka-linux-x86_64-tools.tar.gz` — the probes and the palette demo, for
-  hardware bring-up only. It unpacks into the same directory name, so untarring
-  both side by side merges them.
+  CLI, the desktop app, the GNOME extension, the `packaging/` directories it
+  reads — and `packaging/README.md` beside them — and `install.sh` itself.
+- `skrepka-linux-x86_64-tools.tar.gz` — the probes, the palette demo and the
+  Settings demo, for hardware bring-up only. It unpacks into the same directory
+  name, so untarring both side by side merges them.
 - `skrepka-linux-x86_64.deb` and `skrepka-linux-x86_64.rpm` — the same build as
   system packages.
 - a `.sha256` beside each of the above.
 
 The two tarballs are split because every binary carries its own static Swift
-runtime, Foundation and ICU data, and all six in one tarball came to 256 MB.
+runtime, Foundation and ICU data, and the six binaries there were when it was
+measured came to 256 MB in one tarball.
 Debug info is stripped with the symbol table kept, so crash backtraces still
 name functions. The release tarball comes to about 95 MB.
 

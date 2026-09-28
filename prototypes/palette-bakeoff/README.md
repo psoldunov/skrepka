@@ -47,7 +47,7 @@ reasoning, because both are the kind of thing that gets "simplified" back out.
 ## Running it
 
 ```
-docker build -t skrepka-linux:6.3 docker/                    # from the repo root
+scripts/linux-image.sh                                       # from the repo root; builds skrepka-linux:6.3
 mkdir -p /tmp/palette-home
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/home-mnt \
   -v /tmp/palette-home:/home-mnt \
