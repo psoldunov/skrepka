@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if ! docker info >/dev/null 2>&1; then
-    echo "docker is not reachable (OrbStack socket: ~/.orbstack/run/docker.sock)." >&2
+    echo "docker is not reachable (Linux: is the daemon running and are you in the docker group? macOS: OrbStack socket ~/.orbstack/run/docker.sock)." >&2
     exit 1
 fi
 

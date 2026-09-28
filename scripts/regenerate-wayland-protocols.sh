@@ -44,9 +44,14 @@ TARGET="Sources/CWaylandProtocols"
 XML_DIR="${TARGET}/protocol-xml"
 INCLUDE_DIR="${TARGET}/include"
 
-if [[ "$(uname -s)" != "Linux" ]]; then
-	printf '\033[1m▸ delegating to the Linux container\033[0m\n'
-	exec scripts/linux.sh scripts/regenerate-wayland-protocols.sh "$@"
+# macOS has no wayland-scanner, and a Linux host may not either; both re-enter
+# under the Linux toolchain scripts/lib/linux-env.sh finds — the nix sandbox or
+# the build image, which both carry Wayland 1.22's scanner, the one the checked-in
+# output was generated with.
+if [[ "$(uname -s)" != "Linux" ]] || ! command -v wayland-scanner > /dev/null 2>&1; then
+	# shellcheck source=scripts/lib/linux-env.sh
+	source scripts/lib/linux-env.sh
+	linux_env_reenter scripts/regenerate-wayland-protocols.sh "$@"
 fi
 
 if ! command -v wayland-scanner > /dev/null 2>&1; then

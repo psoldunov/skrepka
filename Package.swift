@@ -80,6 +80,44 @@ let package = Package(
         // Self-signed P-256 device certificates. SyncDeviceID is SHA-256 over
         // the DER encoding, so this package decides the device's identity.
         .package(url: "https://github.com/apple/swift-certificates", from: "1.20.0"),
+        // The two platform-specific dependencies are declared here, on both
+        // platforms, even though each is used on one only: KeyboardShortcuts by
+        // the macOS app target, dbus by the Linux targets. Both targets stay
+        // fenced below; only the declarations are shared.
+        //
+        // That is what gives the two platforms one `Package.resolved`. SwiftPM
+        // derives the lockfile's `originHash` from the declared dependencies, so
+        // a manifest that declared a different list on each platform had a
+        // different lockfile on each, and every Linux build rewrote the tracked
+        // one — which the Linux scripts used to hide by saving and restoring it,
+        // leaving dbus pinned nowhere. Declaring both costs, on each platform,
+        // a clone of a package no target there asks for, so it is never
+        // compiled, and one SwiftPM line per build: "dependency
+        // 'keyboardshortcuts' is not used by any target" on Linux (seen with
+        // Swift 6.3.3), and presumably the same for 'dbus' on macOS, not yet
+        // seen there. It is a package diagnostic, not a compiler warning, so
+        // `treatAllWarnings` does not make it an error.
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "3.0.1"),
+        // A pure-Swift NIO implementation of the D-Bus wire protocol, needing
+        // neither `libdbus-1` nor a system-library target. Two things in Phase 6
+        // speak D-Bus and both are Linux-only: `AvahiDiscovery` calls
+        // `org.freedesktop.Avahi` on the system bus, and the daemon exports
+        // `dev.soldunov.Skrepka1` on the session bus — the same connection type
+        // serves both, since `DBusClient.Connection` conforms to
+        // `DBusServerConnection`.
+        //
+        // The product is spelled `DBUS`; asking for `DBus` fails resolution with
+        // "product 'DBus' … not found in package 'dbus'". The package identity is
+        // the URL's last component, `dbus`.
+        //
+        // `.upToNextMinor` rather than `from:`. `from: "0.4.1"` means
+        // `0.4.1 ..< 1.0.0` — SwiftPM does not give a 0.x major the narrower
+        // reading some other package managers do, confirmed by dumping a
+        // manifest rather than from memory — and a pre-1.0 package promises
+        // nothing across a minor. This one is load-bearing for both peer
+        // discovery and the whole IPC surface, so a new minor should be a
+        // deliberate change to this line rather than a `swift package update`.
+        .package(url: "https://github.com/wendylabsinc/dbus.git", .upToNextMinor(from: "0.4.1")),
     ],
     targets: [
         // The system SQLite, for the Linux history store (D-3). macOS ships a
@@ -184,9 +222,6 @@ let package = Package(
 #if os(macOS)
 
     package.products.append(.executable(name: "Skrepka", targets: ["Skrepka"]))
-    package.dependencies.append(
-        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "3.0.1")
-    )
     package.targets.append(
         .executableTarget(
             name: "Skrepka",
@@ -214,42 +249,6 @@ let package = Package(
 // `#if os(Linux)` here asks about the machine running SwiftPM, which is the
 // right question — `Package.swift` is Swift evaluated on the build host.
 #if os(Linux)
-
-    // A pure-Swift NIO implementation of the D-Bus wire protocol, needing
-    // neither `libdbus-1` nor a system-library target. Two things in Phase 6
-    // speak D-Bus and both are Linux-only: `AvahiDiscovery` calls
-    // `org.freedesktop.Avahi` on the system bus, and the daemon exports
-    // `dev.soldunov.Skrepka1` on the session bus — the same connection type
-    // serves both, since `DBusClient.Connection` conforms to
-    // `DBusServerConnection`.
-    //
-    // Appended here rather than in the shared `dependencies:` list, and that is
-    // the D-9 rule rather than tidiness: the package resolves on macOS
-    // perfectly well, so leaving it unconditional would pull D-Bus,
-    // swift-nio-extras and swift-algorithms into the Mac app's dependency graph
-    // to compile nothing. A Linux-only dependency is one `Package.resolved`
-    // never carries on macOS — which `doctor-linux.sh` already handles, since it
-    // saves and restores that file around every containerised run.
-    //
-    // The product is spelled `DBUS`; asking for `DBus` fails resolution with
-    // "product 'DBus' … not found in package 'dbus'". The package identity is
-    // the URL's last component, `dbus`.
-    //
-    // `.upToNextMinor` rather than `from:`, and the reason is the save/restore
-    // above rather than caution. `from: "0.4.1"` means `0.4.1 ..< 1.0.0` —
-    // SwiftPM does not give a 0.x major the narrower reading some other package
-    // managers do, confirmed by dumping a manifest rather than from memory. A
-    // Linux-only dependency can never appear in the checked-in
-    // `Package.resolved`, which is resolved on macOS, and `doctor-linux.sh`
-    // restores that file around every containerised run — so nothing anywhere
-    // in the repository records which version of this package ever worked, and
-    // every Linux build re-resolves to the newest tag in range. A pre-1.0
-    // package promises nothing across a minor, and this one is load-bearing for
-    // both peer discovery and the whole IPC surface, so the range is the only
-    // place that pin can live.
-    package.dependencies.append(
-        .package(url: "https://github.com/wendylabsinc/dbus.git", .upToNextMinor(from: "0.4.1"))
-    )
 
     package.products.append(.executable(name: "skrepka-clip-probe", targets: ["skrepka-clip-probe"]))
     package.products.append(.executable(name: "skrepkad", targets: ["skrepkad"]))

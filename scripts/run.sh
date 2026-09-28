@@ -10,6 +10,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# On Linux, Run builds skrepkad and skrepka-gui in debug and runs them against
+# this session — scripts/run-linux.sh.
+if [[ "$(uname -s)" == "Linux" ]]; then
+	exec scripts/run-linux.sh "$@"
+fi
+
 # SKREPKA_REVEAL=0 because this script launches the app; a Finder window opening
 # over the thing you are about to run is noise, not a result.
 SKREPKA_REVEAL=0 scripts/bundle.sh

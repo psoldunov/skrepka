@@ -34,7 +34,8 @@ SWIFT_VERSION="${SKREPKA_SWIFT_VERSION:-6.3}"
 # message at all.
 if ! docker info > /dev/null 2>&1; then
 	echo "docker is not reachable." >&2
-	echo "OrbStack exposes its socket at ~/.orbstack/run/docker.sock; under a" >&2
+	echo "On Linux: start the daemon (systemctl start docker) and be in the docker group." >&2
+	echo "On macOS: OrbStack exposes its socket at ~/.orbstack/run/docker.sock; under a" >&2
 	echo "sandbox that path has to be granted before this script can run." >&2
 	exit 1
 fi

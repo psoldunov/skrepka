@@ -10,6 +10,13 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# On Linux the gate is scripts/doctor-linux.sh, with the same flags. It cannot
+# compile the macOS app target, so a change that touches Sources/Skrepka/ or
+# shared code still wants this script on a Mac before it merges.
+if [[ "$(uname -s)" == "Linux" ]]; then
+	exec scripts/doctor-linux.sh "$@"
+fi
+
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
 FAST=0
