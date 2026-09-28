@@ -288,7 +288,10 @@ programs.skrepka.enable = true;
 To try it without installing, run the daemon in one terminal with
 `nix run github:psoldunov/skrepka#skrepkad` and the app with
 `nix run github:psoldunov/skrepka`; the modules are what start both at login.
-The flake repackages each release's tarball rather than building from source;
+The flake repackages each release's tarball. Its `master` package builds the
+latest commit on master from source instead — `nix profile add
+github:psoldunov/skrepka#master`, or `programs.skrepka.package =
+inputs.skrepka.packages.x86_64-linux.master;` in either module.
 [packaging/README.md](packaging/README.md) has the details, and the modules'
 options.
 

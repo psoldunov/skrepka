@@ -447,10 +447,29 @@ previous version.
 
 ## Nix: `flake.nix` and `nix/`
 
-A flake for x86_64-linux that repackages the release tarball rather than
-building from source. nixpkgs carried Swift 5.10 until 2026-09-16, and nothing
-has built a SwiftPM package of this size with its Swift 6.2 yet; revisit a
-source build once that has a track record.
+A flake for x86_64-linux with two variants of the same package, each
+installing as `skrepka` under the same app ID, so a system carries one or the
+other:
+
+- **`release`**, the default, repackages the release tarball.
+- **`master`** compiles the flake's own commit — `github:psoldunov/skrepka#master`
+  is the latest commit on master. Its version names the commit's date,
+  `0.3.0-unstable-2026-09-28`, and the daemon reports the commit itself:
+  `skrepkad --version` and `skrepka doctor` say `0.3.0-master.20260928.gf326d9c`.
+
+`master` does not use nixpkgs' Swift, which carried 5.10 until 2026-09-16 and
+has no track record with a SwiftPM package of this size. `nix/master.nix` runs
+the same `swift build -c release --static-swift-stdlib` as
+`scripts/build-deck.sh`, inside the `nix/dev-env.nix` sandbox, so it builds
+with the release's Swift 6.3.3 against the release's Ubuntu 24.04 library
+floor. That sandbox is bubblewrap nested in Nix's build sandbox, so the build
+machine has to allow unprivileged user namespaces, which NixOS does by
+default. The build has no network: the SwiftPM checkouts come from one
+fixed-output derivation, hashed in `nix/pins.json`. Whenever `Package.resolved`
+changes, run `scripts/pin-master-deps.sh` and commit the new hash with it;
+until then `master` stops with a hash mismatch rather than building against
+the old checkouts. The compiled binaries then go through `nix/package.nix`
+exactly as the tarball's do.
 
 `nix/package.nix` fetches `skrepka-linux-x86_64.tar.gz` for the version and
 hash it names, and:
@@ -468,9 +487,12 @@ hash it names, and:
   so an entry there would start the app for anyone who installs the package,
   whatever a module's `autostart` says; the modules put it where it belongs.
 
-The flake exposes `packages.x86_64-linux.default` (also `skrepka`), `apps` for
-`skrepka-gui`, `skrepka` and `skrepkad`, `overlays.default`, and two modules,
-each `programs.skrepka.enable`:
+The flake exposes `packages.x86_64-linux.default` (also `skrepka` and
+`release`) and `master`, `apps` for `skrepka-gui`, `skrepka` and `skrepkad`,
+`overlays.default` with `skrepka` and `skrepka-master`, and two modules, each
+`programs.skrepka.enable`, which install `release` unless
+`programs.skrepka.package` names another — `inputs.skrepka.packages.x86_64-linux.master`
+for `master`:
 
 - **`nixosModules.default`** installs the package system-wide — launcher, icons
   and the GNOME extension — adds it to `services.dbus.packages` and
