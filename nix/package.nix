@@ -3,8 +3,9 @@
 # The x86_64 tarball scripts/build-deck.sh builds and every GitHub release
 # carries, patched to run against nixpkgs' libraries rather than rebuilt: the
 # binaries link the Swift runtime statically and need only glibc, GTK 4 and a
-# handful of X11 and Wayland libraries from the system. A source build waits
-# for nixpkgs' Swift 6 to have some track record; packaging/README.md says why.
+# handful of X11 and Wayland libraries from the system. This is the flake's
+# `release` package; ./master.nix swaps `src` for the same payload compiled
+# from the flake's own commit, and packages it with everything below.
 #
 # scripts/pin-release.sh rewrites `version` and `hash` for each release.
 {

@@ -16,10 +16,11 @@
 # Rewriting all of that is a toolchain port; a bubblewrap sandbox that provides
 # those paths is not.
 #
-# `pkgs` is NOT the flake's main nixpkgs. flake.nix passes nixos-24.05, whose
-# glibc 2.39, GLib 2.80, GTK 4.14, Wayland 1.22, SQLite 3.45 and sway 1.9 are
-# the versions Ubuntu 24.04 ships — the base of the build image and the floor
-# the release tarball is built against. With current nixpkgs (GLib 2.88, GTK
+# `pkgs` is NOT the flake's main nixpkgs. nix/packages.nix passes nixos-24.05,
+# whose glibc 2.39, GLib 2.80, GTK 4.14, Wayland 1.22, SQLite 3.45 and sway 1.9
+# are the versions Ubuntu 24.04 ships — the base of the build image and the
+# floor the release tarball, and the flake's `master` package, are built
+# against. With current nixpkgs (GLib 2.88, GTK
 # 4.22) SkrepkaLinuxUI does not compile: newer GLib's flag enums import into
 # Swift as option sets, so `G_DBUS_CALL_FLAGS_NONE` and seven more constants
 # are not found, and `gdk_texture_new_for_pixbuf` is deprecated, which this

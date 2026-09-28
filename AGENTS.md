@@ -45,6 +45,7 @@ scripts/doctor-linux.sh      # the Linux quality gate
 scripts/build-deck.sh        # the x86_64 release tarballs, .deb and .rpm, each with a .sha256
 scripts/build-packages.sh    # just the .deb and .rpm, from the stage build-deck.sh leaves
 scripts/pin-release.sh <version> <tarball>  # point the Nix flake, the COPR spec and the pacscript at a release
+scripts/pin-master-deps.sh   # re-hash the SwiftPM checkouts the flake's `master` package builds from
 scripts/test-copr.sh         # build the COPR package and install it in every Fedora it targets
 scripts/publish-copr.sh <version>  # upload it to COPR and wait for the builds
 scripts/test-pacstall.sh     # install the pacscript with Pacstall in clean Ubuntu and Debian
@@ -69,7 +70,8 @@ scripts/gnome-smoke.sh       # install, capture, tray, shortcut, picker and past
   nixos-24.05's libraries, which are Ubuntu 24.04's versions — glibc 2.39, GLib
   2.80, GTK 4.14, Wayland 1.22, sway 1.9. Built once into `.build-nix/dev-env`
   (the first build downloads about 1 GB) and rebuilt only when `flake.nix`,
-  `flake.lock` or `nix/dev-env.nix` change. `nix develop` opens a shell in it.
+  `flake.lock`, `nix/packages.nix` or `nix/dev-env.nix` change. `nix develop`
+  opens a shell in it.
 - **container** — `scripts/linux.sh`. Always the runner on macOS.
 
 `doctor-linux.sh` and `regenerate-wayland-protocols.sh` re-enter themselves
@@ -140,7 +142,10 @@ in `~/.config/copr`. `packaging/pacstall/skrepka-deb.pacscript` hands the
 `pacstall/pacstall-programs`. `flake.nix` and `nix/` repackage it for Nix, with
 a NixOS module and a Home Manager module, each `programs.skrepka`. Every
 release ends with `scripts/pin-release.sh` and a commit, which pins the flake,
-the spec and the pacscript. `packaging/README.md` has the release checklist,
+the spec and the pacscript. The flake's `master` package is compiled from the
+flake's own commit instead, inside the `nix/dev-env.nix` sandbox; whenever
+`Package.resolved` changes, `scripts/pin-master-deps.sh` re-hashes its SwiftPM
+checkouts into `nix/pins.json`, and that belongs in the same commit. `packaging/README.md` has the release checklist,
 and why SteamOS stays on `install.sh` and nothing ships as a Flatpak.
 
 `scripts/bundle.sh` signs without a secure timestamp, which is fine locally and

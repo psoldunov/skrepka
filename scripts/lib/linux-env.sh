@@ -15,7 +15,8 @@
 #   nix        a Linux host with `nix`: the FHS sandbox nix/dev-env.nix builds,
 #              holding Swift 6.3.3 and the Ubuntu 24.04-era libraries the
 #              targets link. Built once into .build-nix/dev-env and reused
-#              until flake.nix, flake.lock or nix/dev-env.nix changes.
+#              until flake.nix, flake.lock, nix/packages.nix or
+#              nix/dev-env.nix changes.
 #   container  scripts/linux.sh and the skrepka-linux build image. The only
 #              runner on macOS, and the fallback on a Linux host with Docker
 #              but neither of the others.
@@ -97,7 +98,7 @@ linux_env_nix_launcher() {
 	repository="$(linux_env_repository)"
 	link="${repository}/.build-nix/dev-env"
 	stamp="${repository}/.build-nix/dev-env.inputs"
-	wanted="$(cd "${repository}" && cat flake.nix flake.lock nix/dev-env.nix | sha256sum | cut -d ' ' -f 1)"
+	wanted="$(cd "${repository}" && cat flake.nix flake.lock nix/packages.nix nix/dev-env.nix | sha256sum | cut -d ' ' -f 1)"
 
 	if [[ ! -x "${link}/bin/skrepka-dev" ]] || [[ "$(cat "${stamp}" 2> /dev/null)" != "${wanted}" ]]; then
 		mkdir -p "${repository}/.build-nix"
