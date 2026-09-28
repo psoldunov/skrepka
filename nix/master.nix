@@ -41,7 +41,9 @@ let
     else
       builtins.head (builtins.head daemonVersionMatches);
 
-  commitTime = self.lastModifiedDate;
+  # The Unix epoch when a source carries no date, as nixpkgs' own flake
+  # falls back to.
+  commitTime = self.lastModifiedDate or "19700101000000";
   commitDate = lib.concatStringsSep "-" [
     (builtins.substring 0 4 commitTime)
     (builtins.substring 4 2 commitTime)
@@ -117,9 +119,10 @@ let
     '';
 
     # Each checkout's .git holds packfiles and an index that differ from one
-    # clone to the next. SwiftPM builds from the files and workspace-state.json
-    # alone, and does not look for .build/repositories while the checkouts
-    # match the pins.
+    # clone to the next, and so do the bare clones in .build/repositories, so
+    # neither is kept. Offline, `swift build` still prints "Fetching" for each
+    # repository, finds nothing, and builds from the checkouts and
+    # workspace-state.json, which match the pins.
     installPhase = ''
       runHook preInstall
 
