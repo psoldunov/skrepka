@@ -1,5 +1,11 @@
 # A Linux Skrepka, and LAN sync between the two
 
+**This is a historical design document, kept for its reasoning rather than as a
+description of the shipped product.** Linux has since shipped; the project
+README's [Where it runs](../README.md#where-it-runs) table is the current
+account of what runs where, and [`packaging/README.md`](../packaging/README.md)
+is the current account of how it is packaged.
+
 **Status: this was written as a consideration; the work has since been
 committed to.** See [D-6](linux-sync/open-questions.md#d-6). No code exists for
 any of it yet.

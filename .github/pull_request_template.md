@@ -23,7 +23,7 @@ up with the app actually running over another app, and no automated check sees
 it. Say what you actually did, not what should work.
 -->
 
-- [ ] `scripts/doctor.sh` is green — format, lint, build with warnings as errors, tests, dead-code scan
+- [ ] `scripts/doctor.sh` is green — format, GNOME extension checks, lint, build with warnings as errors, tests, dead-code scan
 - [ ] SwiftLint and Periphery are installed, so neither step was skipped with a warning
 - [ ] Launched with `scripts/run.sh`, not by executing the binary
 - [ ] Touches Linux code: `scripts/doctor-linux.sh` is green, and the desktops it was run on are named below — real hardware or a headless image

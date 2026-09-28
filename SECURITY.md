@@ -14,8 +14,9 @@ what is in scope rather than leaving you to guess.
 
 Skrepka has no in-app updater, so `brew upgrade --cask skrepka` (or a fresh
 download) is the whole patch path on a Mac. On Linux it is re-running
-`install.sh`, installing the latest `.deb` or `.rpm`, or updating the Nix flake.
-There are no backports to older tags.
+`install.sh`, installing the latest `.deb` or `.rpm`, `dnf upgrade` from COPR on
+Fedora, `pacstall -Up` with Pacstall, or updating the Nix flake. There are no
+backports to older tags.
 
 ## Reporting a vulnerability
 
@@ -102,7 +103,7 @@ exactly as on a Mac.
 - Concealed content (`org.nspasteboard.ConcealedType`, 1Password's own type)
   rendered in the clear anywhere in the UI — it is stored, and it is meant to
   be masked everywhere it is shown
-- A copy from an app on the exclusion list being recorded anyway
+- A copy from an app on the Mac's exclusion list being recorded anyway
 - Clipboard contents reaching any file, log, crash report or process other than
   the store and the app itself
 - A paste landing in an app other than the one that was frontmost, or the wrong
@@ -159,11 +160,20 @@ will be closed with a pointer to this section:
   The one-line install also runs `install.sh` straight from `master`; the
   README's install-from-the-release route runs the copy inside the tarball
   instead. The `.deb` and `.rpm` are unsigned too, and the Nix flake trusts the
-  tarball by the hash committed in `nix/package.nix`. Build from source with
+  tarball by the hash committed in `nix/package.nix`. COPR is the one route
+  that is signed: it generates a GPG key for each project and signs the
+  packages it builds with it. What it builds is the same release tarball,
+  repackaged by `packaging/copr/skrepka.spec`, so that signature vouches for
+  COPR's build, not for the tarball it started from. Build from source with
   `scripts/setup-linux.sh` if that is your threat model.
-- **A password manager that sets no `org.nspasteboard.*` marker gets recorded.**
-  Skrepka honours the markers that exist and offers a per-app exclusion list as
-  the backstop. Tell the password manager's authors too.
+- **A password manager that sets no marker Skrepka honours gets recorded.** On
+  macOS those markers are the `org.nspasteboard.*` types; on Linux the one
+  convention there is, and the one Skrepka reads, is KDE's
+  `x-kde-passwordManagerHint` carrying `secret`. Skrepka honours the markers
+  that exist, and on a Mac offers a per-app exclusion list as the backstop.
+  There is no such list on Linux: the Wayland clipboard protocols hand over what
+  was copied and nothing about which app copied it, so there is no app to match
+  a list against. Tell the password manager's authors too.
 - **A device you paired with keeps what it already received.** Unpairing stops
   the trust and forgets the certificate; it does not reach into the other
   machine and delete history. Sync is a copy, and a copy on a machine you no
@@ -179,9 +189,6 @@ will be closed with a pointer to this section:
   is in it. Discovery without an advertisement is not a thing Bonjour offers,
   and Linux advertises the same record through Avahi, or through `skrepkad`'s
   own responder where Avahi will not.
-- **A live-pushed item over 256 KB reaches history but not the clipboard.** A
-  known limitation, recorded in [CHANGELOG.md](CHANGELOG.md); it fails towards
-  less content moving, not more.
 - **Reports from automated scanners with no working proof of concept**, and
   anything requiring a macOS release older than 26, which Skrepka does not
   support.

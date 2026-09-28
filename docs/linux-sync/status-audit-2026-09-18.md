@@ -1,5 +1,11 @@
 # Linux sync — status audit, 2026-09-18
 
+**This is a historical record of where the work stood on 2026-09-18, not a
+description of the shipped product.** The project README's
+[Where it runs](../../README.md#where-it-runs) table is the current account of
+what runs where, and [`packaging/README.md`](../../packaging/README.md) is the
+current account of how it is packaged.
+
 Code at `e3d5a92` checked against every phase doc in this directory. Five
 read-only agents took one slice each; their key claims were re-checked by hand.
 The same day's follow-up work is recorded under [Done today](#done-today).

@@ -52,7 +52,8 @@ see [On Linux](#on-linux) below.
   ```
 
   The quality gate skips either one with a warning rather than failing, so a
-  green run on your machine without them is not the same green run as CI's.
+  green run on your machine without them is not a full green run.
+  `SKREPKA_STRICT=1 scripts/doctor.sh` turns a skipped check into a failure.
 
 Then:
 
@@ -108,8 +109,8 @@ headless.
 ## The quality gate
 
 ```sh
-scripts/doctor.sh          # format check, lint, build with warnings as errors, tests, dead-code scan
-scripts/doctor.sh --fast   # format, lint, build only — the mid-edit loop
+scripts/doctor.sh          # format check, GNOME extension checks, lint, build with warnings as errors, tests, dead-code scan
+scripts/doctor.sh --fast   # everything but the tests and the dead-code scan — the mid-edit loop
 ```
 
 **A green `scripts/doctor.sh` is the definition of done.** Run the full one
@@ -129,7 +130,7 @@ as well.
 When the formatter disagrees with you, it wins:
 
 ```sh
-xcrun swift-format format --in-place --recursive --parallel Sources Tests
+scripts/format.sh   # Xcode's swift-format on a Mac, the Linux toolchain's on Linux
 ```
 
 Never disable a lint rule to make the gate pass. If a rule is genuinely wrong
@@ -187,9 +188,13 @@ in the toolchain. Reach for XCTest only when an API exists nowhere else, and
 say why in a comment.
 
 ```sh
-swift test --parallel
-swift test --filter <regex>
+scripts/test.sh                            # the whole suite, in parallel
+scripts/test.sh --filter <regex>           # one suite
 ```
+
+`scripts/test.sh` is the way in on both platforms: on Linux it runs under the
+toolchain `scripts/linux-env.sh` finds and builds into `.build-linux`, which a
+bare `swift test` does not.
 
 Test what is testable and do not fake the rest:
 
