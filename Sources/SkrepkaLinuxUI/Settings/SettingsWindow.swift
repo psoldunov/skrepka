@@ -48,10 +48,7 @@ final class SettingsWindow {
         else { throw SettingsError.widgetCreationFailed }
         gtk_widget_add_css_class(widget, SettingsStyle.window)
         gtk_window_set_title(window, "Skrepka Settings")
-        let size = Self.defaultSize(
-            at: services.interfaceScale.scale,
-            screen: (skrepka_smallest_monitor_width(), skrepka_smallest_monitor_height()))
-        gtk_window_set_default_size(window, size.width, size.height)
+        Self.size(window, at: services.interfaceScale.scale)
         try Self.installTitlebar(on: window)
 
         let sidebar = try SettingsSidebar()
@@ -104,6 +101,17 @@ final class SettingsWindow {
         (fitted(900, at: scale, screen: screen.width), fitted(660, at: scale, screen: screen.height))
     }
 
+    /// Gives `window` ``defaultSize(at:screen:)`` for the screens GDK knows.
+    /// On a window already showing, GTK queues a resize to the new default
+    /// (`gtk_window_set_default_size`, GTK 4.12); a maximized, tiled or full
+    /// screen window keeps the size the compositor gave it. A floating one
+    /// grows from where it stands — the compositor places it, not the app.
+    private static func size(_ window: UnsafeMutablePointer<GtkWindow>, at scale: InterfaceScale) {
+        let size = defaultSize(
+            at: scale, screen: (skrepka_smallest_monitor_width(), skrepka_smallest_monitor_height()))
+        gtk_window_set_default_size(window, size.width, size.height)
+    }
+
     private static func fitted(_ design: Int32, at scale: InterfaceScale, screen: Int32) -> Int32 {
         let wanted = scale.length(design)
         guard screen > 0 else { return wanted }
@@ -136,6 +144,12 @@ final class SettingsWindow {
     /// Restyles for a dark or light desktop and its accent.
     func apply(_ appearance: AppearancePreference) {
         sidebar.apply(appearance)
+    }
+
+    /// Resizes to the size the window opens at for `scale` — the stylesheet
+    /// has already grown everything inside it.
+    func apply(_ scale: InterfaceScale) {
+        Self.size(window, at: scale)
     }
 
     func setShortcut(_ state: GlobalShortcutsState) {

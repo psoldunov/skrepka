@@ -61,11 +61,13 @@ final class SettingsHost {
     }
 
     /// Redraws at `scale`: the stylesheet at once, which is every size the
-    /// window on screen has.
+    /// window on screen draws, and that window's own size, which would
+    /// otherwise keep the old one and scroll the larger page inside it.
     func apply(_ scale: InterfaceScale) {
         interfaceScale = InterfaceScaleStatus(scale: scale)
         guard let appearance else { return }
         SettingsStyle.apply(appearance, scale: scale)
+        open?.apply(scale)
     }
 
     private func chooseInterfaceScale(_ scale: InterfaceScale) -> InterfaceScaleStatus {
