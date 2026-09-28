@@ -42,7 +42,19 @@ final class PickerPanel {
         self.footer = footer
         self.emptyState = emptyState
         self.root = root
+        apply(.standard)
         showList()
+    }
+
+    /// Sizes the search row, the footer, the rows and the empty state for an
+    /// interface size — the chrome to exactly ``PaletteMetrics/chromeHeight``,
+    /// which is what the window sizes the panel by. Rows already on screen
+    /// keep their size until the list is next rebuilt.
+    func apply(_ metrics: PaletteMetrics) {
+        gtk_widget_set_size_request(searchBar.root, -1, metrics.searchHeight)
+        gtk_widget_set_size_request(footer.root, -1, metrics.footerHeight)
+        list.metrics = metrics
+        emptyState.apply(metrics.scale)
     }
 
     /// Shows the list, hiding the empty state.

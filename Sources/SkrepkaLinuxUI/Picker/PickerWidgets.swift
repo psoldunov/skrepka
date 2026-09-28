@@ -6,6 +6,8 @@ import CGtk4
 /// so a caller still guards once — the raw-interop tax shim.h describes — but
 /// says what it is building rather than which macro it is casting through.
 enum Build {
+    /// A box whose gap grows with the interface size — see
+    /// ``InterfaceScale/gapStylesheet(scope:)``.
     static func box(
         _ orientation: GtkOrientation,
         spacing: Int32 = 0,
@@ -13,6 +15,7 @@ enum Build {
     ) -> UnsafeMutablePointer<GtkWidget>? {
         guard let widget = gtk_box_new(orientation, spacing) else { return nil }
         if let cssClass { gtk_widget_add_css_class(widget, cssClass) }
+        if let gap = InterfaceScale.gapClass(spacing) { gtk_widget_add_css_class(widget, gap) }
         return widget
     }
 

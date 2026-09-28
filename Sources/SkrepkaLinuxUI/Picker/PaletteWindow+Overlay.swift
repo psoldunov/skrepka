@@ -93,7 +93,7 @@ extension PaletteWindow {
         guard let overlay else { return nil }
         let outputWidth = gtk_widget_get_width(overlay)
         let outputHeight = gtk_widget_get_height(overlay)
-        let frame = PaletteMetrics.frame(
+        let frame = metrics.frame(
             wantedHeight: wantedHeight, outputWidth: outputWidth, outputHeight: outputHeight)
         var minimumWidth: Int32 = 0
         gtk_widget_measure(panel.root, GTK_ORIENTATION_HORIZONTAL, -1, &minimumWidth, nil, nil, nil)

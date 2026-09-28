@@ -185,20 +185,20 @@ static inline void skrepka_schedule_main_loop_quit(GMainLoop *loop) {
 
 // MARK: - Geometry
 
-/// The height, in pixels, of the shortest monitor GDK knows about — or 0 when
-/// it knows about none, which is what a display that has not been opened yet
-/// reports.
+/// The width, when `wants_width` is non-zero, or else the height, in pixels,
+/// of the narrowest or shortest monitor GDK knows about — or 0 when it knows
+/// about none, which is what a display that has not been opened yet reports.
 ///
 /// A C function rather than Swift because the monitor list is a `GListModel`,
 /// and walking one from Swift means `g_list_model_get_item` plus a manual
 /// unref per element to answer a question that is one loop in C.
 ///
 /// Layer-shell hands placement to the compositor, so the surface's output is
-/// not known until it maps. The conservative minimum keeps the palette from
-/// being clipped when that output is shorter than another monitor. Each item
-/// returned by `g_list_model_get_item` has a full-transfer reference and is
-/// unreffed before the next item is read.
-static inline int skrepka_smallest_monitor_height(void) {
+/// not known until it maps, and a toplevel is placed after it is sized. The
+/// conservative minimum keeps a window from being clipped when that output is
+/// smaller than another monitor. Each item returned by `g_list_model_get_item`
+/// has a full-transfer reference and is unreffed before the next item is read.
+static inline int skrepka_smallest_monitor_side(int wants_width) {
 	GdkDisplay *display = gdk_display_get_default();
 	if (display == NULL) { return 0; }
 	GListModel *monitors = gdk_display_get_monitors(display);
@@ -212,12 +212,23 @@ static inline int skrepka_smallest_monitor_height(void) {
 
 		GdkRectangle geometry;
 		gdk_monitor_get_geometry(monitor, &geometry);
-		if (geometry.height > 0 && (smallest == 0 || geometry.height < smallest)) {
-			smallest = geometry.height;
+		int side = wants_width ? geometry.width : geometry.height;
+		if (side > 0 && (smallest == 0 || side < smallest)) {
+			smallest = side;
 		}
 		g_object_unref(monitor);
 	}
 	return smallest;
+}
+
+/// The shortest monitor's height — see `skrepka_smallest_monitor_side`.
+static inline int skrepka_smallest_monitor_height(void) {
+	return skrepka_smallest_monitor_side(0);
+}
+
+/// The narrowest monitor's width — see `skrepka_smallest_monitor_side`.
+static inline int skrepka_smallest_monitor_width(void) {
+	return skrepka_smallest_monitor_side(1);
 }
 
 // MARK: - Signals

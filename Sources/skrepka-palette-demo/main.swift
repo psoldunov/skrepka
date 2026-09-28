@@ -8,11 +8,13 @@ import SkrepkaLinuxUI
 //
 // It drives the real `PickerController` against an in-process fake daemon with
 // canned rows, so the whole picker — search, rows, thumbnails, footer, empty
-// states — can be seen on the Steam Deck without `skrepkad`. Two environment
+// states — can be seen on the Steam Deck without `skrepkad`. Environment
 // variables pick what to draw, so one binary produces every screenshot:
 //
 //   SKREPKA_DEMO_APPEARANCE = dark | light   (default dark)
 //   SKREPKA_DEMO_STATE      = list | empty    (default list)
+//   SKREPKA_DEMO_SCALE      = the interface size in percent, 100 to 200
+//                             (default 100)
 //
 // It is not a product — no tray, no hotkey, no daemon. `skrepka-gui` is the
 // picker for the real installation.
@@ -28,6 +30,8 @@ let appearance =
     ? AppearancePreference(colorScheme: .light, accent: nil)
     : AppearancePreference(colorScheme: .dark, accent: nil)
 let showEmpty = environment["SKREPKA_DEMO_STATE"] == "empty"
+let scale =
+    environment["SKREPKA_DEMO_SCALE"].flatMap(Int.init).flatMap(InterfaceScale.init(percent:)) ?? .standard
 
 let daemon = FakePickerDaemon(
     rows: showEmpty ? [] : DemoClips.all(),
@@ -39,6 +43,7 @@ do {
         FileHandle.standardOutput.write(Data("open settings\n".utf8))
     }
     controller.apply(appearance)
+    controller.apply(scale)
     controller.start()
     controller.show()
     // SKREPKA_DEMO_MENU=1 pops the row context menu open a moment after the

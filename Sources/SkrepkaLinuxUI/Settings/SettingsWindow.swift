@@ -34,6 +34,11 @@ final class SettingsWindow {
         let shortcut: GlobalShortcutsState
         let pasteMechanism: PasteMechanism
         let pasteAutomaticallyChanged: (Bool) -> Void
+        /// The interface size in force, for the General pane.
+        let interfaceScale: InterfaceScaleStatus
+        /// Keeps a new interface size and redraws at it, answering where it
+        /// stands now.
+        let chooseInterfaceScale: (InterfaceScale) -> InterfaceScaleStatus
     }
 
     init(application: UnsafeMutablePointer<GtkApplication>, services: Services) throws {
@@ -43,9 +48,7 @@ final class SettingsWindow {
         else { throw SettingsError.widgetCreationFailed }
         gtk_widget_add_css_class(widget, SettingsStyle.window)
         gtk_window_set_title(window, "Skrepka Settings")
-        // Sized for the Steam Deck's 1280×800: the sidebar and a page of cards
-        // side by side, with the panel's height to spare.
-        gtk_window_set_default_size(window, 900, 660)
+        Self.size(window, at: services.interfaceScale.scale)
         try Self.installTitlebar(on: window)
 
         let sidebar = try SettingsSidebar()
@@ -82,6 +85,39 @@ final class SettingsWindow {
         }
     }
 
+    /// The size the window opens at: 900×660 at the design size, sized for the
+    /// Steam Deck's 1280×800 — the sidebar and a page of cards side by side,
+    /// with the panel's height to spare. A larger interface size opens it
+    /// larger, but no larger than five sixths of the smallest screen each way,
+    /// so the title bar and its buttons stay on it; the page scrolls instead.
+    /// Never smaller than the design size, which is the size it has always
+    /// opened at.
+    ///
+    /// - Parameter screen: the narrowest monitor's width and the shortest
+    ///   one's height, each 0 when it is not known.
+    static func defaultSize(
+        at scale: InterfaceScale, screen: (width: Int32, height: Int32)
+    ) -> (width: Int32, height: Int32) {
+        (fitted(900, at: scale, screen: screen.width), fitted(660, at: scale, screen: screen.height))
+    }
+
+    /// Gives `window` ``defaultSize(at:screen:)`` for the screens GDK knows.
+    /// On a window already showing, GTK queues a resize to the new default
+    /// (`gtk_window_set_default_size`, GTK 4.12); a maximized, tiled or full
+    /// screen window keeps the size the compositor gave it. A floating one
+    /// grows from where it stands — the compositor places it, not the app.
+    private static func size(_ window: UnsafeMutablePointer<GtkWindow>, at scale: InterfaceScale) {
+        let size = defaultSize(
+            at: scale, screen: (skrepka_smallest_monitor_width(), skrepka_smallest_monitor_height()))
+        gtk_window_set_default_size(window, size.width, size.height)
+    }
+
+    private static func fitted(_ design: Int32, at scale: InterfaceScale, screen: Int32) -> Int32 {
+        let wanted = scale.length(design)
+        guard screen > 0 else { return wanted }
+        return min(wanted, max(design, screen * 5 / 6))
+    }
+
     private static func installTitlebar(on window: UnsafeMutablePointer<GtkWindow>) throws {
         guard let bar = gtk_header_bar_new(),
             let title = GtkBuild.label("Settings")
@@ -108,6 +144,12 @@ final class SettingsWindow {
     /// Restyles for a dark or light desktop and its accent.
     func apply(_ appearance: AppearancePreference) {
         sidebar.apply(appearance)
+    }
+
+    /// Resizes to the size the window opens at for `scale` — the stylesheet
+    /// has already grown everything inside it.
+    func apply(_ scale: InterfaceScale) {
+        Self.size(window, at: scale)
     }
 
     func setShortcut(_ state: GlobalShortcutsState) {

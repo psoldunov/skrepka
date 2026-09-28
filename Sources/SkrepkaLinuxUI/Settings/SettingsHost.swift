@@ -22,6 +22,14 @@ final class SettingsHost {
     /// The desktop's look, as last reported — a window built later is drawn in
     /// it too.
     private var appearance: AppearancePreference?
+    /// The interface size in force, and why the last change of it could not
+    /// be saved, if it could not.
+    private var interfaceScale = InterfaceScaleStatus(scale: .standard)
+    /// Keeps an interface size chosen in the General pane: saves it and
+    /// redraws every window at it, Settings included, answering why it could
+    /// not be saved, or nil. Wired by the app; with nothing wired, a choice
+    /// redraws Settings alone and is not kept.
+    var onInterfaceScale: ((InterfaceScale) -> String?)?
     /// The shortcut, as the portal session last reported it.
     private var shortcut: GlobalShortcutsState = .connecting
     /// The window on screen, if any.
@@ -48,8 +56,28 @@ final class SettingsHost {
     /// window on screen, if any.
     func apply(_ appearance: AppearancePreference) {
         self.appearance = appearance
-        SettingsStyle.apply(appearance)
+        SettingsStyle.apply(appearance, scale: interfaceScale.scale)
         open?.apply(appearance)
+    }
+
+    /// Redraws at `scale`: the stylesheet at once, which is every size the
+    /// window on screen draws, and that window's own size, which would
+    /// otherwise keep the old one and scroll the larger page inside it.
+    func apply(_ scale: InterfaceScale) {
+        interfaceScale = InterfaceScaleStatus(scale: scale)
+        guard let appearance else { return }
+        SettingsStyle.apply(appearance, scale: scale)
+        open?.apply(scale)
+    }
+
+    private func chooseInterfaceScale(_ scale: InterfaceScale) -> InterfaceScaleStatus {
+        guard let onInterfaceScale else {
+            apply(scale)
+            return interfaceScale
+        }
+        let error = onInterfaceScale(scale)
+        interfaceScale = InterfaceScaleStatus(scale: scale, error: error)
+        return interfaceScale
     }
 
     /// Passes on where the global shortcut stands, for the General pane.
@@ -107,7 +135,11 @@ final class SettingsHost {
             autostart: autostart,
             shortcut: shortcut,
             pasteMechanism: pasteMechanism,
-            pasteAutomaticallyChanged: pasteAutomaticallyChanged
+            pasteAutomaticallyChanged: pasteAutomaticallyChanged,
+            interfaceScale: interfaceScale,
+            chooseInterfaceScale: { [weak self] scale in
+                self?.chooseInterfaceScale(scale) ?? InterfaceScaleStatus(scale: scale)
+            }
         )
         let window = try SettingsWindow(application: application, services: services)
         if let appearance { window.apply(appearance) }

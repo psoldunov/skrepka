@@ -14,6 +14,8 @@ import SkrepkaLinuxUI
 //                             old claims interface version 3, which cannot
 //                             change settings)
 //   SKREPKA_DEMO_PROBLEMS   = 1 to have Diagnostics report a problem
+//   SKREPKA_DEMO_SCALE      = the interface size in percent, 100 to 200
+//                             (default 100)
 //
 // It is not a product. `skrepka-gui` is the Settings window for the real
 // installation.
@@ -28,6 +30,8 @@ let daemon = FakeSettingsDaemon(
     version: environment["SKREPKA_DEMO_DAEMON"] == "old" ? 3 : 4,
     withProblems: environment["SKREPKA_DEMO_PROBLEMS"] == "1"
 )
+let scale =
+    environment["SKREPKA_DEMO_SCALE"].flatMap(Int.init).flatMap(InterfaceScale.init(percent:)) ?? .standard
 let autostart = FileManager.default.temporaryDirectory
     .appendingPathComponent("skrepka-settings-demo-autostart.desktop")
 
@@ -35,6 +39,7 @@ let options = SettingsDemo.Options(
     section: section,
     appearance: appearance,
     shortcut: .bound("Meta+Shift+V"),
-    autostartFile: autostart
+    autostartFile: autostart,
+    interfaceScale: scale
 )
 exit(SettingsDemo.run(options: options) { daemon })

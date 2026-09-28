@@ -25,6 +25,8 @@ final class AppController {
     let shortcuts: GlobalShortcuts
     let paste: PasteCoordinator
     let appearance = AppearanceMonitor()
+    /// The app's own settings file, and the interface size it holds.
+    let preferencesFile = AppPreferencesFile.standard()
     let inbox: MainLoopInbox<AppEvent>?
     private var watch: MainLoopWatch<AppEvent>?
     private var isHolding = false
@@ -79,6 +81,7 @@ final class AppController {
         }
         wire()
         appearance.start()
+        applyInterfaceScale(preferencesFile.load().scale)
         picker?.apply(appearance.current)
         picker?.start()
         tray?.start()
@@ -153,6 +156,7 @@ final class AppController {
             self?.picker?.apply(preference)
             self?.settings.apply(preference)
         }
+        settings.onInterfaceScale = { [weak self] scale in self?.setInterfaceScale(scale) }
         shortcuts.onActivated = { [weak self] shortcutID, _ in
             guard shortcutID == Self.pickerShortcutID else { return }
             self?.togglePicker()

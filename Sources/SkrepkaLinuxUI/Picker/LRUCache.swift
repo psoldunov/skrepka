@@ -48,6 +48,14 @@ struct LRUCache<Value> {
         return displaced
     }
 
+    /// Empties the cache and returns every value it held.
+    mutating func removeAll() -> [Value] {
+        let values = order.compactMap { storage[$0] }
+        storage = [:]
+        order = []
+        return values
+    }
+
     private mutating func promote(_ key: String) {
         if let index = order.firstIndex(of: key) { order.remove(at: index) }
         order.append(key)

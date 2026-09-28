@@ -67,6 +67,23 @@ extension AppController {
         tray?.setProblem(headline)
     }
 
+    // MARK: - Interface size
+
+    /// Draws the picker and Settings at `scale`.
+    func applyInterfaceScale(_ scale: InterfaceScale) {
+        picker?.apply(scale)
+        settings.apply(scale)
+    }
+
+    /// Keeps an interface size chosen in Settings, and draws at it whether or
+    /// not it could be kept — answering why it could not, for the General
+    /// pane to show.
+    func setInterfaceScale(_ scale: InterfaceScale) -> String? {
+        let error = preferencesFile.save(AppPreferences(scale: scale))
+        applyInterfaceScale(scale)
+        return error
+    }
+
     // MARK: - Clear History
 
     /// The macOS wording, and the macOS rule: pinned entries stay.

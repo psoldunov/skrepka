@@ -34,22 +34,27 @@ enum PickerStyle {
     /// The macOS-blue default, for a desktop that names no accent.
     static let defaultAccent = SkrepkaPalette.defaultAccent
 
-    /// Installs the stylesheet for `appearance` on the default display.
-    static func apply(_ appearance: AppearancePreference, isDark: Bool) {
+    /// Installs the stylesheet for `appearance` at `scale` on the default
+    /// display.
+    static func apply(_ appearance: AppearancePreference, isDark: Bool, scale: InterfaceScale) {
         CssInstaller.install(
-            css(isDark: isDark, accent: appearance.accent?.cssValue ?? defaultAccent), slot: .picker)
+            css(isDark: isDark, accent: appearance.accent?.cssValue ?? defaultAccent, scale: scale),
+            slot: .picker)
     }
 
-    /// The whole stylesheet, as one string.
-    static func css(isDark: Bool, accent: String) -> String {
+    /// The whole stylesheet, as one string, with every length at `scale`.
+    static func css(isDark: Bool, accent: String, scale: InterfaceScale = .standard) -> String {
         let palette = SkrepkaPalette.forMode(isDark: isDark)
-        return [
+        let design = [
             window(palette),
             search(palette),
             list(palette, accent: accent),
             footer(palette),
             empty(palette),
         ].joined(separator: "\n")
+        return [scale.stylesheet(design), scale.gapStylesheet(scope: "window.skrepka-picker")]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 
     private static func window(_ palette: SkrepkaPalette) -> String {

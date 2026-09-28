@@ -51,10 +51,12 @@ enum GtkBuild {
         skrepka_set_label_select_on_focus(selects ? 1 : 0)
     }
 
+    /// A box whose gap grows with the interface size — see
+    /// ``InterfaceScale/gapStylesheet(scope:)``.
     static func box(vertical: Bool, spacing: Int32, classes: [String] = []) -> GtkWidgetPointer? {
         let orientation = vertical ? GTK_ORIENTATION_VERTICAL : GTK_ORIENTATION_HORIZONTAL
         guard let widget = gtk_box_new(orientation, spacing) else { return nil }
-        style(widget, classes)
+        style(widget, classes + [InterfaceScale.gapClass(spacing)].compactMap(\.self))
         return widget
     }
 

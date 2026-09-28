@@ -45,8 +45,6 @@ public final class PaletteWindow {
 
     /// Rows Page Up and Page Down move, matching the macOS picker.
     public static let pageJump = 5
-    /// The empty state's height, matching `PaletteMetrics`.
-    private static let emptyHeight: Int32 = 150
 
     /// Sends a decoded key press — or a click away — out; the window decides
     /// nothing.
@@ -62,9 +60,14 @@ public final class PaletteWindow {
     /// The full-output overlay the panel is laid out in, on a layer-shell
     /// session; nil for a plain window.
     var overlay: UnsafeMutablePointer<GtkWidget>?
+    /// The panel's sizes at the interface size in force.
+    var metrics = PaletteMetrics.standard
     /// How tall the panel wants to be for the rows on screen, before the
     /// output's ceiling — what both kinds of window size the panel by.
-    var wantedHeight = PaletteMetrics.minimumHeight
+    var wantedHeight = PaletteMetrics.standard.minimumHeight
+    /// The rows ``wantedHeight`` was last worked out for, so a new interface
+    /// size can work it out again.
+    private var sizedDocuments: [ClipDocument] = []
     /// The plain window's last size, so an unchanged resize is skipped.
     var lastPlainSize: (Int32, Int32)?
     /// Whether the window has been the active window since it was last shown.
@@ -136,7 +139,10 @@ public final class PaletteWindow {
     /// arithmetic is `PaletteMetrics`', over the document's own "has a
     /// preview" flag rather than a `ClipSummary`'s.
     public func resize(for documents: [ClipDocument]) {
-        wantedHeight = Self.wantedHeight(for: documents)
+        sizedDocuments = documents
+        let metrics = metrics
+        wantedHeight = metrics.wantedHeight(
+            rowHeights: documents.map { metrics.rowHeight(isImage: $0.hasPreview && !$0.isConcealed) })
         if let overlay {
             // The overlay covers the output whatever the panel's size, so only
             // the panel's place in it is laid out again — the layer surface
@@ -147,15 +153,12 @@ public final class PaletteWindow {
         }
     }
 
-    static func wantedHeight(for documents: [ClipDocument]) -> Int32 {
-        guard !documents.isEmpty else { return PaletteMetrics.chromeHeight + emptyHeight }
-        let content = documents.reduce(Int32(0)) { $0 + rowHeight($1) }
-        return PaletteMetrics.chromeHeight + content + PaletteMetrics.gutter * Int32(documents.count - 1)
-    }
-
-    private static func rowHeight(_ document: ClipDocument) -> Int32 {
-        guard document.hasPreview, !document.isConcealed else { return PaletteMetrics.standardRowHeight }
-        return PaletteMetrics.imageRowHeight
+    /// Resizes the panel, and the window around it, for a new interface size.
+    func apply(_ metrics: PaletteMetrics) {
+        guard metrics != self.metrics else { return }
+        self.metrics = metrics
+        panel.apply(metrics)
+        resize(for: sizedDocuments)
     }
 
     /// Dismisses the picker as Escape would, unless its row menu is open — the

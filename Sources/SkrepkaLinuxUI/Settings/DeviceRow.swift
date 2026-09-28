@@ -50,7 +50,7 @@ final class DeviceRow {
             let toggle = try SettingsSwitchRow(title: "Live clipboard", isOn: state.livePush?.isOn ?? false)
             toggle.onToggle = onLivePush
             // Indented under the device it belongs to, as on a Mac.
-            gtk_widget_set_margin_start(toggle.row.widget, 36)
+            gtk_widget_add_css_class(toggle.row.widget, SettingsStyle.indentedRow)
             GtkBuild.append(toggle.row.widget, to: column)
             livePush = toggle
         }
