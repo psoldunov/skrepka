@@ -46,7 +46,7 @@ done
 [[ -f "${STAGE}/lib/libgtk4-layer-shell.so.0" ]] || fail "${STAGE}/lib/libgtk4-layer-shell.so.0 is missing."
 
 if ! docker info > /dev/null 2>&1; then
-	fail "docker is not reachable (OrbStack exposes it at ~/.orbstack/run/docker.sock)."
+	fail "docker is not reachable (Linux: is the daemon running and are you in the docker group? macOS: OrbStack exposes it at ~/.orbstack/run/docker.sock)."
 fi
 
 # --------------------------------------------------------------------------

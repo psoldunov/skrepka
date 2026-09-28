@@ -27,7 +27,7 @@ pacstall_green() { printf '\033[32m%s\033[0m\n' "$1"; }
 
 pacstall_require_docker() {
 	if ! docker info > /dev/null 2>&1; then
-		pacstall_fail "docker is not reachable (OrbStack exposes it at ~/.orbstack/run/docker.sock)."
+		pacstall_fail "docker is not reachable (Linux: is the daemon running and are you in the docker group? macOS: OrbStack exposes it at ~/.orbstack/run/docker.sock)."
 	fi
 }
 

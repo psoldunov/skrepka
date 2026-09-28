@@ -9,12 +9,21 @@ tests, dead-code scan. Do not report work complete on a red doctor.
 Use `./scripts/doctor.sh --fast` (skips tests and the dead-code scan) mid-edit.
 Run the full one before you hand work back.
 
+On Linux, `./scripts/doctor.sh` runs `./scripts/doctor-linux.sh` — same flags,
+same rule — under whichever Linux toolchain `scripts/linux-env.sh` finds. It
+compiles every Linux target and the shared ones, but never `Sources/Skrepka/`:
+the macOS app target does not exist in the Linux manifest. A change to the app
+target, or to `SkrepkaCore`/`SkrepkaSync` code fenced `#if os(macOS)`, cannot be
+verified from Linux. Say so when you hand it back, and name `scripts/doctor.sh`
+on a Mac as the check still outstanding, rather than calling it done.
+
 Never disable a rule to make the gate pass. If a rule is genuinely wrong for one
 line, silence it at that line with a comment saying why. A blanket entry in
 `disabled_rules` needs a reason in the pull request description.
 
 The formatter is not a matter of taste. When it disagrees with you, run
-`xcrun swift-format format --in-place --recursive --parallel Sources Tests`.
+`./scripts/format.sh` — Xcode's swift-format on a Mac, the Linux toolchain's on
+Linux.
 
 ## Project Layout
 

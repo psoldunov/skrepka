@@ -6,10 +6,13 @@
 #   scripts/doctor-linux.sh          full run
 #   scripts/doctor-linux.sh --fast   skip tests and the dead-code scan
 #
-# Run it from macOS and it re-enters itself inside the Linux Swift container.
-# Run it on Linux and it runs natively. Either way it builds into .build-linux,
-# never .build: the two toolchains produce incompatible module caches, and
-# sharing one scratch directory forces a full rebuild on every switch.
+# It re-enters itself under whichever Linux toolchain this machine has —
+# natively, in the nix sandbox nix/dev-env.nix builds, or in the Linux Swift
+# container; scripts/lib/linux-env.sh has the order, and SKREPKA_LINUX_RUNNER
+# picks one. From macOS it is always the container. Every runner builds into
+# .build-linux, never .build: the two toolchains produce incompatible module
+# caches, and sharing one scratch directory forces a full rebuild on every
+# switch.
 #
 # One thing it deliberately does NOT do, verified 2026-09-05 against Swift
 # 6.3.3 on aarch64-unknown-linux-gnu and recorded in docs/linux-sync/
@@ -52,48 +55,28 @@ optional() {
 	local name="$1" binary="$2"
 	shift 2
 	if ! command -v "${binary}" > /dev/null 2>&1; then
-		SKIPPED+=("${name} (${binary} not on PATH in this container)")
+		SKIPPED+=("${name} (${binary} not on PATH here)")
 		return 0
 	fi
 	check "${name}" "$@"
 }
 
 # ---------------------------------------------------------------------------
-# On macOS, re-enter inside the container and stop.
+# Without a toolchain here, re-enter under one and stop.
 # ---------------------------------------------------------------------------
 
-if [[ "$(uname -s)" != "Linux" ]]; then
-	bold "delegating to the Linux container"
-	# scripts/linux.sh owns the image pin, the bind mount and the host-user
-	# mapping, and adds `-it` only when there is a terminal to attach — so this
-	# works the same from a shell, from CI and from an agent.
-	exec scripts/linux.sh scripts/doctor-linux.sh "$@"
-fi
+# Returns only when `swift` and the libraries are already on hand; otherwise it
+# execs this script again under the nix sandbox or the container.
+# scripts/linux.sh, behind the container runner, owns the image pin, the bind
+# mount and the host-user mapping, and adds `-it` only when there is a terminal
+# to attach — so this works the same from a shell, from CI and from an agent.
+# shellcheck source=scripts/lib/linux-env.sh
+source scripts/lib/linux-env.sh
+linux_env_reenter scripts/doctor-linux.sh "$@"
 
 # ---------------------------------------------------------------------------
-# Native Linux run.
+# The run itself.
 # ---------------------------------------------------------------------------
-
-# `Package.resolved` is put back exactly as it was found, and this is a
-# correctness measure rather than tidiness.
-#
-# Package.swift fences the macOS-only app target — and its KeyboardShortcuts
-# dependency — out of the manifest on Linux, so SwiftPM resolves a genuinely
-# smaller graph here and rewrites the lockfile to match. That file is tracked.
-# Left alone, every Linux gate run stages a lockfile with the macOS pin deleted
-# and a different `originHash`, and whoever commits next commits it.
-#
-# Restored rather than prevented: `--only-use-versions-from-resolved-file`
-# refuses a graph that does not match the file, which is exactly the graph this
-# platform has. Saving and putting back is the version that works on both.
-RESOLVED_BACKUP=""
-if [[ -f Package.resolved ]]; then
-	RESOLVED_BACKUP="$(mktemp)"
-	cp Package.resolved "${RESOLVED_BACKUP}"
-	# EXIT alone: this script ends by calling `exit`, and a trap on EXIT runs
-	# for that as well as for a signal.
-	trap 'if [[ -n "${RESOLVED_BACKUP}" ]]; then cp "${RESOLVED_BACKUP}" Package.resolved; rm -f "${RESOLVED_BACKUP}"; fi' EXIT
-fi
 
 # swift-format ships inside the Linux toolchain at /usr/bin/swift-format, same
 # major version as the macOS one, and takes the same flags the macOS gate uses.
@@ -101,9 +84,8 @@ fi
 check "format" swift-format lint --strict --recursive --parallel Sources Tests
 check "GNOME extension" scripts/test-gnome-extension.sh
 
-# SwiftLint publishes a prebuilt Linux aarch64 binary but it is not in the
-# stock swift image, so from macOS this always skips. Bake it into a derived
-# image and point SKREPKA_LINUX_IMAGE at that to turn the check on.
+# SwiftLint publishes prebuilt Linux binaries. The build image and the nix
+# sandbox both carry 0.65.1; a native toolchain without it reports a skip.
 optional "lint" swiftlint swiftlint lint --strict --quiet
 
 # `SkrepkaLinux` is the two portable targets in one product. It has to be
@@ -125,9 +107,10 @@ if ((!FAST)); then
 	# SKREPKA_REQUIRE_HEADLESS turns a missing compositor from a skip into a
 	# failure. The live Wayland and X11 suites gate on
 	# `.enabled(if: HeadlessSession.isAvailable(...))`, which is right on a
-	# native checkout without sway or Xvfb and wrong here: this container
-	# installs both on purpose, so a Dockerfile regression that dropped one
-	# would disable eighteen tests and still go green. Set for this run only,
+	# native checkout without sway or Xvfb and wrong for the gate: the build
+	# image and the nix sandbox install both on purpose, so a regression that
+	# dropped one would disable eighteen tests and still go green. A native
+	# toolchain has to have both for this gate to pass. Set for this run only,
 	# so a bare `swift test` on a developer's machine still skips them.
 	check "test" env SKREPKA_REQUIRE_HEADLESS=1 swift test --scratch-path "${SCRATCH}"
 

@@ -46,6 +46,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+if [[ "$(uname -s)" != "Darwin" ]]; then
+	echo "scripts/notarize.sh builds the macOS app and runs only on macOS." >&2
+	echo "On Linux, scripts/run.sh builds and runs skrepkad and skrepka-gui, and" >&2
+	echo "scripts/build-deck.sh builds the release tarballs." >&2
+	exit 1
+fi
+
 # shellcheck source=scripts/lib/mac-release.sh
 source scripts/lib/mac-release.sh
 

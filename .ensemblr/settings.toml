@@ -1,8 +1,15 @@
 #:schema https://www.ensemblr.dev/schemas/settings.schema.json
 
 # Skrepka is a SwiftPM package, not an Xcode project: there is no scheme and no
-# dev server. Every button below drives the same `swift` toolchain and the same
-# .build directory that scripts/doctor.sh does.
+# dev server. Every button below is a script, and every script branches on the
+# OS it runs on, because this file has no per-platform keys and the same
+# workspace buttons appear on a Mac and on a Linux box:
+#
+#   macOS  the same `swift` toolchain and .build directory scripts/doctor.sh
+#          uses, with DEVELOPER_DIR pinned.
+#   Linux  the Linux targets, through scripts/linux-env.sh — a native Swift 6.3,
+#          the nix sandbox nix/dev-env.nix builds, or the build image — into
+#          .build-linux. bundle and notarize refuse to run there.
 
 [environment_variables]
 # scripts/doctor.sh, scripts/bundle.sh and scripts/setup.sh already default to
@@ -28,12 +35,13 @@ DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer"
 
 [scripts]
 # A fresh worktree starts with no .build/ (it is gitignored, so nothing is
-# carried over). Resolve the pinned graph — KeyboardShortcuts 3.0.1, per
-# Package.resolved — then warm the debug build so the first Doctor or Test
-# press is incremental. A cold debug build of this package measures ~13s.
+# carried over). Resolve the pinned graph in Package.resolved, then warm the
+# debug build so the first Doctor or Test press is incremental. A cold debug
+# build measures ~13s on a Mac and ~50s on Linux; the very first Linux setup
+# under nix also downloads the Swift toolchain, about 1 GB.
 #
 # A script, not an inline `swift package resolve && swift build`, so it pins
-# DEVELOPER_DIR the way every other script here does.
+# DEVELOPER_DIR on a Mac and picks the Linux toolchain on Linux.
 setup = "scripts/setup.sh"
 
 # Every script here contends on the one .build directory, and Periphery builds
@@ -47,17 +55,22 @@ run_mode = "nonconcurrent"
 auto_run_after_setup = false
 
 [scripts.run.run]
-# Build, bundle, sign and launch. Launching via this script rather than
+# macOS: build, bundle, sign and launch. Launching via this script rather than
 # executing the binary matters: TCC attributes permissions to the responsible
 # process, so a shell-launched binary inherits the terminal's grants instead of
 # exercising the real permission path. Exits as soon as `open` returns.
+#
+# Linux: scripts/run-linux.sh — skrepkad and skrepka-gui in debug, in the
+# foreground, against this session, with the installed copy stepped aside for
+# the run and its own data in .build-linux/dev-data.
 command = "scripts/run.sh"
 icon = "play"
 default = true
 
 [scripts.run.doctor]
 # The quality gate and the definition of done: format check, lint, build with
-# warnings as errors, tests, dead-code scan.
+# warnings as errors, tests, dead-code scan. On Linux it is
+# scripts/doctor-linux.sh, which cannot compile the macOS app target.
 command = "scripts/doctor.sh"
 icon = "badge-check"
 
@@ -68,20 +81,20 @@ icon = "zap"
 
 [scripts.run.test]
 # Just the Swift Testing suite, for when the whole gate is too slow to be a
-# feedback loop. `env` rather than a `VAR=value cmd` prefix, which fish does not
-# read the same way every other shell does.
-command = "env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --parallel"
+# feedback loop.
+command = "scripts/test.sh"
 icon = "test-tube"
 
 [scripts.run.format]
-# The fixer scripts/doctor.sh names by hand when its format check fails. Pinned
-# for the same reason: CommandLineTools carries its own swift-format, and two
-# versions of it disagree about formatting.
-command = "env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift-format format --in-place --recursive --parallel Sources Tests"
+# The fixer the format check names when it fails. On a Mac it is Xcode's
+# swift-format, pinned: CommandLineTools carries its own, and two versions of it
+# disagree about formatting. On Linux, the Linux toolchain's.
+command = "scripts/format.sh"
 icon = "paintbrush"
 
 [scripts.run.bundle]
 # Produce build/Skrepka.app without stopping or relaunching a running instance.
+# macOS only.
 command = "scripts/bundle.sh"
 icon = "package"
 
@@ -96,6 +109,7 @@ icon = "package"
 # leaves the machine.
 #
 # Needs a one-time notarytool keychain profile named `skrepka` — the script
-# prints the exact `store-credentials` command when it cannot find one.
+# prints the exact `store-credentials` command when it cannot find one. macOS
+# only.
 command = "scripts/notarize.sh"
 icon = "shield-check"

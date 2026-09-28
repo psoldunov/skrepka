@@ -20,6 +20,20 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# On Linux there is no Xcode to pin and no app target to build: resolve and warm
+# the Linux build instead, through whichever toolchain scripts/linux-env.sh
+# finds — native, the nix sandbox, or the build image. The first nix run
+# downloads the Swift toolchain, so a new workspace's first setup is the slow
+# one.
+if [[ "$(uname -s)" == "Linux" ]]; then
+	echo "▸ Resolving dependencies"
+	scripts/linux-env.sh swift package resolve --scratch-path .build-linux
+	echo "▸ Warming the Linux build"
+	scripts/linux-env.sh swift build --product SkrepkaLinux --scratch-path .build-linux
+	echo "✓ setup complete"
+	exit 0
+fi
+
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
 if [[ ! -d "${DEVELOPER_DIR}" ]]; then

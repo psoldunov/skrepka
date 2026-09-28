@@ -65,11 +65,18 @@ struct MDNSSocketSmokeTests {
             questions: [DNSQuestion(name: MDNSServiceRecords.serviceType, type: DNSType.ptr)]
         )
         try await querier.send(DNSWriter.encode(query))
-        let reply = try await Self.first(from: querier.replies) { _ in true }
+        // Not simply the first reply: every `_skrepka._tcp` responder on this
+        // network answers the same query, and on a Linux machine that develops
+        // Skrepka while running it, the installed daemon usually answers first.
+        // The reply that matters is the one naming this test's service.
+        let reply = try await Self.first(from: querier.replies) { reply in
+            guard let message = try? DNSReader.decode(reply) else { return false }
+            return message.answers.contains {
+                $0.data == .ptr(DNSName("smoke test", "_skrepka", "_tcp", "local"))
+            }
+        }
         let message = try DNSReader.decode(reply)
         #expect(message.id == 0x4242)
-        #expect(
-            message.answers.contains { $0.data == .ptr(DNSName("smoke test", "_skrepka", "_tcp", "local")) })
         #expect(message.additionals.contains { $0.data.type == DNSType.srv })
     }
 

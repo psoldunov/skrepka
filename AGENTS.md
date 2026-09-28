@@ -15,6 +15,8 @@ that distinction in anything you write about them.
 ```
 scripts/setup.sh      # resolve dependencies, warm the debug build
 scripts/run.sh        # build, bundle, sign, launch
+scripts/test.sh       # just the test suite; arguments go to `swift test`
+scripts/format.sh     # rewrite Sources and Tests with swift-format
 scripts/bundle.sh     # build build/Skrepka.app only
 scripts/notarize.sh   # build, sign, notarize, staple — the .zip and .dmg a release carries
 scripts/make-dmg.sh   # just the notarized .dmg, from the last notarized build
@@ -25,10 +27,19 @@ scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols 
 scripts/setup-linux.sh  # build skrepkad, skrepka and skrepka-gui, install into ~/.local — Linux only
 ```
 
-The Linux side has its own gate and its own entry points, and neither is
-reachable from a Mac without the container:
+Every script in that first block branches on the OS it runs on, so the same
+commands — and the same Ensemblr buttons, which are those scripts — work on a
+Linux machine without macOS or Xcode. There, `setup.sh`, `test.sh` and
+`format.sh` drive the Linux targets through `scripts/linux-env.sh`, `doctor.sh`
+hands over to `doctor-linux.sh`, `run.sh` hands over to `run-linux.sh`, and
+`bundle.sh`, `notarize.sh` and `make-dmg.sh` refuse to run.
+
+The Linux side has its own gate and its own entry points; from a Mac they run
+in the container:
 
 ```
+scripts/linux-env.sh <command>  # run anything with the Linux toolchain, wherever it is
+scripts/run-linux.sh         # debug skrepkad + skrepka-gui against this session
 scripts/linux.sh <command>   # run anything inside the Linux build image
 scripts/doctor-linux.sh      # the Linux quality gate
 scripts/build-deck.sh        # the x86_64 release tarballs, .deb and .rpm, each with a .sha256
@@ -46,6 +57,39 @@ scripts/gnome-image.sh       # an Ubuntu 26.04 / GNOME 50 headless test image
 scripts/gnome.sh <command>   # run, screenshot, type, click or eval inside GNOME
 scripts/gnome-smoke.sh       # install, capture, tray, shortcut, picker and paste checks
 ```
+
+`scripts/linux-env.sh` picks the Linux toolchain in this order, unless
+`SKREPKA_LINUX_RUNNER=native|nix|container` names one:
+
+- **native** — `swift` 6.3 or newer on PATH *and* pkg-config finding sqlite3,
+  wayland-client, xfixes and gtk4-layer-shell-0. A Swift install without those
+  headers is skipped, not used.
+- **nix** — any x86_64 Linux host with `nix`. `nix/dev-env.nix` is a bubblewrap
+  FHS sandbox holding swift.org's Swift 6.3.3 (the build image's release) and
+  nixos-24.05's libraries, which are Ubuntu 24.04's versions — glibc 2.39, GLib
+  2.80, GTK 4.14, Wayland 1.22, sway 1.9. Built once into `.build-nix/dev-env`
+  (the first build downloads about 1 GB) and rebuilt only when `flake.nix`,
+  `flake.lock` or `nix/dev-env.nix` change. `nix develop` opens a shell in it.
+- **container** — `scripts/linux.sh`. Always the runner on macOS.
+
+`doctor-linux.sh` and `regenerate-wayland-protocols.sh` re-enter themselves
+under that runner. Every runner builds into `.build-linux`. Current nixpkgs is
+deliberately not used for the sandbox: against GLib 2.88 and GTK 4.22,
+`SkrepkaLinuxUI` does not compile (newer GLib flag enums import as option sets,
+and `gdk_texture_new_for_pixbuf` is deprecated), so a native gate there would
+check a different thing than the container does.
+
+Release artifacts stay in the container whatever runner is available:
+`scripts/build-deck.sh` calls `scripts/linux.sh` directly, because the build
+image is what defines the glibc and GTK floor the tarball promises.
+
+`scripts/run-linux.sh` builds `skrepkad` and `skrepka-gui` in debug and runs
+both in the foreground against the live desktop session. An installed copy
+steps aside for the run — the tray app is asked to `--quit` and
+`skrepkad.service` is stopped — and both come back when it ends. The dev daemon
+uses `.build-linux/dev-data` and does not sync, so the real history, device key
+and peers are untouched; `SKREPKA_DEV_DATA_DIR` and `SKREPKA_DEV_SYNC=1`
+change that. It needs the native or nix runner: the container has no display.
 
 The KDE image is the Steam Deck's Desktop Mode without a Deck: the same KWin,
 plasmashell, kglobalacceld and portals, down to the package release. Run
@@ -151,15 +195,21 @@ Change the mark in one place.
 
 Every script that runs Swift on the Mac pins `DEVELOPER_DIR` to
 `/Applications/Xcode.app/Contents/Developer`. The Linux ones — `linux.sh`,
-`linux-image.sh`, `doctor-linux.sh`, `build-deck.sh`, `setup-linux.sh`,
-`install.sh` — do not:
-their Swift runs inside the build image or on a Linux host, with no Xcode to pin.
-Do not build with a bare `swift build`: `xcode-select -p` points at
+`linux-env.sh`, `linux-image.sh`, `doctor-linux.sh`, `run-linux.sh`,
+`build-deck.sh`, `setup-linux.sh`, `install.sh` — do not: their Swift runs
+inside the build image, the nix sandbox or on a Linux host, with no Xcode to
+pin. On Linux, go through `scripts/linux-env.sh` with `--scratch-path
+.build-linux` rather than a bare `swift build`, so every runner shares one
+scratch directory. On a Mac, do not build with a bare `swift build`: `xcode-select -p` points at
 CommandLineTools, whose toolchain ships no `libSwiftDataMacros.dylib`, so `@Model`
 in `Sources/SkrepkaCore/Store/` fails to expand. Mixing the two toolchains also
 invalidates `.build/` and forces a full rebuild every time you switch.
 
-`scripts/doctor.sh` is the definition of done. Launch with `scripts/run.sh`, not
+`scripts/doctor.sh` is the definition of done — on Linux it runs
+`scripts/doctor-linux.sh`, which cannot compile the macOS app target, so a
+change to `Sources/Skrepka/` or to shared code worked on from Linux still needs
+a Mac run of `scripts/doctor.sh` before it merges, and should say so until it
+has had one. Launch with `scripts/run.sh`, not
 by executing the binary: TCC attributes permissions to the responsible process,
 so a shell-launched binary inherits the terminal's grants instead of exercising
 the real permission path.

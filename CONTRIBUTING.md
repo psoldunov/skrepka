@@ -33,7 +33,8 @@ is why SteamOS gets a user-scope installer, other distributions a `.deb` or an
 ## What you need
 
 On a Mac, for the Mac app — and for everything else, since the Linux side
-builds and tests in containers from here:
+builds and tests in containers from there. On Linux, for the Linux side alone;
+see [On Linux](#on-linux) below.
 
 - macOS 26.0 or later
 - **Xcode 26, a full install.** Not Command Line Tools. Its toolchain ships no
@@ -65,14 +66,40 @@ attributes permissions to the responsible process, so a shell-launched binary
 inherits your terminal's grants instead of exercising the real permission path
 — which means a permissions bug will not reproduce for you.
 
-For the Linux side, add [OrbStack](https://orbstack.dev) or Docker.
+For the Linux side from a Mac, add [OrbStack](https://orbstack.dev) or Docker.
 `scripts/linux.sh <command>` runs anything inside the Linux build image, and
 the headless desktop images — `scripts/kde-image.sh` for SteamOS 3.8's Plasma,
 `scripts/gnome-image.sh` for Ubuntu 26.04's GNOME 50 — are where the tray, the
-shortcut, the picker and automatic paste get exercised. On a Linux machine
-itself, a Swift 6.3 toolchain and `scripts/setup-linux.sh` are enough; the
-desktop app also needs the development packages for GTK 4.12 or newer and
-gtk4-layer-shell.
+shortcut, the picker and automatic paste get exercised.
+
+### On Linux
+
+The Linux side needs neither macOS nor Xcode. The scripts above branch on the
+OS: `scripts/setup.sh`, `scripts/doctor.sh`, `scripts/test.sh` and
+`scripts/format.sh` drive the Linux targets, and `scripts/run.sh` builds
+`skrepkad` and `skrepka-gui` in debug and runs them against your session
+(`scripts/run-linux.sh`), with an installed copy stepped aside for the run and
+put back after it.
+
+They find a toolchain through `scripts/linux-env.sh`, in this order:
+
+1. **Swift 6.3 or newer on PATH**, with the development packages
+   `docker/Dockerfile.linux` installs — SQLite, Wayland, libX11/libXfixes, GTK
+   4.12 or newer and gtk4-layer-shell — visible to pkg-config.
+2. **Nix**, on x86_64. Nothing to install by hand: the first run builds
+   `nix/dev-env.nix`, a sandbox with Swift 6.3.3 and Ubuntu 24.04's library
+   versions, which downloads about 1 GB once. `nix develop` opens a shell in it.
+3. **Docker**, with the build image from `scripts/linux-image.sh`.
+
+`SKREPKA_LINUX_RUNNER=native|nix|container` picks one explicitly. The release
+tarballs, `.deb` and `.rpm` always build in the container, whichever you use.
+
+`scripts/setup-linux.sh` is a different thing: it builds a release and installs
+it into `~/.local`, the way `install.sh` installs a download.
+
+Working from Linux, you cannot compile the Mac app. Say so in a pull request
+that touches `Sources/Skrepka/` or shared code, so it gets a
+`scripts/doctor.sh` run on a Mac before it merges.
 
 The containers are not a desktop anyone uses. Say which of your checks ran
 headless and which on real hardware — GNOME, for one, has so far only ever run
@@ -88,7 +115,8 @@ scripts/doctor.sh --fast   # format, lint, build only — the mid-edit loop
 **A green `scripts/doctor.sh` is the definition of done.** Run the full one
 before you open a pull request. Do not open one on a red doctor and describe
 the failure in the body. A change that touches code compiled on Linux also
-needs a green `scripts/doctor-linux.sh` — same flags, same rule.
+needs a green `scripts/doctor-linux.sh` — same flags, same rule. On a Linux
+machine, `scripts/doctor.sh` is `scripts/doctor-linux.sh`.
 
 One that touches the tray, the shortcut, the picker or pasting on Linux also
 runs `scripts/kde-smoke.sh` and `scripts/gnome-smoke.sh`, and reports what they
