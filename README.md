@@ -283,7 +283,14 @@ programs.skrepka.enable = true;
 # or NixOS
 imports = [ inputs.skrepka.nixosModules.default ];
 programs.skrepka.enable = true;
+
+# on NixOS either way, so other devices can connect
+programs.skrepka.openFirewall = true;
 ```
+
+NixOS's firewall drops Skrepka's ports until something opens them, and Home
+Manager cannot, so on NixOS import the NixOS module even when Home Manager
+installs Skrepka and set only `openFirewall` there — see [Sync](#sync).
 
 To try it without installing, run the daemon in one terminal with
 `nix run github:psoldunov/skrepka#skrepkad` and the app with
@@ -391,6 +398,25 @@ storage in the first place.
 
 There is no relay, so two devices that cannot see each other over Bonjour or
 Avahi cannot pair or exchange anything.
+
+On Linux, other devices reach `skrepkad` on TCP port 27182 for sync and 27183
+for pairing, and find it over mDNS on UDP 5353. A firewall that drops those
+lets the Linux machine reach everyone else but nobody reach it: pairing started
+on the other device fails with "did not answer", and nothing copied there
+reaches the Linux clipboard, though its history still arrives every half
+minute. NixOS's firewall does this until told otherwise. Open the ports:
+
+- NixOS: `programs.skrepka.openFirewall = true;` in the system configuration.
+- firewalld: `sudo firewall-cmd --permanent --add-port=27182-27183/tcp`,
+  `sudo firewall-cmd --permanent --add-service=mdns`, then
+  `sudo firewall-cmd --reload`.
+- ufw: `sudo ufw allow proto tcp from any to any port 27182:27183` and
+  `sudo ufw allow 5353/udp`.
+
+`skrepka doctor` and Settings → Diagnostics say so when a paired device has
+not managed to connect for a few minutes while this one reaches it. If another
+program already holds 27182 or 27183, `skrepkad` listens on a free port instead
+and says that too; `--port N` moves the pair to N and N+1.
 
 ## Permissions
 

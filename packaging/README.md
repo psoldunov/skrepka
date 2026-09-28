@@ -499,7 +499,13 @@ for `master`:
   `systemd.packages`, and has `skrepkad` wanted by every user's
   `default.target`. `programs.skrepka.autostart` (on by default) puts the
   autostart entry in `/etc/xdg/autostart`, where Settings reads it as the
-  system entry and each user can hide it.
+  system entry and each user can hide it. `programs.skrepka.openFirewall` (off
+  by default) opens TCP 27182–27183 and UDP 5353, the ports other devices reach
+  `skrepkad` on. NixOS's firewall drops them otherwise, and then pairing started
+  on another device times out and nothing copied there reaches this clipboard.
+  It works without `enable`, because Home Manager cannot open a port: a NixOS
+  machine that installs Skrepka through the Home Manager module imports this
+  module too, and sets only `openFirewall`.
 - **`homeManagerModules.default`**, for Nix on any distribution, a Steam Deck
   included. It installs the package, the D-Bus activation file into
   `~/.local/share/dbus-1/services` and the user unit into

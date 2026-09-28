@@ -72,14 +72,15 @@ public struct SyncPaneState: Sendable, Hashable {
     static func pairingSwitch(_ model: SyncModel, now: Date, timeZone: TimeZone) -> PairingSwitch {
         let latest = model.inFlight.last { $0 == .openPairingWindow || $0 == .closePairingWindow }
         let isOn = latest.map { $0 == .openPairingWindow } ?? (model.peers?.pairingPort != nil)
+        let note = firewallNote(model.peers?.pairingPort)
         let subtitle: String
         if isOn, let endsAt = model.pairingWindowEndsAt, endsAt > now {
             subtitle = """
                 Open until \(SyncText.clock(endsAt, in: timeZone)). Another device on this \
-                network can ask to pair.
+                network can ask to pair.\(note)
                 """
         } else if isOn {
-            subtitle = "Open. Another device on this network can ask to pair."
+            subtitle = "Open. Another device on this network can ask to pair.\(note)"
         } else {
             subtitle = """
                 Turn this on, then choose Pair… for this device on the other one. \
@@ -87,6 +88,15 @@ public struct SyncPaneState: Sendable, Hashable {
                 """
         }
         return PairingSwitch(isOn: isOn, isEnabled: model.isSyncAvailable, subtitle: subtitle)
+    }
+
+    /// Which ports the other device dials, said while the window is open —
+    /// the one moment a firewall here decides whether pairing works, and the
+    /// failure only ever shows on the other machine's screen.
+    private static func firewallNote(_ pairingPort: UInt16?) -> String {
+        guard let pairingPort else { return "" }
+        let ports = Int(pairingPort) == SkrepkaPorts.pairing ? SkrepkaPorts.all : [Int(pairingPort)]
+        return " It connects to \(FirewallAdvice.describe(ports)), which a firewall here has to allow."
     }
 
     private static func emptyMessage(_ model: SyncModel) -> String {

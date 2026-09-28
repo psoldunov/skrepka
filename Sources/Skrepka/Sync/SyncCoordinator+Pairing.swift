@@ -111,13 +111,8 @@ extension SyncCoordinator {
         runtime: SyncRuntime
     ) async throws {
         let resolved = try await resolve(sighting.advertisement.deviceID)
-        let connection = try await SyncClient.connect(
-            host: resolved.host,
-            port: Int(port),
-            identity: runtime.certificate,
-            policy: .pairing,
-            group: runtime.group
-        )
+        let connection = try await dialToPair(
+            resolved, browsedPort: port, sighting: sighting, runtime: runtime)
         defer { Task { await connection.close() } }
 
         let pairedAt = Date()
@@ -147,6 +142,43 @@ extension SyncCoordinator {
         guard accepted else { return }
         try await runtime.trust.savePairedPeer(proposal.peer)
         await pairedSetMayHaveChanged()
+    }
+
+    /// Opens the pairing connection, and says where it was going when it
+    /// cannot.
+    ///
+    /// Dials the pairing port the device advertises as resolved just now
+    /// rather than as browsed, so a window that reopened on another port since
+    /// the row was drawn is still the one reached. A connect that never
+    /// completes becomes a ``PairingDialError``: NIO's "Connect timeout (10 s)"
+    /// is what a firewall dropping the dial looks like, and it used to reach
+    /// the sheet as a bare "Could not connect."
+    private func dialToPair(
+        _ resolved: ResolvedPeer,
+        browsedPort: UInt16,
+        sighting: SightedPeer,
+        runtime: SyncRuntime
+    ) async throws -> SyncConnection {
+        let pairingPort = resolved.advertisement.pairingPort ?? browsedPort
+        do {
+            return try await SyncClient.connect(
+                host: resolved.host,
+                port: Int(pairingPort),
+                identity: runtime.certificate,
+                policy: .pairing,
+                group: runtime.group
+            )
+        } catch {
+            guard let failure = DialFailure(error) else { throw error }
+            throw PairingDialError(
+                failure: failure,
+                peerName: sighting.advertisement.displayName ?? sighting.peer.instanceName,
+                platform: sighting.advertisement.platform,
+                pairingPort: pairingPort,
+                syncPort: resolved.port,
+                reason: String(describing: error)
+            )
+        }
     }
 
     /// Shows the code this side derived, before anything is sent.

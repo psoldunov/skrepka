@@ -24,7 +24,10 @@ public struct DaemonOptions: Sendable {
           --name NAME       what this device calls itself on the network
                             (default: this machine's hostname)
           --no-sync         watch the clipboard, but do not join the network
-          --port N          sync listener port (default: any free port)
+          --port N          listen for sync on TCP port N and for pairing on
+                            N+1; 0 for any free ports (default: 27182 and
+                            27183, or free ports when another program holds
+                            them)
           --data-dir PATH   override $XDG_DATA_HOME/skrepka
           --config PATH     override the settings file (default: config.json in
                             --data-dir when given, else
@@ -61,7 +64,15 @@ public struct DaemonOptions: Sendable {
     /// and that user should not have a listener bound or a record published.
     public var syncEnabled = true
 
-    public var port = 0
+    /// The sync listener's TCP port as `--port` gave it; the pairing listener
+    /// takes the one after. See ``ListenerPorts``.
+    ///
+    /// Nil means Skrepka's own pair, ``ListenerPorts/defaultSync`` and the port
+    /// after it, and it is the only value that may fall back to a free port
+    /// when another program holds one. A number is a promise to a firewall rule
+    /// somebody wrote for it, so it binds exactly or not at all; `0` asks for
+    /// free ports outright.
+    public var port: Int?
     public var logLevel = "info"
 
     /// Where the database and the device key live. Nil means the XDG default.
@@ -167,11 +178,12 @@ public struct DaemonOptions: Sendable {
     /// the user had just written, and `--port 99999` reached NIO's
     /// `SocketAddress(ipAddress:port:)`, which narrows to `in_port_t` — a
     /// `UInt16` — without checking, and killed the daemon on a fatal error
-    /// where a usage message belonged.
+    /// where a usage message belonged. 65535 is refused for the same reason:
+    /// the pairing listener takes the port after it.
     private static func port(_ rest: inout ArraySlice<String>, for flag: String) throws -> Int {
         let text = try value(&rest, for: flag)
-        guard let number = Int(text), number >= 0, number <= 65535 else {
-            throw DaemonOptionsError.invalidValue(text, flag: flag, expected: "0, or 1 to 65535")
+        guard let number = Int(text), number >= 0, number < 65535 else {
+            throw DaemonOptionsError.invalidValue(text, flag: flag, expected: "0, or 1 to 65534")
         }
         return number
     }

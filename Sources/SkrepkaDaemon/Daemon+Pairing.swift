@@ -38,12 +38,7 @@ extension Daemon {
             let ends = scheduleWindowClose(after: duration)
             return PairingWindowDocument(port: UInt16(server.port), expiresAt: ends)
         }
-        let server = try await SyncServer.start(
-            identity: runtime.certificate,
-            policy: .pairing,
-            host: Self.listenHost,
-            group: runtime.group
-        )
+        let server = try await bindPairingListener(runtime: runtime)
         // Re-checked after the await: `stop()` may have run while the listener
         // was binding, and a pairing port left open on a stopping daemon is the
         // one thing that must not survive.

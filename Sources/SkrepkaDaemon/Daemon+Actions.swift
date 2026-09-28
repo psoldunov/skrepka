@@ -169,6 +169,11 @@ extension Daemon {
                 metadata: ["peer": .string(fingerprint)]
             )
             throw error
+        } catch {
+            // A connect that never completed: said as what the user can act
+            // on rather than as "Connect timeout (10 s)".
+            guard let failure = DialFailure(error) else { throw error }
+            throw PairError.couldNotReach(fingerprint, failure, port: pairingPort)
         }
     }
 

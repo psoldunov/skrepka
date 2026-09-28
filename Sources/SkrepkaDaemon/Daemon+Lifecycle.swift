@@ -107,7 +107,7 @@ extension Daemon {
         )
         self.runtime = runtime
 
-        try await startSyncListener(runtime: runtime, port: options.port)
+        try await startSyncListener(runtime: runtime, port: listenerPorts.sync)
         await startDiscovery(runtime: runtime)
     }
 

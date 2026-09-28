@@ -9,10 +9,11 @@ import SkrepkaSync
 /// user-facing copy. So the translation lives here, where the pane that shows it
 /// does.
 ///
-/// Only the failures a user can act on are named. Everything else falls through
-/// to a plain "could not connect", because a peer that is asleep, a Wi-Fi
-/// network that has changed and a laptop that closed its lid all arrive as
-/// unrelated NIO errors and none of them is worth a paragraph. The
+/// Only the failures a user can act on are named. A connect that never
+/// completed is sorted by `DialFailure` into no answer, refused, unreachable or
+/// not found — "no answer" being what a firewall that drops the dial looks
+/// like, which is worth saying because it is the one the user can fix.
+/// Everything else falls through to a plain "could not connect". The
 /// `CustomStringConvertible` description each of these types already carries is
 /// what goes to the log; this is what goes on screen.
 ///
@@ -48,8 +49,57 @@ nonisolated enum SyncFailureText {
         case let error as SyncTLSError: describe(error)
         case let error as PairingError: describe(error)
         case let error as DiscoveryError: describe(error)
-        default: "Could not connect."
+        case let error as PairingDialError: describe(error)
+        default: DialFailure(error).map { describe($0) } ?? "Could not connect."
         }
+    }
+
+    /// A paired device's link that could not connect, said under the device's
+    /// name in its row.
+    private static func describe(_ failure: DialFailure) -> String {
+        switch failure {
+        case .noAnswer: "Not answering. It may be asleep, or a firewall on it may be blocking Skrepka."
+        case .refused: "Turned the connection away. Skrepka may not be running there."
+        case .unreachable: "Not reachable from this Mac's network."
+        case .notFound: "Could not find this device on the network."
+        }
+    }
+
+    /// A dial to pair that never reached the device, which knows the device's
+    /// name and the ports it was dialling.
+    ///
+    /// A Linux machine that does not answer gets the ports to open, because a
+    /// firewall is nearly always why: NixOS ships its firewall on and dropping,
+    /// and this Mac waiting out a ten-second timeout is all that is ever seen of
+    /// it from here — the Linux side hears nothing.
+    private static func describe(_ error: PairingDialError) -> String {
+        let name = error.peerName
+        return switch error.failure {
+        case .noAnswer where error.platform == .linux:
+            """
+            \(name) did not answer. A firewall on it is the usual cause: allow incoming \
+            TCP \(ports(error)) and UDP 5353 there — on NixOS, set \
+            programs.skrepka.openFirewall = true — then try again.
+            """
+        case .noAnswer:
+            "\(name) did not answer. It may be asleep, or a firewall on it may be blocking Skrepka."
+        case .refused:
+            """
+            \(name) turned the connection away. Its pairing window may have just closed — \
+            allow pairing there again, then retry.
+            """
+        case .unreachable:
+            "\(name) cannot be reached from this Mac's network."
+        case .notFound:
+            "Could not find \(name) on the network."
+        }
+    }
+
+    /// "ports 27182–27183", or both ports by name when they are not a range.
+    private static func ports(_ error: PairingDialError) -> String {
+        // Compared as `Int`: `UInt16` arithmetic traps on a sync port of 65535.
+        let (sync, pairing) = (Int(error.syncPort), Int(error.pairingPort))
+        return pairing == sync + 1 ? "ports \(sync)–\(pairing)" : "ports \(sync) and \(pairing)"
     }
 
     private static func describe(_ error: DiscoveryError) -> String {

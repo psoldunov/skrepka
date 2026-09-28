@@ -10,7 +10,9 @@ struct DaemonOptionsTests {
         let options = try DaemonOptions.parse([])
         #expect(options.command == .run)
         #expect(options.syncEnabled)
-        #expect(options.port == 0)
+        // Nil is Skrepka's own pair, 27182 and 27183 — not "any free port",
+        // which is what a firewall rule cannot name.
+        #expect(options.port == nil)
         #expect(options.displayName.isEmpty)
         #expect(options.logLevel == "info")
     }
@@ -64,7 +66,7 @@ struct DaemonOptionsTests {
         }
     }
 
-    @Test("--port takes a port, or 0 for any free one", arguments: [0, 1, 7011, 65535])
+    @Test("--port takes a port, or 0 for any free one", arguments: [0, 1, 7011, 65534])
     func acceptsEveryValidPort(_ port: Int) throws {
         #expect(try DaemonOptions.parse(["--port", String(port)]).port == port)
     }
@@ -75,10 +77,11 @@ struct DaemonOptionsTests {
     /// firewall rule the user had just written, and `--port 99999` reached
     /// NIO's `SocketAddress(ipAddress:port:)`, which narrows to `in_port_t`
     /// without checking and killed the daemon on a fatal error where a usage
-    /// message belonged.
+    /// message belonged. 65535 is refused because the pairing listener takes
+    /// the port after it, and there is none.
     @Test(
         "--port refuses anything that is not one",
-        arguments: ["eighty", "99999", "65536", "-1", "80.5", "", "0x50"]
+        arguments: ["eighty", "99999", "65536", "65535", "-1", "80.5", "", "0x50"]
     )
     func refusesAnInvalidPort(_ value: String) {
         #expect(throws: DaemonOptionsError.self) {

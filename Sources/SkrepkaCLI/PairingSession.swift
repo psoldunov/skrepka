@@ -40,6 +40,7 @@ struct PairingSession {
             This device is accepting pairings on port \(window.port) until \
             \(HistoryReport.stamp(window.expiresAt, in: .current)).
             Run `skrepka pair --peer <this device's fingerprint>` on the other machine.
+            \(Self.firewallHint(pairingPort: window.port))
             Waiting…
             """
         )
@@ -54,6 +55,21 @@ struct PairingSession {
         let code = try await answer(proposal)
         _ = try await proxy.closePairing()
         return code
+    }
+
+    /// What to do if the other machine says it could not connect.
+    ///
+    /// Said up front because the failure shows on the *other* screen: a
+    /// firewall here drops the dial silently, so this side never learns it
+    /// happened and would otherwise wait out the whole window saying nothing.
+    /// Skrepka's own pair is named whole, because the peer dials the sync port
+    /// straight after pairing; any other port is named alone.
+    static func firewallHint(pairingPort: UInt16) -> String {
+        let ports = Int(pairingPort) == SkrepkaPorts.pairing ? SkrepkaPorts.all : [Int(pairingPort)]
+        return """
+            If the other machine cannot connect, a firewall here is the usual cause: allow \
+            \(FirewallAdvice.describe(ports)). \(FirewallAdvice.current().remedy(opening: ports))
+            """
     }
 
     /// The first proposal, or nil once the window has expired.

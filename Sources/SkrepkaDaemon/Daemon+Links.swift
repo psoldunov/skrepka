@@ -61,6 +61,7 @@ extension Daemon {
             report: { [weak self] deviceID, event in
                 await self?.apply(event, to: deviceID, generation: generation)
             },
+            describeFailure: DialFailure.linkReason(for:),
             onPushFetched: { [weak self] meta, payloads in
                 await self?.receiveFetchedPush(meta, payloads: payloads, generation: generation)
             }
@@ -93,6 +94,7 @@ extension Daemon {
         case .synced(let learned, let at):
             entry.state = learned > 0 ? "synced, learned \(learned)" : "synced"
             entry.lastSyncedAt = at
+            entry.firstSyncedAt = entry.firstSyncedAt ?? at
         case .pushed:
             entry.state = "pushed"
         case .failed(let reason):
