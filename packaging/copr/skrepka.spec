@@ -33,7 +33,7 @@
 %global debug_package %{nil}
 
 Name:           skrepka
-Version:        0.3.0
+Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Clipboard history for the Linux desktop, synced with your other machines
 License:        MIT
@@ -150,5 +150,5 @@ grep -Fq '"uuid": "%{extension_uuid}"' \
 # with each release, and CHANGELOG.md is where the history lives. rpmbuild takes
 # the build's timestamps from its date, which keeps the build reproducible.
 %changelog
-* Tue Sep 22 2026 Philipp Soldunov <69530789+psoldunov@users.noreply.github.com> - 0.3.0-1
-- Skrepka 0.3.0: https://github.com/psoldunov/skrepka/blob/v0.3.0/CHANGELOG.md
+* Mon Sep 28 2026 Philipp Soldunov <69530789+psoldunov@users.noreply.github.com> - 0.3.1-1
+- Skrepka 0.3.1: https://github.com/psoldunov/skrepka/blob/v0.3.1/CHANGELOG.md
