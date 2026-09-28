@@ -32,10 +32,11 @@ extension Daemon {
                 ?? "run `skrepka doctor` for what this session offers"
         }
         return """
-            Neither WAYLAND_DISPLAY nor DISPLAY is set. If this is a graphical session, the \
-            compositor did not export them to the systemd user manager — run \
-            `systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_SESSION_TYPE` \
-            and restart skrepkad. On a headless machine this is expected, and sync still works.
+            Neither WAYLAND_DISPLAY nor DISPLAY is set. skrepkad keeps asking the systemd user \
+            manager and starts watching as soon as the desktop exports them. If this is a \
+            graphical session and it never does, the compositor does not export them — run \
+            `systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_SESSION_TYPE`. \
+            On a headless machine this is expected, and sync still works.
             """
     }
 
@@ -45,11 +46,14 @@ extension Daemon {
     /// not thrown: GNOME Wayland is exactly that session, and the answer there
     /// is the Shell extension submitting clips over the bus rather than the
     /// daemon refusing to run. `skrepka doctor` is what says so.
+    ///
+    /// A session with no display at all is the one exception that is waited
+    /// out rather than stepped over — see ``waitForDisplay(attempt:)``.
     func startClipboard() async throws {
-        let probe = SessionProbe().run(environment: environment)
+        let probe = SessionProbe().run(environment: sessionEnvironment)
         sessionReport = probe
         do {
-            let running = try await ClipboardBackend.start(environment: environment)
+            let running = try await ClipboardBackend.start(environment: sessionEnvironment)
             sessionReport = running.report
             clipboard = running
             hasEverCaptured = true
@@ -63,6 +67,7 @@ extension Daemon {
                     "remedy": .string(Self.remedy(for: report)),
                 ]
             )
+            if isWaitingForDisplay { waitForDisplay(attempt: 0) }
         } catch ClipboardBackend.StartError.backendFailed(let report, let error) {
             sessionReport = report
             logger.error(
@@ -72,8 +77,15 @@ extension Daemon {
                     "error": .string(String(describing: error)),
                 ]
             )
-            scheduleSessionRestart(attempt: 0)
+            scheduleSessionRestart(attempt: 0, isTransient: Self.isTransient(error))
         }
+    }
+
+    /// Whether a backend start ran out of time rather than failed — see
+    /// ``scheduleSessionRestart(attempt:isTransient:)``.
+    static func isTransient(_ error: any Error) -> Bool {
+        if case ClipboardBackend.StartError.backendFailed(_, let inner) = error { return isTransient(inner) }
+        return (error as? LinuxSessionStartError) == .timedOut
     }
 
     /// Reads decisions until the backend stops, then rebuilds the session.
@@ -123,16 +135,22 @@ extension Daemon {
     /// last delay, indefinitely: one `SessionProbe` every thirty seconds is an
     /// environment read and at most one connect attempt, which is not spinning.
     ///
-    /// A daemon that has *never* had one is on a machine with no display, and
-    /// re-probing cannot change that: `SessionProbe` reads the environment this
-    /// process was started with, and a `WAYLAND_DISPLAY` exported to the user
-    /// manager afterwards is not in it. Only a restart of the unit picks that
-    /// up. So this gives up, says so once, and leaves the daemon running for
-    /// the sync and the history it can still serve.
-    func scheduleSessionRestart(attempt: Int) {
+    /// A daemon that has *never* had one, on a session that names a display,
+    /// has a backend that will not start there, and re-probing the same
+    /// display will not change that. So this gives up, says so once, and
+    /// leaves the daemon running for the sync and the history it can still
+    /// serve. A session naming no display at all never reaches here: that one
+    /// is waited out by ``waitForDisplay(attempt:)``.
+    ///
+    /// A backend that *timed out* is retried like a lost session: it did not
+    /// refuse, it only had no first read within
+    /// `LinuxSessionTiming.startupTimeout` — likeliest at login, just after the
+    /// display appeared — and that says nothing about the next attempt. Only
+    /// the latest failure counts, so a later refusal still gives up.
+    func scheduleSessionRestart(attempt: Int, isTransient: Bool = false) {
         guard !isStopping else { return }
         let last = Self.sessionRetryDelays.count - 1
-        guard attempt <= last || hasEverCaptured else {
+        guard attempt <= last || hasEverCaptured || isTransient else {
             logger.error(
                 """
                 Gave up rebuilding the clipboard session. Nothing is being captured on this \
@@ -150,20 +168,21 @@ extension Daemon {
                 // rebuild for.
                 return
             }
-            await self?.restartSession(attempt: attempt)
+            // Queued, for the reason ``waitForDisplay(attempt:)`` is.
+            await self?.enqueue { await $0.restartSession(attempt: attempt) }.value
         }
     }
 
     private func restartSession(attempt: Int) async {
         guard !isStopping else { return }
-        let probe = SessionProbe().run(environment: environment)
+        let probe = SessionProbe().run(environment: sessionEnvironment)
         sessionReport = probe
         guard probe.backend != nil else {
             scheduleSessionRestart(attempt: attempt + 1)
             return
         }
         do {
-            let running = try await ClipboardBackend.start(environment: environment)
+            let running = try await ClipboardBackend.start(environment: sessionEnvironment)
             sessionReport = running.report
             clipboard = running
             hasEverCaptured = true
@@ -177,7 +196,7 @@ extension Daemon {
             )
             startCaptureLoop(over: running)
         } catch {
-            scheduleSessionRestart(attempt: attempt + 1)
+            scheduleSessionRestart(attempt: attempt + 1, isTransient: Self.isTransient(error))
         }
     }
 

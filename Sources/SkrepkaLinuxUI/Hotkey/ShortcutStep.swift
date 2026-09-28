@@ -13,20 +13,35 @@ enum ShortcutStep: Equatable {
 
     static let noKey = "the desktop left it without a key — assign one in its shortcut settings"
 
-    /// After `ListShortcuts`.
+    /// The first step of every new session: bind, whatever is already bound.
     ///
-    /// - Parameter mayBind: false for the listing that confirms a bind, so a
-    ///   desktop that accepts a bind and then lists nothing cannot send the
-    ///   session round in a loop.
-    static func afterListing(_ result: Result<PortalResponse, DBusError>, mayBind: Bool) -> ShortcutStep {
+    /// **Listing first is the bug this replaced.** From xdg-desktop-portal-kde
+    /// 6.7.4, `GlobalShortcutsSession::loadActions` no longer registers the
+    /// saved trigger with kglobalaccel when a session is created: `ListShortcuts`
+    /// on a fresh session still reports it, but only `BindShortcuts`
+    /// (`setActions`) hands it to KWin. A client that lists, sees `show-picker`
+    /// and stops has a shortcut the portal reports as bound and KWin never
+    /// delivers — every login after the first. Through 6.7.3, `loadActions`
+    /// made that registration itself, so listing alone worked there.
+    ///
+    /// Binding a shortcut the portal already knows opens no dialog on KDE (it
+    /// is "returning", not new) and keeps the trigger the user chose. Checked
+    /// on a second login under Plasma 6.4.3 with portal-kde 6.4.3 — SteamOS
+    /// 3.8, `scripts/kde-image.sh`: no dialog, `BindShortcuts` answered
+    /// `Success` with Meta+Shift+V, and the keys opened the picker. GNOME's
+    /// portal lists nothing until a bind in the same session anyway, so it was
+    /// always binding there.
+    static let opening: ShortcutStep = .bind
+
+    /// After the `ListShortcuts` that confirms a bind. Never binds again, so a
+    /// desktop that accepts a bind and then lists nothing cannot send the
+    /// session round in a loop.
+    static func afterListing(_ result: Result<PortalResponse, DBusError>) -> ShortcutStep {
         guard case .success(let response) = result, response.code == 0 else {
-            // A failed listing is not fatal while binding is still allowed:
-            // binding afresh is what an empty list leads to anyway, and the
-            // desktop keeps a trigger the user already chose.
-            return mayBind ? .bind : .unbound(GlobalShortcuts.describe(result))
+            return .unbound(GlobalShortcuts.describe(result))
         }
         if let trigger = trigger(in: response) { return .bound(trigger) }
-        return mayBind ? .bind : .unbound(noKey)
+        return .unbound(noKey)
     }
 
     /// After `BindShortcuts`.
