@@ -1,5 +1,4 @@
 import CGtk4
-import SkrepkaCore
 import SkrepkaIPC
 
 /// The picker's floating window: an undecorated, keyboard-driven surface that

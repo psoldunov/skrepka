@@ -1,6 +1,5 @@
 import CGtk4
 import Foundation
-import SkrepkaCore
 import SkrepkaIPC
 
 /// The picker, assembled: the window, daemon link and model.
@@ -15,7 +14,7 @@ public final class PickerController {
 
     private let window: PaletteWindow
     private let link: PickerLink
-    private let inbox: MainLoopInbox<PickerEvent>
+    // periphery:ignore - held, never read: dropping the watch detaches it from the loop
     private var watch: MainLoopWatch<PickerEvent>?
     private let thumbnails = ThumbnailCache()
 
@@ -43,8 +42,9 @@ public final class PickerController {
     ///   in the app, a fake in the demo and tests.
     public init(connect: @escaping @Sendable () async throws -> any PickerDaemon) throws {
         window = try PaletteWindow()
+        // Not stored: the watch holds the inbox, and the link's report closure
+        // holds it too.
         let inbox = try MainLoopInbox<PickerEvent>()
-        self.inbox = inbox
         link = PickerLink(connect: connect, report: { inbox.post($0) })
         watch = try MainLoopWatch(inbox: inbox) { [weak self] event in self?.handle(event) }
         wire()

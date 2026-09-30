@@ -198,14 +198,18 @@ extension ProbePeer {
     }
 }
 
-/// One device the browse turned up, with its record already read.
-///
-/// A named type rather than a tuple, because the tuple's labels put the
-/// signature past the line the formatter breaks at, and a broken signature trips
-/// the repo's own brace rule. Naming it is the smaller change and it reads
-/// better at both call sites.
-struct Sighting: Sendable {
-    let deviceID: SyncDeviceID
-    let peer: DiscoveredPeer
-    let advertisement: PeerAdvertisement
-}
+// Fenced with ``ProbePeer/sightings()``, its one producer: only the Bonjour
+// browse turns anything up.
+#if canImport(Network) && canImport(dnssd)
+    /// One device the browse turned up, with its record already read.
+    ///
+    /// A named type rather than a tuple, because the tuple's labels put the
+    /// signature past the line the formatter breaks at, and a broken signature trips
+    /// the repo's own brace rule. Naming it is the smaller change and it reads
+    /// better at both call sites.
+    struct Sighting: Sendable {
+        let deviceID: SyncDeviceID
+        let peer: DiscoveredPeer
+        let advertisement: PeerAdvertisement
+    }
+#endif

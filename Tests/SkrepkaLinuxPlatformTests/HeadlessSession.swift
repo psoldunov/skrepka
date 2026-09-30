@@ -81,12 +81,9 @@ final class HeadlessSession {
     /// loaded container takes noticeably longer to bring a compositor up — a
     /// 10-second window was enough alone and not enough under 481 tests. What
     /// stops that generosity costing a slow failure is the liveness check:
-    /// a compositor that exited is reported at once, with what it said.
-    private func waitForSocket(
-        named prefix: String,
-        startedBy process: Subprocess,
-        log: URL
-    ) -> String? {
+    /// a compositor that exited is reported at once — the caller adds what it
+    /// said, from its log.
+    private func waitForSocket(named prefix: String, startedBy process: Subprocess) -> String? {
         var found: String?
         _ = waitUntil(timeout: .seconds(30)) {
             if process.status() != nil { return true }
@@ -185,7 +182,7 @@ final class HeadlessSession {
         ).process
         process = sway
 
-        guard let socket = waitForSocket(named: "wayland-", startedBy: sway, log: log) else {
+        guard let socket = waitForSocket(named: "wayland-", startedBy: sway) else {
             // The tail is read here, while the log still exists: ``start()``
             // catches this, and its cleanup deletes the directory holding it.
             throw Failure.didNotStart("sway produced no Wayland socket\n\(Self.tail(of: log))")

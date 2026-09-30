@@ -19,9 +19,7 @@ extension SettingsStyle {
         window.skrepka-settings button:disabled label { color: \(palette.primary); }
         window.skrepka-settings button:focus-visible { box-shadow: 0 0 0 2px alpha(\(accent), 0.7); }
         window.skrepka-settings button.skrepka-destructive { color: \(tones.red); }
-        window.skrepka-settings button.skrepka-suggested,
         window.skrepka-settings button.suggested-action { background: \(accent); color: #ffffff; }
-        window.skrepka-settings button.skrepka-suggested:hover,
         window.skrepka-settings button.suggested-action:hover { background: alpha(\(accent), 0.88); }
         window.skrepka-settings dropdown > button { min-width: 150px; padding: 0 10px 0 14px; }
         window.skrepka-settings dropdown > button arrow { color: \(palette.secondary); }

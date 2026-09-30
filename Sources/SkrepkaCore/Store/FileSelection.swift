@@ -52,14 +52,18 @@ enum FileSelection {
     /// stays exact however many names went unlisted.
     static let maximumNamedFiles = 100
 
-    /// How many of a selection's files the row draws in its stack.
-    ///
-    /// Three, because that is what a pile reads as: two says "a pair", four
-    /// crowds a 48-point tile into mush, and past three the layers behind are
-    /// hidden by the ones in front anyway. The exact number of files is on the
-    /// badge and in the subtitle, so the stack has only to say "several".
-    ///
-    /// Each one is an icon read off disk and a picture stored on the row, so
-    /// this bounds real work as well as the drawing.
-    static let maximumStackedIcons = 3
+    // AppKit-only with ``FileIconStack``, its one reader: Linux draws no stacks
+    // yet (D-9).
+    #if canImport(AppKit)
+        /// How many of a selection's files the row draws in its stack.
+        ///
+        /// Three, because that is what a pile reads as: two says "a pair", four
+        /// crowds a 48-point tile into mush, and past three the layers behind are
+        /// hidden by the ones in front anyway. The exact number of files is on the
+        /// badge and in the subtitle, so the stack has only to say "several".
+        ///
+        /// Each one is an icon read off disk and a picture stored on the row, so
+        /// this bounds real work as well as the drawing.
+        static let maximumStackedIcons = 3
+    #endif
 }

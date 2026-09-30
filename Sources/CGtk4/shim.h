@@ -75,8 +75,6 @@ static inline GtkButton *skrepka_as_button(GtkWidget *widget) { return GTK_BUTTO
 
 static inline GtkSwitch *skrepka_as_switch(GtkWidget *widget) { return GTK_SWITCH(widget); }
 
-static inline GtkFrame *skrepka_as_frame(GtkWidget *widget) { return GTK_FRAME(widget); }
-
 static inline GtkSpinner *skrepka_as_spinner(GtkWidget *widget) {
 	return GTK_SPINNER(widget);
 }

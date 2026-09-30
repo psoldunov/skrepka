@@ -49,7 +49,6 @@ enum SettingsStyle {
     static let banner = "skrepka-banner"
     static let bannerMessage = "skrepka-banner-message"
     static let destructive = "skrepka-destructive"
-    static let suggested = "skrepka-suggested"
     static let code = "skrepka-code"
     static let dialogTitle = "skrepka-dialog-title"
 

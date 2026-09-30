@@ -43,8 +43,6 @@ struct XAtoms {
     let atomPair: Atom
     /// The property Skrepka asks owners to put replies on, on its own window.
     let transferProperty: Atom
-    /// UTF-8 text, which is what every toolkit written since 2000 offers.
-    let utf8String: Atom
     /// Used to provoke a `PropertyNotify` and read a server timestamp off it.
     let timeProperty: Atom
 
@@ -59,7 +57,6 @@ struct XAtoms {
         incr = intern("INCR")
         atomPair = intern("ATOM_PAIR")
         transferProperty = intern("SKREPKA_SELECTION")
-        utf8String = intern("UTF8_STRING")
         timeProperty = intern("SKREPKA_TIME")
     }
 

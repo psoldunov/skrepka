@@ -12,7 +12,7 @@ extension Daemon {
     /// clipboard and still answers `skrepka list`; what it cannot do is find
     /// peers, and `skrepka doctor` is where that is said. Refusing to start
     /// would turn a missing package into a broken clipboard manager.
-    func startDiscovery(runtime: SyncRuntime) async {
+    func startDiscovery() async {
         let discovery = AvahiDiscovery(session: systemBus, logger: logger)
         switch await discovery.probe() {
         case .success(let version):

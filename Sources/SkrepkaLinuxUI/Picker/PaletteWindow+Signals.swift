@@ -1,5 +1,4 @@
 import CGtk4
-import SkrepkaCore
 
 // The C side of ``PaletteWindow``: the one key callback GTK reaches through a
 // function pointer, and the retain it balances.
@@ -21,7 +20,6 @@ extension PaletteWindow {
     /// layout-independent name for a key, and Alt+1–9 needs one — see
     /// ``PickerKeyMap``.
     static func keyPressed(
-        _ controller: OpaquePointer?,
         keysym: UInt32,
         keycode: UInt32,
         state: UInt32,
@@ -41,10 +39,11 @@ extension PaletteWindow {
     /// Formed from a literal closure rather than a bare reference for the reason
     /// the Linux compiler gives: a C function pointer can only come from a
     /// literal closure or a `func` reference it happens to accept, and the
-    /// closure with positional `$0` is what compiles for both.
+    /// literal closure is what compiles for both. The key controller GTK passes
+    /// first is dropped: the window arrives through `data`.
     static let onKeyPressed: @convention(c) (OpaquePointer?, UInt32, UInt32, UInt32, gpointer?) -> gboolean =
-        {
-            keyPressed($0, keysym: $1, keycode: $2, state: $3, data: $4)
+        { _, keysym, keycode, state, data in
+            keyPressed(keysym: keysym, keycode: keycode, state: state, data: data)
         }
 
     /// Drops the retain ``connectKeys(_:)`` took, when GLib destroys the

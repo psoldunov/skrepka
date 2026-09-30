@@ -1,6 +1,5 @@
 import CGtk4
 import Foundation
-import SkrepkaCore
 import SkrepkaLinuxUI
 
 // A hand-driven smoke test and screenshot rig for the picker on a real

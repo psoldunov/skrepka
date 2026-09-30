@@ -1,4 +1,3 @@
-import SkrepkaIPC
 import Testing
 
 @testable import SkrepkaCLI

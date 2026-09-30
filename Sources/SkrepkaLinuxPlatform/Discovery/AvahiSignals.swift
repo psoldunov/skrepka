@@ -24,7 +24,6 @@ enum AvahiSignals {
         let name: String
         let serviceType: String
         let domain: String
-        let flags: UInt32
 
         /// The browse result, with no advertisement.
         ///
@@ -46,16 +45,13 @@ enum AvahiSignals {
         }
     }
 
-    /// One `Found` from a `ServiceResolver`.
+    /// One `Found` from a `ServiceResolver`: the part of it a connection needs.
     struct Resolution: Sendable, Hashable {
-        let name: String
-        let serviceType: String
-        let domain: String
         /// The SRV target — a host *name*, usually `something.local`. Left as a
         /// name deliberately: turning it into an address here would pin one of
-        /// the peer's addresses and keep using it after the peer moved network.
+        /// the peer's addresses and keep using it after the peer moved network,
+        /// which is why the signal's own `address` is not kept at all.
         let host: String
-        let address: String
         let port: UInt16
         /// Raw `key=value` byte arrays, exactly as they came off the wire.
         let txt: [[UInt8]]
@@ -68,37 +64,33 @@ enum AvahiSignals {
             case .string(let name) = body[2],
             case .string(let serviceType) = body[3],
             case .string(let domain) = body[4],
-            case .uint32(let flags) = body[5]
+            // The lookup-result flags. Bit 8, `AVAHI_LOOKUP_RESULT_LOCAL`, marks
+            // a result this host announced itself, and is deliberately not used
+            // to filter: the device identifier in the TXT record is the
+            // authority on "is this me", and it works across two Skrepka
+            // processes on one machine where this flag does not.
+            case .uint32 = body[5]
         else { return nil }
         return BrowseItem(
             interfaceIndex: interfaceIndex,
             networkProtocol: networkProtocol,
             name: name,
             serviceType: serviceType,
-            domain: domain,
-            flags: flags
+            domain: domain
         )
     }
 
     static func resolution(_ body: [DBusValue]) -> Resolution? {
         guard body.count >= 11,
-            case .string(let name) = body[2],
-            case .string(let serviceType) = body[3],
-            case .string(let domain) = body[4],
+            case .string = body[2],
+            case .string = body[3],
+            case .string = body[4],
             case .string(let host) = body[5],
-            case .string(let address) = body[7],
+            case .string = body[7],
             case .uint16(let port) = body[8],
             let txt = byteArrays(body[9])
         else { return nil }
-        return Resolution(
-            name: name,
-            serviceType: serviceType,
-            domain: domain,
-            host: host,
-            address: address,
-            port: port,
-            txt: txt
-        )
+        return Resolution(host: host, port: port, txt: txt)
     }
 
     /// `(i state, s error)` from an entry group.

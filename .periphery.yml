@@ -27,3 +27,12 @@ retain_public: true
 retain_objc_accessible: true
 retain_swift_ui_previews: true
 strict: true
+# Handles held only for their lifetime, the way Periphery already treats
+# `AnyCancellable`: each one's deinit ends a GDBus signal subscription, a name
+# watch or an exported object, so the property that holds it is assigned and
+# never read by design. Types only `SkrepkaLinuxUI` declares; the macOS scan
+# never meets them.
+retain_assign_only_property_types:
+  - DBusSignalSubscription
+  - DBusNameWatch
+  - DBusExportedObject

@@ -1,5 +1,4 @@
 import CGtk4
-import SkrepkaCore
 
 /// The picker's stylesheet, generated for a dark or light desktop and an accent
 /// colour, and installed above the theme.

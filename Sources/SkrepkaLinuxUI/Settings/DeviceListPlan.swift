@@ -13,6 +13,7 @@ struct DeviceListPlan: Equatable {
     /// One row, as far as keeping it goes: its device, and whether it is the
     /// paired kind — Unpair and a switch — or the nearby kind, with Pair….
     struct Key: Hashable {
+        // periphery:ignore - read by the synthesized Hashable, which is what tells two rows apart
         let id: String
         let isPaired: Bool
     }
@@ -20,6 +21,7 @@ struct DeviceListPlan: Equatable {
     /// A row to put in, at its index in the list as it should end up.
     struct Insertion: Equatable {
         let index: Int
+        // periphery:ignore - read by the synthesized Equatable the tests compare plans with
         let key: Key
     }
 

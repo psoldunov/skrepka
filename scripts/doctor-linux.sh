@@ -116,9 +116,19 @@ if ((!FAST)); then
 
 	# Periphery ships no Linux binary — the 3.8.0 artifactbundle declares only
 	# x86_64-apple-macosx and arm64-apple-macosx. It does build from source on
-	# Linux, so this check turns on for anyone who does that; otherwise the
-	# dead-code scan stays a macOS-only check and says so.
-	optional "dead code" periphery periphery scan --strict --quiet
+	# Linux, and nixpkgs carries such a build, so this check turns on wherever
+	# one is on PATH; otherwise the dead-code scan stays a macOS-only check and
+	# says so.
+	#
+	# It reads the index store the test build above just wrote instead of
+	# building for itself: left alone it runs its own `swift build` into .build —
+	# a second full build, into the directory this gate exists to keep Linux
+	# builds out of. Pointed at a store by hand, it reports on everything the
+	# store indexed, the dependency checkouts under the scratch path included,
+	# hence the exclude.
+	index_store="$(swift build --show-bin-path --scratch-path "${SCRATCH}")/index/store"
+	optional "dead code" periphery periphery scan --strict --quiet --skip-build \
+		--index-store-path "${index_store}" --index-exclude "**/${SCRATCH}/**/*"
 fi
 
 printf '\n'

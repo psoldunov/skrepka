@@ -3,7 +3,6 @@ import Logging
 import NIOCore
 import NIOPosix
 import SkrepkaCore
-import SkrepkaIPC
 import SkrepkaLinuxPlatform
 import SkrepkaSync
 
@@ -108,7 +107,7 @@ extension Daemon {
         self.runtime = runtime
 
         try await startSyncListener(runtime: runtime, port: listenerPorts.sync)
-        await startDiscovery(runtime: runtime)
+        await startDiscovery()
     }
 
     /// Everything the diagnostics document needs about the network half.

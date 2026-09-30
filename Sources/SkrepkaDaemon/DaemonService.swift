@@ -19,16 +19,6 @@ import SkrepkaSync
 /// decision that lived here would be one the CLI and the extension could reach
 /// and the daemon's own tests could not.
 public actor DaemonService {
-    /// What the bus answers when a call names something this build has no
-    /// meaning for.
-    static let unknownMethodError = "org.freedesktop.DBus.Error.UnknownMethod"
-    /// What it answers when a caller passed the wrong shape of argument.
-    static let invalidArgumentsError = "org.freedesktop.DBus.Error.InvalidArgs"
-    /// What it answers when the daemon could not do the thing at all — as
-    /// opposed to did it and it did not work, which is an `ActionDocument` with
-    /// `ok: false`.
-    static let failedError = "org.freedesktop.DBus.Error.Failed"
-
     private let daemon: Daemon
     private let session: BusSession
     private let calls: CallGate<DBusMessage>

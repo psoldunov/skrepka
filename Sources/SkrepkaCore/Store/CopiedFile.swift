@@ -73,42 +73,48 @@ struct CopiedFile: Sendable, Hashable {
     /// nothing should start: the number means different things on the two
     /// platforms.
     let fileSize: Int?
-    /// Whether the file *declares* itself a picture.
-    ///
-    /// The declared type, never the bytes: it comes off the same
-    /// `resourceValues` call the shape does, so naming pictures costs no extra
-    /// trip to a volume that may be slow or gone. ``FileURLKind`` turns it into
-    /// ``ClipKind/imageFile`` so the row reads "Image" rather than "File";
-    /// ``ContentSize`` ignores it, which is why this is a property beside
-    /// ``shape`` rather than another ``Shape`` case both readers would have to
-    /// answer for.
-    ///
-    /// False, not nil, for "the file system did not say so" — a file with no
-    /// extension declares the generic `public.data` and is indistinguishable
-    /// here from a spreadsheet. ``ThumbnailRenderer`` upgrades that case later,
-    /// once a picture has actually been decoded out of the file, which is the
-    /// only evidence stronger than the declared type.
-    ///
-    /// Always false on Linux, where there is no `UniformTypeIdentifiers` to ask
-    /// and `URLResourceValues` therefore has no `contentType`. A Linux row reads
-    /// "File", which is what every row read before pictures were told apart.
-    let isImage: Bool
+    // Absent on Linux, where there is no `UniformTypeIdentifiers` to ask and
+    // `URLResourceValues` therefore has no `contentType`. It would only ever be
+    // false there, and nothing there reads it: a Linux row reads "File", which
+    // is what every row read before pictures were told apart.
+    #if canImport(UniformTypeIdentifiers)
+        /// Whether the file *declares* itself a picture.
+        ///
+        /// The declared type, never the bytes: it comes off the same
+        /// `resourceValues` call the shape does, so naming pictures costs no extra
+        /// trip to a volume that may be slow or gone. ``FileURLKind`` turns it into
+        /// ``ClipKind/imageFile`` so the row reads "Image" rather than "File";
+        /// ``ContentSize`` ignores it, which is why this is a property beside
+        /// ``shape`` rather than another ``Shape`` case both readers would have to
+        /// answer for.
+        ///
+        /// False, not nil, for "the file system did not say so" — a file with no
+        /// extension declares the generic `public.data` and is indistinguishable
+        /// here from a spreadsheet. ``ThumbnailRenderer`` upgrades that case later,
+        /// once a picture has actually been decoded out of the file, which is the
+        /// only evidence stronger than the declared type.
+        let isImage: Bool
+    #endif
 
-    /// A description assembled by the caller rather than read off a disk.
-    ///
-    /// Production has exactly one source for these — ``init(at:)`` — and should
-    /// keep it that way: a `CopiedFile` naming a shape the file system never
-    /// reported is a lie the readers cannot detect. It exists because
-    /// ``FileURLKind/kind(of:)`` and ``ContentSize/byteCount(of:)`` are total
-    /// functions over ``Shape``, and the arm that matters most —
-    /// ``Shape/unknown``, where the two deliberately disagree — is the one no
-    /// real path can be made to produce.
-    init(url: URL, shape: Shape, fileSize: Int?, isImage: Bool = false) {
-        self.url = url
-        self.shape = shape
-        self.fileSize = fileSize
-        self.isImage = isImage
-    }
+    // AppKit-only with ``FileURLKind`` and the tests that build one of these by
+    // hand, which are fenced the same way.
+    #if canImport(AppKit)
+        /// A description assembled by the caller rather than read off a disk.
+        ///
+        /// Production has exactly one source for these — ``init(at:)`` — and should
+        /// keep it that way: a `CopiedFile` naming a shape the file system never
+        /// reported is a lie the readers cannot detect. It exists because
+        /// ``FileURLKind/kind(of:)`` and ``ContentSize/byteCount(of:)`` are total
+        /// functions over ``Shape``, and the arm that matters most —
+        /// ``Shape/unknown``, where the two deliberately disagree — is the one no
+        /// real path can be made to produce.
+        init(url: URL, shape: Shape, fileSize: Int?, isImage: Bool = false) {
+            self.url = url
+            self.shape = shape
+            self.fileSize = fileSize
+            self.isImage = isImage
+        }
+    #endif
 
     /// Asks the file system about `url`, once.
     ///
@@ -141,8 +147,6 @@ struct CopiedFile: Sendable, Hashable {
         fileSize = values.fileSize
         #if canImport(UniformTypeIdentifiers)
             isImage = values.contentType?.conforms(to: .image) == true
-        #else
-            isImage = false
         #endif
     }
 }

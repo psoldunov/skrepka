@@ -104,14 +104,6 @@
             return ClipPayload(representations: representations)
         }
 
-        /// Byte count per representation, keyed by local type — the shape
-        /// `RepresentationIndex` holds on the SwiftData side.
-        static func index(from rows: [SQLiteRepresentationRow]) -> [String: Int] {
-            var index: [String: Int] = [:]
-            for row in rows { index[row.type] = row.byteCount }
-            return index
-        }
-
         /// Local types that can serve `key`, best first.
         ///
         /// `origin` first because it is the sender's own name and is exact when the

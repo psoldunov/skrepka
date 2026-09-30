@@ -1,7 +1,6 @@
 import Foundation
 import Logging
 import SkrepkaCore
-import SkrepkaIPC
 import SkrepkaLinuxPlatform
 import SkrepkaSync
 

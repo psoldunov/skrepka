@@ -1,5 +1,4 @@
 import Foundation
-import SkrepkaCore
 import Synchronization
 
 /// How a backend's own thread is asked to do something.

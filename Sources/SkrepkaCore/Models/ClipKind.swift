@@ -63,23 +63,27 @@ public enum ClipKind: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    /// Whether an entry of this kind is worth asking ``ThumbnailMaker`` about.
-    ///
-    /// `.file` is on the list because a copied picture is a file, not an image:
-    /// `public.file-url` outranks `public.png` in ``PasteboardType/readOrder``,
-    /// so a screenshot copied out of Finder arrives here as `.file`. Excluding
-    /// it is what left those rows showing a generic document icon. Files that
-    /// turn out not to be images simply get no preview.
-    ///
-    /// `.folder` is not: a directory is never a picture, so opening it could
-    /// only ever confirm that. An application bundle is a directory too, but it
-    /// classifies as `.file` — see ``FileURLKind`` — so it keeps its preview.
-    var canPreview: Bool {
-        switch self {
-        case .image, .file, .imageFile: true
-        case .text, .richText, .link, .folder: false
+    // AppKit-only with ``ThumbnailMaker``, the one thing that previews: the
+    // Linux store keeps no thumbnail (D-9), so nothing there asks.
+    #if canImport(AppKit)
+        /// Whether an entry of this kind is worth asking ``ThumbnailMaker`` about.
+        ///
+        /// `.file` is on the list because a copied picture is a file, not an image:
+        /// `public.file-url` outranks `public.png` in ``PasteboardType/readOrder``,
+        /// so a screenshot copied out of Finder arrives here as `.file`. Excluding
+        /// it is what left those rows showing a generic document icon. Files that
+        /// turn out not to be images simply get no preview.
+        ///
+        /// `.folder` is not: a directory is never a picture, so opening it could
+        /// only ever confirm that. An application bundle is a directory too, but it
+        /// classifies as `.file` — see ``FileURLKind`` — so it keeps its preview.
+        var canPreview: Bool {
+            switch self {
+            case .image, .file, .imageFile: true
+            case .text, .richText, .link, .folder: false
+            }
         }
-    }
+    #endif
 
     /// The kind as it enters ``ClipItem/contentHash``.
     ///
