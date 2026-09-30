@@ -79,7 +79,7 @@ public final class PickerController {
     public func show() {
         opening += 1
         previewRequests = previewRequests.reopened()
-        link.refreshSettings()
+        link.opened()
         hoverArmed = false
         model = PickerModel(rows: historyRows).reset()
         window.panel.footer.showError(nil)

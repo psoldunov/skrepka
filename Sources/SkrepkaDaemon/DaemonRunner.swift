@@ -1,3 +1,4 @@
+import DBUS
 import Foundation
 import Logging
 import SkrepkaIPC
@@ -84,8 +85,12 @@ public enum DaemonRunner {
         over session: BusSession,
         logger: Logger = Logger(label: "skrepka.daemon")
     ) async -> Int32 {
+        // Made here because it spans the same interval the session does: it
+        // holds the calls that arrive once the name is won, and the service
+        // answers them once it is exported. See ``CallGate``.
+        let calls = CallGate<DBusMessage>(logger: logger)
         do {
-            try await BusNameClaim.claim(SkrepkaInterface.busName, over: session)
+            try await BusNameClaim.claim(SkrepkaInterface.busName, over: session, holding: calls)
         } catch {
             // `ServiceError.nameAlreadyOwned` is the one a user is most likely
             // to meet, and it says how to stop the other daemon.
@@ -94,7 +99,7 @@ public enum DaemonRunner {
             return Exit.cannotStart
         }
 
-        let code = await serve(options, session: session, logger: logger)
+        let code = await serve(options, session: session, calls: calls, logger: logger)
         await session.stop()
         return code
     }
@@ -108,6 +113,7 @@ public enum DaemonRunner {
     private static func serve(
         _ options: DaemonOptions,
         session: BusSession,
+        calls: CallGate<DBusMessage>,
         logger: Logger
     ) async -> Int32 {
         let daemon: Daemon
@@ -122,7 +128,7 @@ public enum DaemonRunner {
             return Exit.cannotStart
         }
 
-        let service = DaemonService(daemon: daemon, session: session, logger: logger)
+        let service = DaemonService(daemon: daemon, session: session, calls: calls, logger: logger)
         do {
             // The export is last: a name on the bus is a promise that something
             // behind it can answer.

@@ -56,7 +56,8 @@ struct DaemonServiceInterfaceTests {
         // — and the dead address is what keeps that true if one ever does.
         return DaemonService(
             daemon: try Daemon(options: options, environment: [:]),
-            session: BusSession(bus: .session, address: BusNameClaimTests.deadAddress)
+            session: BusSession(bus: .session, address: BusNameClaimTests.deadAddress),
+            calls: CallGate()
         )
     }
 

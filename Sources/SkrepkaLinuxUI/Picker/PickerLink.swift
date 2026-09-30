@@ -16,7 +16,10 @@ public actor PickerLink {
     public typealias Report = @Sendable (PickerEvent) -> Void
 
     enum Command: Sendable {
-        case prefetch
+        /// Re-read what the list shows: the full history, or the open search.
+        /// With `onlyIfStale`, the full history alone, and only when the last
+        /// read of it failed.
+        case prefetch(onlyIfStale: Bool = false)
         case search(String)
         case copy(hash: String, style: CopyStyle)
         case setPinned(hash: String, pinned: Bool)
@@ -36,6 +39,10 @@ public actor PickerLink {
     /// The query the open list is showing, so a pin or a delete can redraw the
     /// same view rather than snapping it back to the full history.
     private var lastQuery = ""
+    /// Whether the last read of the full history failed, so the controller's
+    /// copy of it — what opening the picker paints — is not what the daemon
+    /// holds. See ``opened()``.
+    private var historyIsStale = false
     private var pasteAutomatically = true
 
     public init(connect: @escaping Connect, report: @escaping Report) {
@@ -52,11 +59,23 @@ public actor PickerLink {
         consumer = Task { [weak self] in await self?.consume(commands) }
         watching = Task { [weak self] in await self?.watchHistory(retryAfter: retry) }
         watchingTransfers = Task { [weak self] in await self?.watchTransfers(retryAfter: retry) }
-        enqueue(.prefetch)
+        enqueue(.prefetch())
         enqueue(.settings)
     }
 
-    public nonisolated func refresh() { enqueue(.prefetch) }
+    public nonisolated func refresh() { enqueue(.prefetch()) }
+
+    /// The picker opened: re-read the settings, and the history too if the
+    /// last read of it failed.
+    ///
+    /// The history is otherwise re-read only on `HistoryChanged`, so a prefetch
+    /// that failed — the daemon still coming up when the app starts at login —
+    /// left the picker painting an empty list until something was copied.
+    public nonisolated func opened() {
+        enqueue(.settings)
+        enqueue(.prefetch(onlyIfStale: true))
+    }
+
     public nonisolated func search(_ query: String) { enqueue(.search(query)) }
     public nonisolated func preview(hash: String) { enqueue(.preview(hash: hash)) }
     public nonisolated func refreshSettings() { enqueue(.settings) }
@@ -85,8 +104,8 @@ public actor PickerLink {
     /// Runs one command. Answers whether it was the shutdown.
     private func handle(_ command: Command) async -> Bool {
         switch command {
-        case .prefetch:
-            await load(lastQuery.isEmpty ? nil : lastQuery)
+        case .prefetch(let onlyIfStale):
+            await prefetch(onlyIfStale: onlyIfStale)
         case .search(let query):
             lastQuery = query
             await load(query)
@@ -123,6 +142,15 @@ public actor PickerLink {
 
     // MARK: - Reading
 
+    /// See ``Command/prefetch(onlyIfStale:)``.
+    private func prefetch(onlyIfStale: Bool) async {
+        if !onlyIfStale {
+            await refreshOpen()
+        } else if historyIsStale {
+            await load(nil)
+        }
+    }
+
     /// Loads the history, or the matches for `query`, and reports it. A `nil`
     /// query is the full history, painted straight away; a real one is a search
     /// reply, tagged so a stale one can be dropped.
@@ -133,8 +161,10 @@ public actor PickerLink {
                 report(.results(query: query, rows: try await daemon.search(query, limit: 0).clips))
             } else {
                 report(.history(try await daemon.history(limit: 0).clips))
+                historyIsStale = false
             }
         } catch {
+            if query == nil { historyIsStale = true }
             report(.unreachable(for: error))
         }
     }
@@ -194,7 +224,7 @@ public actor PickerLink {
     private func watchHistory(retryAfter retry: Duration) async {
         while !Task.isCancelled {
             if let daemon = try? await connect(), let changes = try? await daemon.historyChanges() {
-                for await _ in changes { enqueue(.prefetch) }
+                for await _ in changes { enqueue(.prefetch()) }
             }
             try? await Task.sleep(for: retry)
         }

@@ -66,7 +66,11 @@ struct BusNameClaimTests {
     func aFailedClaimReportsTheBus() async throws {
         var failure: (any Error)?
         do {
-            try await BusNameClaim.claim(SkrepkaInterface.busName, over: Self.deadSession())
+            try await BusNameClaim.claim(
+                SkrepkaInterface.busName,
+                over: Self.deadSession(),
+                holding: CallGate()
+            )
         } catch {
             failure = error
         }

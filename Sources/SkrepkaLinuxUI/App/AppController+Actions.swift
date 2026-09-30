@@ -53,10 +53,35 @@ extension AppController {
     private func note(_ outcome: DaemonStarter.Outcome) {
         switch outcome {
         case .running, .started:
+            if daemonFailures > 0 {
+                FileHandle.standardError.write(Data("skrepka-gui: skrepkad is answering\n".utf8))
+            }
+            daemonFailures = 0
+            daemonRecheck?.cancel()
+            daemonRecheck = nil
             setDaemonProblem(nil)
         case .failed(let reason):
-            FileHandle.standardError.write(Data("skrepka-gui: \(reason)\n".utf8))
+            // Once per run of failures: the check repeats every half minute
+            // while the daemon stays away, and the journal needs the reason,
+            // not a line per retry.
+            if daemonFailures == 0 {
+                FileHandle.standardError.write(Data("skrepka-gui: \(reason)\n".utf8))
+            }
             setDaemonProblem("Skrepka's background service isn't running")
+            scheduleDaemonRecheck()
+        }
+    }
+
+    /// Checks again later — see ``DaemonRecheck``.
+    private func scheduleDaemonRecheck() {
+        daemonFailures += 1
+        daemonRecheck?.cancel()
+        let delay = DaemonRecheck.delay(afterFailures: daemonFailures)
+        daemonRecheck = LoopTimer(seconds: delay) { [weak self] in
+            // Once: a `LoopTimer` repeats until it is cancelled.
+            self?.daemonRecheck?.cancel()
+            self?.daemonRecheck = nil
+            self?.ensureDaemon()
         }
     }
 
