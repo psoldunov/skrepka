@@ -28,6 +28,17 @@ public struct PickerModel: Equatable, Sendable {
 
     public var isEmpty: Bool { rows.isEmpty }
 
+    /// Whether a reply carrying `rows` has to be drawn.
+    ///
+    /// Rows identical to these are skipped — a search reply and a
+    /// `HistoryChanged`-driven re-prefetch often carry the same list — except
+    /// over a failure. A reply is the daemon answering again, and skipping one
+    /// whose rows matched, an empty history most often, left "Can't reach
+    /// Skrepka" on screen after the daemon was back.
+    public func needsDrawing(_ rows: [ClipDocument], overFailure isShowingFailure: Bool) -> Bool {
+        isShowingFailure || rows != self.rows
+    }
+
     /// The selected row: the one whose hash matches, or the first when the hash
     /// names nothing in the current rows.
     public var selection: ClipDocument? {

@@ -119,4 +119,24 @@ struct PickerModelTests {
         #expect(after == start)
         #expect(effect == nil)
     }
+
+    @Test("a reply with the rows already held is not drawn again")
+    func identicalRowsAreSkipped() {
+        // One array for both sides: `rows(_:)` stamps each call with `Date()`.
+        let held = rows(["a", "b"])
+        #expect(!PickerModel(rows: held).needsDrawing(held, overFailure: false))
+        #expect(!model([]).needsDrawing([], overFailure: false))
+    }
+
+    @Test("a reply with different rows is drawn")
+    func changedRowsAreDrawn() {
+        #expect(model(["a"]).needsDrawing(rows(["a", "b"]), overFailure: false))
+    }
+
+    @Test("over a failure, a reply is drawn even when its rows match — an empty history included")
+    func aReplyEndsAFailureEvenWithTheSameRows() {
+        let held = rows(["a"])
+        #expect(model([]).needsDrawing([], overFailure: true))
+        #expect(PickerModel(rows: held).needsDrawing(held, overFailure: true))
+    }
 }

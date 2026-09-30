@@ -50,8 +50,16 @@ struct RemoteDesktopPasterTests {
     @Test("a first grant waits for focus before injecting")
     func firstGrantWaitsBeforeInjecting() {
         let portal = FakeRemoteDesktopPortal()
+        // An empty state directory rather than the default store: a first
+        // grant is one with no token saved, and the default reads the real
+        // `~/.local/state/skrepka`, which holds one on any machine where the
+        // app has pasted before — the test then took the restored path.
+        let stateDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let paster = RemoteDesktopPaster(
-            connection: { nil }, requester: portal.request, injector: portal.inject)
+            connection: { nil },
+            tokenStore: RestoreTokenStore(environment: ["XDG_STATE_HOME": stateDirectory.path]),
+            requester: portal.request,
+            injector: portal.inject)
 
         paster.paste { _ in }
         portal.succeedCreation()

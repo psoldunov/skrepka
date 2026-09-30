@@ -14,7 +14,9 @@ import SkrepkaIPC
 /// An enum with static members rather than a type to instantiate: there is no
 /// state here. Owning the name is the *connection's* property, and the
 /// connection belongs to the ``SkrepkaIPC/BusSession`` the caller opened and
-/// keeps open — dropping that session drops the name.
+/// keeps open — dropping that session drops the name. The calls that arrive
+/// for it before anything can answer are held by the ``CallGate`` the caller
+/// passes in.
 enum BusNameClaim {
     /// `DBUS_NAME_FLAG_DO_NOT_QUEUE`, from the D-Bus specification's
     /// `RequestName` flags.
@@ -31,14 +33,33 @@ enum BusNameClaim {
     /// this name, or this process asked twice.
     static let becamePrimaryOwner: UInt32 = 1
 
-    /// Opens `session` if it is not open yet and claims `name` on it.
+    /// Opens `session` if it is not open yet and claims `name` on it, holding
+    /// in `calls` every method call addressed to the name from then on.
+    ///
+    /// The gate becomes the connection's message handler *before*
+    /// `RequestName` is sent, because the bus delivers calls to the new owner
+    /// straight after the claim — the ones it queued while activating this
+    /// daemon first of all — and a connection with no handler drops them. See
+    /// ``CallGate``.
     ///
     /// Throws rather than warning when the name is taken. A daemon that runs
     /// with no interface is a daemon `skrepka` cannot talk to, and the systemd
     /// unit restarting it is a better outcome than a silent one nobody can
     /// reach.
-    static func claim(_ name: String, over session: BusSession) async throws {
-        try await claim(name, on: try await session.connection())
+    static func claim(
+        _ name: String,
+        over session: BusSession,
+        holding calls: CallGate<DBusMessage>
+    ) async throws {
+        let connection = try await session.connection()
+        await connection.setMessageHandler { message in
+            // Only calls are held. The object server ignores anything else,
+            // and a signal nobody subscribed to should not use up the room
+            // the gate keeps for calls.
+            guard message.messageType == .methodCall else { return }
+            await calls.receive(message)
+        }
+        try await claim(name, on: connection)
     }
 
     static func claim(_ name: String, on connection: DBusClient.Connection) async throws {

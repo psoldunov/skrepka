@@ -33,6 +33,10 @@ final class AppController {
     /// What is wrong with the daemon, as the tray's problem row says it; nil
     /// while it answers.
     var daemonProblem: String?
+    /// Checks that have failed in a row, which sets how long until the next.
+    var daemonFailures = 0
+    /// The next check, while the daemon is not answering.
+    var daemonRecheck: LoopTimer?
     /// The activation token the tray last handed over, spent on the next
     /// window it opens — how KWin on Wayland lets that window take focus.
     var activationToken: String?
@@ -113,6 +117,8 @@ final class AppController {
         picker?.hide()
         watch?.cancel()
         watch = nil
+        daemonRecheck?.cancel()
+        daemonRecheck = nil
         settings.closeAll()
         if isHolding {
             isHolding = false

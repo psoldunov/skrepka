@@ -31,6 +31,7 @@ public actor DaemonService {
 
     private let daemon: Daemon
     private let session: BusSession
+    private let calls: CallGate<DBusMessage>
     private let logger: Logger
     private var server: DBusObjectServer?
     private var historyTask: Task<Void, Never>?
@@ -50,13 +51,18 @@ public actor DaemonService {
     ///   claims the name with ``BusNameClaim`` before the daemon is built, so
     ///   that a second `skrepkad` loses the race before it opens the store.
     ///   Whoever opened the session closes it; ``stop()`` deliberately does not.
+    /// - Parameter calls: the gate ``BusNameClaim`` made the session's message
+    ///   handler, holding every call that arrived since the name was won.
+    ///   ``start()`` opens it onto the exported object.
     public init(
         daemon: Daemon,
         session: BusSession,
+        calls: CallGate<DBusMessage>,
         logger: Logger = Logger(label: "skrepka.service")
     ) {
         self.daemon = daemon
         self.session = session
+        self.calls = calls
         self.logger = logger
     }
 
@@ -64,7 +70,9 @@ public actor DaemonService {
     ///
     /// The export comes last on purpose: a name on the bus is a promise that
     /// something behind it can answer, so the object is published only once the
-    /// daemon is up. The *name* is claimed much earlier — see ``BusNameClaim``.
+    /// daemon is up. The *name* is claimed much earlier — see ``BusNameClaim`` —
+    /// and the calls that reach it in between wait in the ``CallGate`` until
+    /// this opens it.
     public func start() async throws {
         let connection = try await session.connection()
 
@@ -78,14 +86,18 @@ public actor DaemonService {
             logger: logger
         )
         await server.export(exportedObject())
-        // Every message the connection does not recognise as a reply is a call
-        // for us. `DBusObjectServer` answers the ones it exports and returns
-        // `UnknownMethod` for the rest, which is what a D-Bus client expects.
-        await connection.setMessageHandler { [weak server] message in
-            await server?.handle(message: message)
-        }
         self.server = server
         startSignalPumps(on: connection)
+        // Every call the connection does not recognise as a reply reaches the
+        // gate, which has been its message handler since before the name was
+        // claimed. Opening it answers what it held while the daemon came up —
+        // the tray app's first calls, at login — and routes everything after
+        // straight here. `DBusObjectServer` answers the members it exports and
+        // returns `UnknownMethod` for the rest, which is what a D-Bus client
+        // expects.
+        await calls.open { [weak server] message in
+            await server?.handle(message: message)
+        }
         logger.notice("exported \(SkrepkaInterface.name) on the session bus")
     }
 
