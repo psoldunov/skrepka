@@ -1,5 +1,4 @@
 import Foundation
-import SkrepkaCore
 
 /// What the session actually offers, and which backend that implies.
 ///

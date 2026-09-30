@@ -8,7 +8,7 @@ import Testing
 /// byte size · line count · age, dropping the parts that do not apply.
 struct PickerRowTextTests {
     /// A fixed age so the assembly can be asserted exactly.
-    private func age(_ from: Date, _ to: Date) -> String { "10 seconds ago" }
+    private func age(_: Date, _: Date) -> String { "10 seconds ago" }
 
     private func document(
         kind: String,

@@ -45,12 +45,6 @@ struct DNSName: Sendable, Hashable, CustomStringConvertible {
         }
     }
 
-    /// Octets on the wire, uncompressed: a length byte per label plus the
-    /// root's zero.
-    var wireLength: Int {
-        labels.reduce(1) { $0 + 1 + $1.count }
-    }
-
     var description: String {
         labels.map { String(bytes: $0, encoding: .utf8) ?? "\\?" }.joined(separator: ".") + "."
     }

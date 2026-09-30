@@ -21,8 +21,6 @@ struct LRUCache<Value> {
         self.capacity = max(1, capacity)
     }
 
-    var count: Int { storage.count }
-
     /// The keys, least-recently-used first — for tests and nothing else.
     var keysByAge: [String] { order }
 

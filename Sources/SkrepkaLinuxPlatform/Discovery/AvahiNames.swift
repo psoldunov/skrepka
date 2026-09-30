@@ -127,9 +127,9 @@ enum AvahiNames {
         static let itemNew = "ItemNew"
         /// The same signature.
         static let itemRemove = "ItemRemove"
-        /// `()`. Every answer the cache and the first round of queries had.
-        /// Not the end of anything — more may arrive later.
-        static let allForNow = "AllForNow"
+        // `AllForNow` `()` is deliberately not listened for. It says every
+        // answer the cache and the first round of queries had has arrived, and
+        // is not the end of anything — more may arrive later.
         /// `(s error)`
         static let failure = "Failure"
         /// `()`
@@ -152,10 +152,6 @@ enum AvahiNames {
     /// carrying a magic number: dns_sd spells the same idea `0`.
     static let unspecifiedInterface: Int32 = -1
     static let unspecifiedProtocol: Int32 = -1
-
-    /// `AVAHI_PROTO_INET`. Only used to say "resolve to whatever address family
-    /// you have"; Skrepka connects by host name, not by address.
-    static let protocolInet: Int32 = 0
 
     /// The state an entry group reports on `StateChanged`, from
     /// `avahi-common/defs.h`.
@@ -184,13 +180,4 @@ enum AvahiNames {
         case collision = 3
         case failure = 4
     }
-
-    /// `AVAHI_LOOKUP_RESULT_LOCAL`, set on a browse result this host announced
-    /// itself.
-    ///
-    /// Not used to filter — the device identifier in the TXT record is the
-    /// authority on "is this me", and it works across two Skrepka processes on
-    /// one machine where this flag does not. Recorded so nobody re-derives what
-    /// bit 8 means.
-    static let lookupResultLocal: UInt32 = 8
 }

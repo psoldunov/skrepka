@@ -117,13 +117,6 @@ enum XProperty {
         }
     }
 
-    /// The first `long` in a property — a `TIMESTAMP` reply, or an `INCR`
-    /// size hint.
-    static func firstWord(in value: Value) -> Int? {
-        guard value.format == 32, value.bytes.count >= MemoryLayout<Int>.size else { return nil }
-        return value.bytes.withUnsafeBytes { $0.loadUnaligned(as: Int.self) }
-    }
-
     /// Writes a list of atoms as format 32.
     static func write(
         atoms: [Atom],

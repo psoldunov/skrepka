@@ -1,5 +1,4 @@
 import CGtk4
-import SkrepkaCore
 
 /// What fills the list area when there are no rows: the app's own mark for an
 /// idle history, a magnifier for a search that found nothing, a warning when

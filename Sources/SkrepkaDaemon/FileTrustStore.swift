@@ -1,6 +1,5 @@
 import Foundation
 import Logging
-import SkrepkaCore
 import SkrepkaSync
 
 #if canImport(Glibc)

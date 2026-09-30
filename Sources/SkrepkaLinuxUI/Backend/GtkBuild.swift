@@ -66,15 +66,6 @@ enum GtkBuild {
         return widget
     }
 
-    /// A themed border around `child` — how a card is drawn here. A frame is
-    /// the one bordered container every GTK theme styles, where a style class
-    /// such as `boxed-list` exists in some themes and not others.
-    static func frame(around child: GtkWidgetPointer) -> GtkWidgetPointer? {
-        guard let widget = gtk_frame_new(nil) else { return nil }
-        gtk_frame_set_child(skrepka_as_frame(widget), child)
-        return widget
-    }
-
     static func append(_ child: GtkWidgetPointer, to box: GtkWidgetPointer) {
         gtk_box_append(skrepka_as_box(box), child)
     }

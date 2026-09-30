@@ -50,6 +50,12 @@ final class SettingsHost {
         self.pasteMechanism = pasteMechanism
         self.pasteAutomaticallyChanged = pasteAutomaticallyChanged
         self.connect = connect
+        // Settings' copyable labels are in the focus chain, and a new window
+        // focuses its first focusable widget — which can be one of them. Left
+        // on, that selects the label's whole text the moment the window
+        // appears. A setting of the display, so it is made once, here, where
+        // every Settings window in the process comes from.
+        GtkBuild.selectsLabelTextOnFocus(false)
     }
 
     /// Restyles for the desktop's look: the stylesheet at once, and the

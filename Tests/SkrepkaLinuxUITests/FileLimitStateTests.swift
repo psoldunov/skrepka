@@ -1,5 +1,4 @@
 import Foundation
-import SkrepkaCore
 import SkrepkaIPC
 import SkrepkaSync
 import Testing
