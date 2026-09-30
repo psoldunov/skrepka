@@ -248,11 +248,11 @@ extension PickerController {
     }
 
     private func apply(rows: [ClipDocument]) {
-        // Skip identical rows. A search reply and a `HistoryChanged`-driven
-        // re-prefetch often carry the same list; re-rendering it would rebuild
-        // the widgets and re-commit the layer surface for nothing, and a layer
-        // surface that re-configures under a keystroke can drop it.
-        guard rows != model.rows else { return }
+        // Identical rows are skipped unless a failure is showing — see
+        // `PickerModel.needsDrawing`. Re-rendering them would rebuild the widgets
+        // and re-commit the layer surface for nothing, and a layer surface that
+        // re-configures under a keystroke can drop it.
+        guard model.needsDrawing(rows, overFailure: window.panel.isShowingFailure) else { return }
         model = model.withRows(rows)
         render(rebuild: true)
     }

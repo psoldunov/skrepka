@@ -15,6 +15,9 @@ final class PickerPanel {
     let list: PickerListView
     let footer: PickerFooter
     private let emptyState: PickerEmptyState
+    /// Whether the middle says the daemon could not be reached, which the next
+    /// reply has to replace even when its rows are the ones already held.
+    private(set) var isShowingFailure = false
 
     init?() {
         guard let searchBar = PickerSearchBar(),
@@ -59,12 +62,18 @@ final class PickerPanel {
 
     /// Shows the list, hiding the empty state.
     func showList() {
+        isShowingFailure = false
         gtk_widget_set_visible(list.scroller, 1)
         gtk_widget_set_visible(emptyState.root, 0)
     }
 
     /// Shows an empty state, hiding the list.
     func showEmpty(_ kind: PickerEmptyState.Kind) {
+        if case .unreachable = kind {
+            isShowingFailure = true
+        } else {
+            isShowingFailure = false
+        }
         emptyState.show(kind)
         gtk_widget_set_visible(list.scroller, 0)
         gtk_widget_set_visible(emptyState.root, 1)
