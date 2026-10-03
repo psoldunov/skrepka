@@ -36,7 +36,7 @@
             // A directory has no size of its own; the walk is what produces one.
             #expect(file.fileSize == nil)
             #expect(FileURLKind.kind(of: file) == .folder)
-            #expect(ContentSize.byteCount(of: file) == 700)
+            #expect(ContentSize.byteCount(of: file, deadline: Fixtures.ampleDeadline) == 700)
         }
 
         @Test("One lookup answers both for an application bundle")
@@ -54,7 +54,7 @@
             let file = try #require(CopiedFile(at: bundle))
             #expect(file.shape == .package)
             #expect(FileURLKind.kind(of: file) == .file)
-            #expect(ContentSize.byteCount(of: file) == 512)
+            #expect(ContentSize.byteCount(of: file, deadline: Fixtures.ampleDeadline) == 512)
         }
 
         @Test("One lookup answers both for a regular file")
@@ -102,8 +102,8 @@
             // is inside rather than the 9 they carry — which is the distinction:
             // `fileSize` is the path's own size and is not what a directory
             // reports.
-            #expect(ContentSize.byteCount(of: described(.folder)) == 64)
-            #expect(ContentSize.byteCount(of: described(.package)) == 64)
+            #expect(ContentSize.byteCount(of: described(.folder), deadline: Fixtures.ampleDeadline) == 64)
+            #expect(ContentSize.byteCount(of: described(.package), deadline: Fixtures.ampleDeadline) == 64)
             #expect(ContentSize.byteCount(of: described(.file)) == 9)
             #expect(ContentSize.byteCount(of: described(.unknown)) == 9)
         }
