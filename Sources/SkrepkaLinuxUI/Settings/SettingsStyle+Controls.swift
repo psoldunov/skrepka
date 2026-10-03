@@ -2,8 +2,11 @@
 
 extension SettingsStyle {
     static func controls(_ palette: SkrepkaPalette, accent: String, tones: Tones) -> String {
-        [buttons(palette, accent: accent, tones: tones), switches(palette, accent: accent)]
-            .joined(separator: "\n")
+        [
+            buttons(palette, accent: accent, tones: tones), dropDowns(palette),
+            switches(palette, accent: accent),
+        ]
+        .joined(separator: "\n")
     }
 
     private static func buttons(_ palette: SkrepkaPalette, accent: String, tones: Tones) -> String {
@@ -21,8 +24,20 @@ extension SettingsStyle {
         window.skrepka-settings button.skrepka-destructive { color: \(tones.red); }
         window.skrepka-settings button.suggested-action { background: \(accent); color: #ffffff; }
         window.skrepka-settings button.suggested-action:hover { background: alpha(\(accent), 0.88); }
+        """
+    }
+
+    /// The drop-downs' buttons. One shows its choice in a `row.activatable`,
+    /// which a theme may paint as a list row — Breeze fills it with its
+    /// selection colour on hover — so the button's own background has to show
+    /// through, as GTK's default theme already lets it.
+    private static func dropDowns(_ palette: SkrepkaPalette) -> String {
+        """
         window.skrepka-settings dropdown > button { min-width: 150px; padding: 0 10px 0 14px; }
         window.skrepka-settings dropdown > button arrow { color: \(palette.secondary); }
+        window.skrepka-settings dropdown > button row {
+          background: none; color: \(palette.primary); box-shadow: none;
+        }
         """
     }
 
