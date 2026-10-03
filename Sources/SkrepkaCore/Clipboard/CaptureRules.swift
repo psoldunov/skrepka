@@ -67,12 +67,20 @@ public struct CaptureRules: Sendable {
         guard kind == .image || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .rejectedEmpty
         }
+        let stored = ClipPayload(
+            representations: LinkPlainText.completing(payload.representations, kind: kind, text: text))
+        // Again, because a link may now hold its URL twice. The check above
+        // spares decoding a payload that is already too large; this one bounds
+        // what is kept, which a peer measures against the same limit.
+        guard stored.byteCount <= maximumItemBytes else {
+            return .rejectedTooLarge(byteCount: stored.byteCount)
+        }
 
         return .captured(
             ClipItem(
                 kind: kind,
                 text: text,
-                payload: payload,
+                payload: stored,
                 sourceBundleID: snapshot.sourceBundleID,
                 createdAt: snapshot.capturedAt,
                 isConcealed: PrivacyMarkers.isConcealed(types: snapshot.declaredTypes),

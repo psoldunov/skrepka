@@ -17,14 +17,15 @@ struct ClipboardWrite: Sendable, Hashable {
     let representations: [String: Data]
     let fileURLs: [URL]
     /// Whether this is something other than the row as stored: a foreign
-    /// file row's files written here, or their names. Captured back, it would
-    /// be a second row rather than the same one hoisted.
+    /// file row's files written here, or their names, or a link's text.
+    /// Captured back, it would be a second row rather than the same one
+    /// hoisted.
     let replacesRow: Bool
 
-    init(representations: [String: Data], fileURLs: [URL] = []) {
+    init(representations: [String: Data], fileURLs: [URL] = [], replacesRow: Bool = false) {
         self.representations = representations
         self.fileURLs = fileURLs
-        replacesRow = false
+        self.replacesRow = replacesRow
     }
 
     init(_ clipboard: ForeignFileGuard.Clipboard) {

@@ -82,7 +82,8 @@ extension Daemon {
         // every clipboard manager does. Not for a file row from another
         // device, though: what is written is files in this machine's cache,
         // or their names, and captured back it would be a second row pointing
-        // into a cache that is swept when the first one goes.
+        // into a cache that is swept when the first one goes. Nor for a link,
+        // which is written as its text and would capture back as a text row.
         await clipboard.setSelection(targets, as: write.replacesRow ? .handoff : .copy)
         return .succeeded(Self.copiedDetail(entry), subject: entry.contentHash)
     }

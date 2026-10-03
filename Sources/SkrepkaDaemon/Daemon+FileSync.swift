@@ -80,7 +80,20 @@ extension Daemon {
         switch decision {
         case .passThrough:
             let files = source.kind.isFileSystemEntry && !source.isForeign ? source.fileURLs : []
-            return ClipboardWrite(representations: source.representations, fileURLs: files)
+            let representations = LinkPlainText.completing(
+                source.representations,
+                kind: source.kind,
+                preview: source.preview,
+                contentHash: source.contentHash
+            )
+            // No Linux target carries a `public.url`, so a link goes on the
+            // clipboard as its text alone, and captured back that is a `.text`
+            // row beside the link rather than the link hoisted.
+            return ClipboardWrite(
+                representations: representations,
+                fileURLs: files,
+                replacesRow: source.kind == .link
+            )
         case .files(let bundle):
             do {
                 let urls = try await Self.materialize(bundle, contentHash: source.contentHash, in: fileCache)
