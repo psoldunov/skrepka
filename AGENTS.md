@@ -22,7 +22,7 @@ scripts/notarize.sh   # build, sign, notarize, staple — the .zip and .dmg a re
 scripts/make-dmg.sh   # just the notarized .dmg, from the last notarized build
 scripts/release-notes.sh <version>  # a CHANGELOG.md section as a GitHub release body
 scripts/doctor.sh     # the quality gate — run after every change
-scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift
+scripts/make-icon.sh  # redraw AppIcon.icns from scripts/make-icon.swift; --hicolor, the Linux icons
 scripts/regenerate-wayland-protocols.sh  # regenerate Sources/CWaylandProtocols from its XML
 scripts/setup-linux.sh  # build skrepkad, skrepka and skrepka-gui, install into ~/.local — Linux only
 ```

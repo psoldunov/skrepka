@@ -167,12 +167,9 @@ extension Daemon {
         return PeerDocument(
             deviceID: deviceID.hex,
             fingerprint: deviceID.fingerprint,
-            // The name from `hello` outranks the advertisement's: that arrived
-            // unauthenticated, this arrived inside the tunnel from the device
-            // whose certificate is pinned. Sanitised either way — a pinned peer
-            // still chose its own name.
-            name: SafeText.oneLine(
-                ifPresent: entry.name ?? paired.deviceName, limit: SafeText.nameLimit),
+            // The same name every sentence about this peer uses — see
+            // ``PeerLabels/name(of:progress:paired:)``.
+            name: PeerLabels.name(of: deviceID, progress: progress, paired: paired),
             platform: (entry.platform == .unknown ? paired.platform : entry.platform).rawValue,
             isPaired: true,
             isSighted: sighting != nil,

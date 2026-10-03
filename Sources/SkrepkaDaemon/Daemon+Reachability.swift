@@ -10,7 +10,7 @@ import SkrepkaSync
 extension Daemon {
     /// One line naming every paired peer that this device reaches and that
     /// has not connected back, with how to open this machine's firewall.
-    func silentPeerProblems(now: Date) -> [String] {
+    func silentPeerProblems(now: Date, paired: [SyncDeviceID: PairedPeer]) -> [String] {
         let silent = InboundSilence.silentPeers(
             progress: progress,
             sighted: Set(sighted.keys),
@@ -18,7 +18,8 @@ extension Daemon {
             now: now
         )
         guard !silent.isEmpty else { return [] }
-        let names = silent.map { progress[$0]?.name ?? $0.fingerprint }.sorted().joined(separator: ", ")
+        let names = PeerLabels.labels(for: silent, progress: progress, paired: paired)
+            .joined(separator: ", ")
         let ports = portsOtherDevicesDial()
         let advice = FirewallAdvice.current().remedy(opening: ports)
         return [

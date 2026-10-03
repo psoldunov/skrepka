@@ -4,6 +4,11 @@
 #
 #   scripts/make-icon.sh [variant]            packs AppIcon.icns
 #   scripts/make-icon.sh --preview <dir>      renders every variant into <dir>
+#   scripts/make-icon.sh --hicolor            redraws packaging/icons/hicolor
+#
+# The .icns is a full-bleed square, because macOS cuts the corners itself. The
+# hicolor PNGs the Linux packages ship are the same drawing cut to the shape
+# macOS gives it, since no Linux desktop masks an icon.
 #
 # The artwork is vector code, not a checked-in design file, so the .icns is a
 # build product that happens to be committed: bundle.sh copies whatever sits in
@@ -44,6 +49,16 @@ if [[ "${1:-}" == "--preview" ]]; then
 		exit 2
 	fi
 	"${WORK}/make-icon" --preview "$2"
+	exit 0
+fi
+
+if [[ "${1:-}" == "--hicolor" ]]; then
+	if [[ $# -ne 1 ]]; then
+		echo "usage: $0 --hicolor" >&2
+		exit 2
+	fi
+	"${WORK}/make-icon" --hicolor packaging/icons/hicolor
+	echo "✓ packaging/icons/hicolor"
 	exit 0
 fi
 

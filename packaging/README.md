@@ -63,11 +63,15 @@ replacing its binary.
 
 ## `icons/hicolor/`
 
-The app icon is the macOS one: `AppIcon.icns`, the icon `scripts/make-icon.sh`
-draws, extracted with `iconutil` and — for the 22, 24, 48 and 96 pixel sizes
-the icon set lacks — scaled from its 1024-pixel image with `sips`. PNGs rather
-than a script run at build time because the drawing is Core Graphics and runs on
-a Mac only; regenerate them there when the icon changes.
+The app icon is the macOS one, drawn at every hicolor size by
+`scripts/make-icon.sh --hicolor` from the same vectors as `AppIcon.icns`. The
+`.icns` is a full-bleed square because macOS cuts it to a rounded square itself;
+no Linux desktop does that, so the hicolor PNGs are cut to the same shape —
+measured from what macOS draws — with a one-pixel edge so the off-white tile
+still reads on a light panel. An unmasked copy showed as a white square in
+title bars and launchers. PNGs rather than a script run at build time because
+the drawing is Core Graphics and runs on a Mac only; regenerate them there when
+the icon changes.
 
 `scalable/status/skrepka-tray.svg` is the tray icon: the mark alone, traced from
 `scripts/paperclip.svg`, monochrome like the macOS menu bar icon. It colours

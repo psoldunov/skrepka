@@ -510,6 +510,7 @@ scripts/bundle.sh     # produce build/Skrepka.app only
 scripts/notarize.sh   # build, sign, notarize, staple — the .zip and .dmg you send out
 scripts/doctor.sh     # the quality gate
 scripts/make-icon.sh  # redraw Sources/Skrepka/Resources/AppIcon.icns
+scripts/make-icon.sh --hicolor  # redraw the Linux icons in packaging/icons/hicolor
 ```
 
 Xcode 26 to build. Launch with `scripts/run.sh` rather than running the binary
@@ -576,8 +577,9 @@ Everything that shows the mark draws that path:
   clipboard, not Skrepka.
 - **Linux** — `MarkRenderer` in `Sources/SkrepkaLinuxUI/Branding/` draws the
   same table with Cairo. The app icon in
-  [`packaging/icons/`](packaging/README.md#iconshicolor) is the Mac's, taken
-  from `AppIcon.icns`, and the tray's `skrepka-tray.svg` is traced from
+  [`packaging/icons/`](packaging/README.md#iconshicolor) is the Mac's drawing,
+  rendered by `scripts/make-icon.sh --hicolor` and cut to the shape macOS shows
+  it in, and the tray's `skrepka-tray.svg` is traced from
   `scripts/paperclip.svg`.
 
 The app icon artwork is full-bleed square on purpose. macOS 26 masks a legacy

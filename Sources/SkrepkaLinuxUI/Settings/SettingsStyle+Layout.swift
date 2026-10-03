@@ -8,6 +8,14 @@
 // background removed Breeze's picture and left its transparent icon, so the
 // buttons vanished; `background-image: none` plus an opaque icon colour gives
 // the same buttons under Breeze and Adwaita.
+//
+// The header bar is exactly as tall as its window buttons plus its own padding.
+// A header bar stretches its buttons to fill it, so a 46-pixel `min-height`
+// drew the 28-pixel round hover as a tall pill. GTK applies `min-height` to the
+// content box, so a 28-pixel minimum with 9 pixels of padding above and below
+// makes the same 46-pixel bar — and since each length grows with the interface
+// size on its own, the buttons fill the content box, and stay round, at every
+// size.
 extension SettingsStyle {
     static func chrome(_ palette: SkrepkaPalette, accent: String) -> String {
         """
@@ -15,7 +23,7 @@ extension SettingsStyle {
         window.skrepka-settings headerbar {
           background: \(palette.window); color: \(palette.primary);
           border: none; box-shadow: inset 0 -1px \(palette.hairline);
-          min-height: 46px; padding: 0 8px;
+          min-height: 28px; padding: 9px 8px;
         }
         window.skrepka-settings headerbar:backdrop { background: \(palette.window); }
         window.skrepka-settings headerbar .title { font-size: 13px; font-weight: 600; }
