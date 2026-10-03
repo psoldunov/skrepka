@@ -67,12 +67,13 @@ public struct CaptureRules: Sendable {
         guard kind == .image || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .rejectedEmpty
         }
+        let stored = LinkPlainText.completing(payload.representations, kind: kind, text: text)
 
         return .captured(
             ClipItem(
                 kind: kind,
                 text: text,
-                payload: payload,
+                payload: ClipPayload(representations: stored),
                 sourceBundleID: snapshot.sourceBundleID,
                 createdAt: snapshot.capturedAt,
                 isConcealed: PrivacyMarkers.isConcealed(types: snapshot.declaredTypes),
