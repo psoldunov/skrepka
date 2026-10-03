@@ -54,6 +54,21 @@ struct LinkPlainTextTests {
         #expect(item.payload.data(forType: PasteboardType.string) == own)
     }
 
+    @Test("the ceiling holds for what is stored, text included")
+    func addedTextCountsAgainstTheCeiling() {
+        // The URL alone fits; the URL twice does not. Stored anyway, the row
+        // would be one every peer refuses, because a peer's limit is this one.
+        let urlBytes = Data(Self.url.utf8).count
+        let snapshot = PasteboardSnapshot(
+            representations: Self.relayed,
+            declaredTypes: Array(Self.relayed.keys)
+        )
+
+        #expect(
+            CaptureRules(maximumItemBytes: urlBytes).decide(snapshot)
+                == .rejectedTooLarge(byteCount: 2 * urlBytes))
+    }
+
     @Test("only links gain text")
     func otherKindsAreUntouched() {
         let picture = [PasteboardType.png: Data([0x89, 0x50, 0x4E, 0x47])]
