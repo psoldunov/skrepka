@@ -13,6 +13,16 @@ download — is the whole update path on a Mac. On Linux it is re-running
 `install.sh`, installing the next release's package, `dnf upgrade` from COPR on
 Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
 
+## Unreleased
+
+### Fixed
+
+- **A Linux Settings drop-down no longer turns blue under the pointer with
+  Breeze.** A drop-down's button shows its choice in a list row, and Breeze
+  fills a list row with its selection colour on hover, so the value sat in a
+  solid blue block inside the button. The button now keeps its own background,
+  as GTK's default theme already does.
+
 ## [0.3.1](https://github.com/psoldunov/skrepka/releases/tag/v0.3.1) — 2026-09-28
 
 Sync through a firewall, and two more ways to install on Linux. `skrepkad` now

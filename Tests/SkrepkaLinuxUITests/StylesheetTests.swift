@@ -38,6 +38,16 @@ struct StylesheetTests {
         #expect(!css.contains(SkrepkaPalette.light.window))
     }
 
+    @Test("a drop-down's button keeps the theme's row backgrounds off its choice", arguments: [true, false])
+    func dropDownButtonRow(isDark: Bool) {
+        let palette = isDark ? SkrepkaPalette.dark : SkrepkaPalette.light
+        let css = SettingsStyle.css(isDark: isDark, accent: "rgb(1,2,3)")
+        #expect(
+            css.contains(
+                "window.skrepka-settings dropdown > button row {\n"
+                    + "  background: none; color: \(palette.primary); box-shadow: none;\n}"))
+    }
+
     @Test("the picker keeps its window, panel and overlay rules and its inset")
     func pickerRules() {
         let css = PickerStyle.css(isDark: true, accent: "rgb(1,2,3)")
