@@ -143,8 +143,10 @@ enum PickerStyle {
         .skrepka-keycap {
           font-size: 10px; font-weight: 600; color: \(palette.secondary);
           background: \(palette.badge); border-radius: 4px;
-          border: 0.5px solid \(palette.hairline); padding: 1px 5px; min-width: 14px;
+          border: 0.5px solid \(palette.hairline); padding: 0 5px; min-height: 16px;
         }
+        .skrepka-keycap-single { padding: 0; min-width: 16px; }
+        .skrepka-keyglyph { min-width: 9px; min-height: 9px; }
         .skrepka-error { font-size: 11px; color: \(palette.primary); }
         .skrepka-gear {
           background: none; border: none; box-shadow: none; padding: 4px;

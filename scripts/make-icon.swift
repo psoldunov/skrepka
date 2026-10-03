@@ -10,6 +10,7 @@
 //
 //   make-icon <output.iconset> [variant]
 //   make-icon --preview <directory>
+//   make-icon --hicolor <directory>
 //
 // Variants exist so the palette can be compared side by side; the first one
 // is what ships. Not part of any SwiftPM target — it lives in scripts/ so the
@@ -18,6 +19,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import SwiftUI
 import UniformTypeIdentifiers
 
 // MARK: - Design space
@@ -119,6 +121,22 @@ let variants: [Variant] = [
 /// stays inside this rectangle.
 let safeArea = CGRect(x: 100, y: 100, width: 824, height: 824)
 
+/// The corner radius of the squircle macOS cuts ``safeArea`` to, measured the
+/// same way on macOS 27: a continuous-corner rounded rectangle of this radius
+/// over ``safeArea`` matches the alpha of the icon `NSWorkspace` returns to
+/// within 0.03% of its area — 214 fitted best of the radii tried from 160 to
+/// 240, continuous or circular.
+///
+/// Linux has no system mask, so a full-bleed tile there is drawn as the
+/// square it is. The hicolor icons are cut to this shape instead, which is how
+/// the Mac shows the same icon.
+let systemCornerRadius: CGFloat = 214
+
+/// The tile as macOS shows it: ``safeArea`` with the system's corners.
+func systemMask() -> CGPath {
+    RoundedRectangle(cornerRadius: systemCornerRadius, style: .continuous).path(in: safeArea).cgPath
+}
+
 func drawTile(_ ctx: CGContext, _ variant: Variant) {
     let tile = CGPath(rect: CGRect(x: 0, y: 0, width: canvas, height: canvas), transform: nil)
     if let warm = gradient(variant.tile, [0, 0.55, 1]) {
@@ -216,7 +234,9 @@ func shadeEdge(
 
 // MARK: - Rasterisation
 
-func renderIcon(size: Int, variant: Variant) -> CGImage? {
+/// - Parameter masked: cut the tile to ``systemMask()`` — for a platform that
+///   shows the icon as drawn — rather than leaving the corners to macOS.
+func renderIcon(size: Int, variant: Variant, masked: Bool = false) -> CGImage? {
     guard
         let ctx = CGContext(
             data: nil,
@@ -235,11 +255,28 @@ func renderIcon(size: Int, variant: Variant) -> CGImage? {
     // Flip into the top-left origin the artwork above is measured in.
     ctx.translateBy(x: 0, y: canvas)
     ctx.scaleBy(x: 1, y: -1)
+    if masked {
+        ctx.addPath(systemMask())
+        ctx.clip()
+    }
 
     drawTile(ctx, variant)
     drawClip(ctx, variant, scale)
+    if masked { drawEdge(ctx, scale) }
 
     return ctx.makeImage()
+}
+
+/// One device pixel of faint shade just inside the mask — the job macOS's own
+/// rim does, so the paper tile still has an edge on a light panel. Stroked
+/// two pixels wide on the clipped outline, so the pixel inside is what stays.
+func drawEdge(_ ctx: CGContext, _ scale: CGFloat) {
+    ctx.saveGState()
+    ctx.addPath(systemMask())
+    ctx.setStrokeColor(rgb(0x000000, 0.12))
+    ctx.setLineWidth(2 / scale)
+    ctx.strokePath()
+    ctx.restoreGState()
 }
 
 func write(_ image: CGImage, to url: URL) throws {
@@ -296,10 +333,32 @@ let iconsetSizes: [(name: String, pixels: Int)] = [
     ("icon_512x512@2x", 1024),
 ]
 
+/// The sizes the Linux packages carry the app icon at — `ICON_SIZES` in
+/// install.sh, under packaging/icons/hicolor.
+let hicolorSizes = [16, 22, 24, 32, 48, 64, 96, 128, 256, 512]
+
+/// Named after the application ID, which is how a desktop matches a window to
+/// its launcher entry and its icon.
+let hicolorName = "dev.soldunov.Skrepka.App"
+
+/// Writes `<root>/<n>x<n>/apps/<hicolorName>.png` for every hicolor size,
+/// masked the way macOS masks the icon.
+func renderHicolor(_ variant: Variant, into root: URL) throws {
+    for pixels in hicolorSizes {
+        let directory = root.appendingPathComponent("\(pixels)x\(pixels)/apps")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard let image = renderIcon(size: pixels, variant: variant, masked: true) else {
+            throw IconError.message("could not render \(pixels)x\(pixels)")
+        }
+        try write(image, to: directory.appendingPathComponent("\(hicolorName).png"))
+    }
+}
+
 func usage() -> Never {
     let text = """
         usage: make-icon <output.iconset> [variant]
                make-icon --preview <directory>
+               make-icon --hicolor <directory>
         variants: \(variants.map(\.name).joined(separator: ", "))
 
         """
@@ -326,6 +385,12 @@ enum IconTool {
                     )
                 }
                 print("✓ previews in \(directory.path)")
+
+            case "--hicolor":
+                guard arguments.count == 2 else { usage() }
+                let directory = URL(fileURLWithPath: arguments[1])
+                try renderHicolor(variants[0], into: directory)
+                print("✓ rendered \(variants[0].name) at \(hicolorSizes.count) hicolor sizes")
 
             case .some(let path) where !path.hasPrefix("-"):
                 let requested = arguments.count > 1 ? arguments[1] : variants[0].name

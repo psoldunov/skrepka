@@ -187,9 +187,11 @@ extension Daemon {
     /// Problems that are about paired peers rather than about this machine.
     private func pairingProblems() async -> [String] {
         var found: [String] = []
+        let paired = await pairedPeersByID()
         let unreachable = links.keys.filter { sighted[$0] == nil }
         if !unreachable.isEmpty, isPublished {
-            let names = unreachable.map(\.fingerprint).sorted().joined(separator: ", ")
+            let names = PeerLabels.labels(for: unreachable, progress: progress, paired: paired)
+                .joined(separator: ", ")
             found.append(
                 """
                 Paired but not on the network right now: \(names). \
@@ -205,7 +207,26 @@ extension Daemon {
         // Asked of this machine rather than measured against a peer, because
         // the wire carries no timestamp to measure against. See ``ClockCheck``.
         if let clock = clockFinding?.problem { found.append(clock) }
-        found.append(contentsOf: silentPeerProblems(now: Date()))
+        found.append(contentsOf: silentPeerProblems(now: Date(), paired: paired))
         return found.sorted()
+    }
+
+    /// The paired devices by ID, for the names the problems above use.
+    ///
+    /// Logged and then treated as none: a peer the store cannot be read for
+    /// is still named, by the name it sent in `hello` or else by fingerprint,
+    /// and a report that dropped the whole finding over a name would hide the
+    /// finding.
+    private func pairedPeersByID() async -> [SyncDeviceID: PairedPeer] {
+        do {
+            let paired = try await trust.pairedPeers()
+            return Dictionary(paired.map { ($0.deviceID, $0) }) { first, _ in first }
+        } catch {
+            logger.error(
+                "could not read the paired devices for the diagnostics report",
+                metadata: ["error": .string(String(describing: error))]
+            )
+            return [:]
+        }
     }
 }

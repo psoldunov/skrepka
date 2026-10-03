@@ -98,8 +98,7 @@ final class PickerFooter {
             let label = Build.label(hint.label, "skrepka-hint")
         else { return nil }
         for key in hint.keys {
-            guard let cap = Build.label(key, "skrepka-keycap") else { return nil }
-            gtk_widget_set_valign(cap, GTK_ALIGN_CENTER)
+            guard let cap = keycap(key) else { return nil }
             Build.append(caps, cap)
         }
         gtk_widget_set_valign(caps, GTK_ALIGN_CENTER)
@@ -107,5 +106,43 @@ final class PickerFooter {
         Build.append(group, caps)
         Build.append(group, label)
         return (group, label)
+    }
+
+    /// One key as a cap: a square around a single character, as the Mac's
+    /// `KeyCap` draws it, and a padded one around a word. Arrows, return and
+    /// shift are drawn — see ``KeyGlyph`` — and a letter or a word is text.
+    private static func keycap(_ key: String) -> GtkWidgetPointer? {
+        guard let cap = Build.box(GTK_ORIENTATION_HORIZONTAL, spacing: 0, "skrepka-keycap") else {
+            return nil
+        }
+        if key.count == 1 { gtk_widget_add_css_class(cap, "skrepka-keycap-single") }
+        gtk_widget_set_valign(cap, GTK_ALIGN_CENTER)
+
+        let face: GtkWidgetPointer?
+        if let glyph = KeyGlyph(symbol: key) {
+            face = glyphFace(glyph)
+            skrepka_set_accessible_label(cap, glyph.spokenName)
+        } else {
+            face = Build.label(key)
+        }
+        guard let face else { return nil }
+        gtk_widget_set_hexpand(face, 1)
+        gtk_widget_set_halign(face, GTK_ALIGN_CENTER)
+        gtk_widget_set_valign(face, GTK_ALIGN_CENTER)
+        Build.append(cap, face)
+        return cap
+    }
+
+    /// A drawing area that strokes `glyph` in the cap's text colour, sized by
+    /// the stylesheet so it grows with the interface.
+    private static func glyphFace(_ glyph: KeyGlyph) -> GtkWidgetPointer? {
+        guard let area = gtk_drawing_area_new() else { return nil }
+        gtk_widget_add_css_class(area, "skrepka-keyglyph")
+        PickerRowSignals.setDrawFunc(area) { cairo, width, height in
+            var color = GdkRGBA()
+            gtk_widget_get_color(area, &color)
+            glyph.draw(cairo, width: width, height: height, color: color)
+        }
+        return area
     }
 }
