@@ -111,16 +111,33 @@ enum PickerRowView {
         return box
     }
 
+    /// The picture, cover-cropped into a tile of exactly `size` — the macOS
+    /// row's fixed preview frame, however wide or tall the picture is.
+    ///
+    /// A size request is only a minimum. A `GtkPicture` asks for the row's
+    /// height times the picture's aspect ratio, and the row's box hands it that
+    /// much, so a long screenshot came out as a tile half the panel wide. The
+    /// picture is therefore an *overlay child* of a `GtkOverlay` with no main
+    /// child: the overlay leaves overlay children out of its measurement, so it
+    /// asks for its size request and nothing more, and stretches a filling
+    /// overlay child across all of it. `can-shrink` keeps the picture's own
+    /// minimum at zero, so it is laid out at the tile and never larger.
     private static func preview(
         _ texture: OpaquePointer, size: (width: Int32, height: Int32)
     ) -> UnsafeMutablePointer<GtkWidget>? {
-        guard let widget = gtk_picture_new(), let picture = skrepka_as_picture(widget) else { return nil }
+        guard let frame = gtk_overlay_new(), let overlay = skrepka_as_overlay(frame),
+            let widget = gtk_picture_new(), let picture = skrepka_as_picture(widget)
+        else { return nil }
         gtk_picture_set_paintable(picture, skrepka_texture_as_paintable(texture))
         gtk_picture_set_content_fit(picture, GTK_CONTENT_FIT_COVER)
-        gtk_widget_set_size_request(widget, size.width, size.height)
-        gtk_widget_set_overflow(widget, GTK_OVERFLOW_HIDDEN)
-        gtk_widget_add_css_class(widget, "skrepka-thumb")
-        return widget
+        gtk_picture_set_can_shrink(picture, 1)
+        gtk_widget_set_halign(widget, GTK_ALIGN_FILL)
+        gtk_widget_set_valign(widget, GTK_ALIGN_FILL)
+        gtk_overlay_add_overlay(overlay, widget)
+        gtk_widget_set_size_request(frame, size.width, size.height)
+        gtk_widget_set_overflow(frame, GTK_OVERFLOW_HIDDEN)
+        gtk_widget_add_css_class(frame, "skrepka-thumb")
+        return frame
     }
 
     private static func placeholder(
