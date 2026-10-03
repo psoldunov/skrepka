@@ -14,12 +14,14 @@ struct ContentSizeTests {
     /// `CopiedSelection`. Nil for a path the file system will not describe,
     /// which is what the caller passes on.
     ///
-    /// `deadline` bounds the *measuring* only. The stat walk keeps its own full
-    /// budget, so a test squeezing this one is squeezing the pass it names.
-    private func measure(_ item: ClipItem, deadline: Duration = FileSelection.deadline) -> Int? {
+    /// `deadline` bounds the *measuring* only. The stat walk always gets
+    /// `Fixtures.ampleDeadline`, so a test squeezing this one is squeezing the
+    /// pass it names — and a test that leaves it alone gets the same ample
+    /// budget, so a stalled run cannot turn a measurement into a nil.
+    private func measure(_ item: ClipItem, deadline: Duration = Fixtures.ampleDeadline) -> Int? {
         ContentSize.byteCount(
             of: item,
-            selection: CopiedSelection.look(at: item.fileURLs),
+            selection: CopiedSelection.look(at: item.fileURLs, deadline: Fixtures.ampleDeadline),
             deadline: deadline
         )
     }
@@ -142,7 +144,7 @@ struct ContentSizeTests {
         // A partial total would read as a real measurement. Nothing is honest.
         #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == nil)
         // The same folder measures fine when there is time for it.
-        #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == 8)
+        #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: Fixtures.ampleDeadline) == 8)
     }
 
     @Test("A folder of one file is checked against the deadline too")
@@ -155,7 +157,7 @@ struct ContentSizeTests {
         try write(42, to: directory.appending(path: "a.bin", directoryHint: .notDirectory))
 
         #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: .zero) == nil)
-        #expect(DirectorySize.byteCount(ofDirectoryAt: directory) == 42)
+        #expect(DirectorySize.byteCount(ofDirectoryAt: directory, deadline: Fixtures.ampleDeadline) == 42)
     }
 
     @Test("A selection is measured on one budget, not one budget per folder")

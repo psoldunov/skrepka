@@ -9,6 +9,20 @@ import Testing
 /// only need a path — `CaptureRulesTests`, `ContentSizeTests` — run on both
 /// platforms. Making a picture needs both, and lives in `Fixtures+Images.swift`.
 enum Fixtures {
+    /// A budget for a pass the test expects to *finish*. Looking at a
+    /// selection, measuring it and walking a folder inside it each give up at
+    /// a wall-clock deadline.
+    ///
+    /// The production budgets, `DirectorySize.deadline` and
+    /// `FileSelection.deadline`, are 250 ms. The folders these tests build
+    /// need a sliver of that, but the full `--parallel` run has stalled a test
+    /// for over a second, and a pass handed 250 ms then reports nothing for a
+    /// copy it had all but finished. Whether a pass gives up is pinned with
+    /// `.zero` instead, which no amount of load makes generous. Every pass
+    /// that should succeed gets a minute, which only a machine that has
+    /// stopped running the test can spend.
+    static let ampleDeadline: Duration = .seconds(60)
+
     static func makeDirectory() throws -> URL {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "skrepka-tests-\(UUID().uuidString)", directoryHint: .isDirectory)

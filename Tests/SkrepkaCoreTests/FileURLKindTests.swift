@@ -31,10 +31,11 @@
 
         /// The same, for a whole copied selection: one walk, then the kind read
         /// off it — what `ThumbnailRenderer.details(for:)` does for a copy of
-        /// several files.
+        /// several files. Given `Fixtures.ampleDeadline` unless a test is about
+        /// running out of budget, so a stalled run cannot turn a kind into nil.
         private func kind(
             at urls: [URL],
-            deadline: Duration = FileSelection.deadline
+            deadline: Duration = Fixtures.ampleDeadline
         ) -> ClipKind? {
             FileURLKind.kind(of: CopiedSelection.look(at: urls, deadline: deadline))
         }
