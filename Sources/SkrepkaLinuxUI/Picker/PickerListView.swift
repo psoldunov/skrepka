@@ -110,7 +110,14 @@ final class PickerListView {
         let changed = Set(transferFractions.keys).union(fractions.keys)
         transferFractions = fractions
         for hash in changed {
-            transferSlots[hash]?.show(fractions[hash])
+            // Bound first, never `transferSlots[hash]?.show(…)`. Swift 6.3 and
+            // 6.4 miscompile that at -Onone for a struct of raw pointers like
+            // the slot: the chain goes through the dictionary's `_modify`, and
+            // `show` runs on garbage when no row has `hash` — a transfer that
+            // lands before the first history, or for an entry a search hides —
+            // handing GTK a wild pointer. Release builds are unaffected.
+            guard let slot = transferSlots[hash] else { continue }
+            slot.show(fractions[hash])
         }
     }
 
