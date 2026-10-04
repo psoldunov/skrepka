@@ -13,15 +13,62 @@ download — is the whole update path on a Mac. On Linux it is re-running
 `install.sh`, installing the next release's package, `dnf upgrade` from COPR on
 Fedora, `pacstall -Up` with Pacstall, or `nix flake update`.
 
-## Unreleased
+## [0.4.0](https://github.com/psoldunov/skrepka/releases/tag/v0.4.0) — 2026-10-04
+
+A Linux picker you can size, and a round of Linux polish. Settings → General →
+Appearance → Interface size draws the picker and Settings larger, a tray that
+said the background service was not running at login now recovers by itself,
+and a link copied on an iPhone pastes on Linux.
+
+### Added
+
+- **An interface size setting for the Linux picker and Settings.** Settings →
+  General → Appearance → Interface size draws both windows at 100, 110, 125,
+  150, 175 or 200 percent of their design size, on top of the desktop's own
+  scaling. The picker was drawn at the Mac's sizes, which reads as small on a
+  desktop whose own apps run larger. A change applies at once to both windows,
+  including an open Settings window, which resizes to fit. The size is kept in
+  `app.json` beside `config.json`, so it is not synced and the daemon never
+  reads it.
 
 ### Fixed
 
+- **The tray no longer says the background service is not running after a
+  restart.** At login the tray app and `skrepkad` start together, and the
+  daemon dropped the app's first calls while it was still opening its store, so
+  the app timed out and never asked again. The daemon now holds those calls and
+  answers them once it is ready, the tray checks again after 2, 5 and 10
+  seconds and then every 30 until the daemon answers, and the picker re-reads
+  the history when its last read failed.
+- **A link copied on an iPhone pastes on Linux.** A link that reached a Mac
+  through Universal Clipboard as a bare URL synced to Linux with no bytes, and
+  the picker refused it. A link is now captured with its URL as plain text too,
+  and a row that already crossed without it pastes from its preview when the
+  preview is the whole URL. Your link's identity does not change.
+- **The Linux picker's footer, Settings title bar and peer names look right on
+  KDE.** The arrow, return and shift keycaps are drawn centred in their caps
+  instead of from a fallback font's glyphs, the Settings window buttons stay
+  round instead of stretching into a pill, and the window icon is the rounded
+  icon rather than a white square. A paired device that is off the network is
+  named as the Sync pane names it, not by its fingerprint.
+- **A long screenshot no longer draws a preview half the picker wide.** The
+  Linux picker's image preview is held to its 84×48 tile and crops to fit, as
+  the Mac's does.
 - **A Linux Settings drop-down no longer turns blue under the pointer with
   Breeze.** A drop-down's button shows its choice in a list row, and Breeze
   fills a list row with its selection colour on hover, so the value sat in a
   solid blue block inside the button. The button now keeps its own background,
   as GTK's default theme already does.
+- **A copyable Settings label no longer selects its whole text when the window
+  opens.** A call lost when Settings was merged into `skrepka-gui` is restored.
+- **A debug build of the Linux picker no longer crashes when a transfer names a
+  row that is not on screen.** Release builds, which every shipped artifact
+  uses, were not affected.
+
+### Documentation
+
+- The docs are back in line with the code, and there is a per-distro install
+  guide.
 
 ## [0.3.1](https://github.com/psoldunov/skrepka/releases/tag/v0.3.1) — 2026-09-28
 
