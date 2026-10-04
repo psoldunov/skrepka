@@ -33,11 +33,11 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "skrepka";
-  version = "0.3.1";
+  version = "0.4.0";
 
   src = fetchurl {
     url = "https://github.com/psoldunov/skrepka/releases/download/v${finalAttrs.version}/skrepka-linux-x86_64.tar.gz";
-    hash = "sha256-Rt7qtD4ttNdplfUBof2iQ6twx5yGK/vz3d2gPgy8K3w=";
+    hash = "sha256-JlHCV84s4FeND9yQzfwZyYOhx0mJ5sFu3YAiGPMkc5U=";
   };
 
   nativeBuildInputs = [
