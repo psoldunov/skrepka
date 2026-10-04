@@ -200,7 +200,7 @@ Run inside a graphical session, it starts the app in the tray.
   newer from the host. The installer refuses a machine whose glibc is too old
   before it writes anything; a GTK that is too old shows up only when the app
   starts, as a missing symbol.
-- `bash -s -- --version v0.3.1` after the pipe pins a release.
+- `bash -s -- --version v0.4.0` after the pipe pins a release.
 - `bash -s -- --uninstall` removes everything except your history and this
   device's sync identity.
 - Re-running the line is the whole update path.
